@@ -1,83 +1,106 @@
-# 🌳 Drrys — Grow what you know
+# Drrys: Grow what you know
 
-**Drrys** turns studying into caring for a living tree. Every subject is a tree, every chapter is a branch, and the companion **Coco** walks you through the study methods that actually work (active recall, self-explanation, spaced repetition) without you needing to know their names.
+Drrys turns studying into a small daily mission. Every subject is a tree, every chapter is a branch, and you keep your trees alive by watering them every day. The watering is a short study session with Coco, a little clay character who makes you study the way learning research says works, without you having to know any of the method names.
 
-> Built for **RevenueCat Shipaton 2026 — Next Gen Award** by Yahya and Abdelhafeez.
+Made by Yahya Al-Khayyat and Abdelhafeez Shaarawy for the RevenueCat Shipaton 2026 (Next Gen).
 
-## The problem
+![Drrys screens](docs/screens.jpg)
 
-1. **Students study the wrong way.** Re-reading and highlighting feel productive but are among the least effective techniques in learning research. Retrieval practice, elaboration and spacing work, but most students never hear of them.
-2. **Studying is boring**, so the habit dies after a few days.
+## Why we built it
 
-Information is everywhere now. The hard part isn't finding it, it's making it stay.
+Most students (us included) study by re-reading and highlighting. These methods are easy because they ask very little of your brain, and that's exactly the problem: without real mental effort, learning is slow, so you need many more hours to get a result. That's also what makes studying feel so boring and long.
 
-## How Drrys works
+Research says the opposite: to learn, your brain has to work. Recalling from memory, explaining ideas in your own words and spacing out your reviews are harder in the moment, but they make things stick much faster. Most students never hear about them, and they're hard to do alone.
 
-| Learning science (built into the flow) | What the student does |
-| --- | --- |
-| **Retrieval practice** | *Brain dump*: after a lecture, tell Coco everything you remember, by voice (Arabic or English) or text, with the material hidden |
-| **Feedback on errors** | Coco reads the lecture PDF (only the pages you studied) and sorts your recall into *nailed · forgotten · needs correction* |
-| **Self-explanation (Feynman)** | Coco asks "why / how" questions about what you missed, grades your explanation, and you can argue back in a short chat. Analogies use your own interests |
-| **Spaced repetition (SM-2)** | Flashcards written from the lecture and your mistakes come back right before you'd forget them. Stuck on a card? Ask Coco about it |
-| **Habit** | A daily 15-minute "watering": a full session on lecture days, a few flashcards on the other days. Coco waters the tree when you finish. Streaks, XP and insights per subject |
+Drrys puts these methods inside a short daily routine that feels like looking after a garden.
 
-## Monetization (RevenueCat)
+## A day with Drrys
 
-- **Drrys Pro**: `drrys_pro` entitlement, `default` offering with monthly ($9.99) and annual ($79.99) packages.
-- **Free**: 1 tree with 1 chapter. **Pro**: 5 trees with 5 chapters each. The paywall appears when you reach for a second tree or chapter.
-- **Streak rewards: the more consistently you study, the cheaper Pro gets.** A 30-day study streak switches the paywall to the `streak25` offering (25% off), 60 days to `streak30` (30% off). Discounted products live in RevenueCat; the app only picks the offering (`src/lib/purchases.ts`). Break the streak and the regular offering comes back.
-- **Study Squad: studying together makes it cheaper.** Up to 4 friends share a squad code; when the squad is full, each of them gets 25% off (the `streak25` products). Squad + streak reward stack, capped at 50% off (the `bonus50` offering). The app only picks the offering (`currentDiscount()` in `src/lib/purchases.ts`).
-- **Invite a friend → a free 2nd branch.** When a friend joins with your code and finishes their first session, a free student's trees get a 2nd chapter. Codes, squads and every anti-cheat rule (not your own code, one referral per student, no swapping, 4 per squad) live in Supabase functions (`src/lib/together.ts`).
-- The subscription is tied to the student's account (`Purchases.logIn(uid)`), so Pro follows them to a new phone. Restore purchases is in Profile and on the paywall.
+After a lecture, the student opens the app. Their lecture files, syllabus and past exams are already there, so Coco knows the course.
 
-## Tech
+**Lecture day: a full session (about 15 minutes)**
 
-- **Expo SDK 57 · React Native 0.86 · TypeScript · Expo Router**
-- **RevenueCat** (`react-native-purchases`) — offerings, entitlement listener, account linking
-- **Supabase** — email/password accounts and a cloud backup of the forest (one JSON row per user, protected by row-level security)
-- **Gemini API** — lecture analysis with native PDF input, question generation, grading, flashcards, chat and voice transcription (a Claude key can be used instead). PDFs are trimmed to the studied pages with `pdf-lib`
-- **Zustand + AsyncStorage** — offline-first state
-- **Reanimated 4, expo-video, expo-image, expo-audio, expo-haptics** — the clay look and feel
-- **Art**: Coco, the trees and every animation were modelled and rendered in Blender; tree stages and branches are composited in code
+1. **Recall.** Tell Coco everything you remember from the lecture, by voice (Arabic, English and many other languages) or by typing. No notes.
+2. **Gaps.** Coco compares what you said with the lecture file and shows what you nailed, what you forgot and what you got wrong.
+3. **Explain.** Coco asks "why" and "how" questions on the parts you missed. You answer in your own words, Coco grades it, and you can argue back.
+4. **Flashcards.** Cards are made from the lecture and from the exact things you got wrong in step 3.
+5. Coco waters the tree.
 
-```
-src/
-  app/
-    onboarding/     intro, questions, planting, sign-in, reminder
-    (tabs)/         coco · tree (the forest) · profile
-    session/        choose → recall → analyze → review → active → cards → done
-    subject.tsx     plant / edit a tree (chapters, PDFs, syllabus, past papers)
-    paywall.tsx     Drrys Pro + streak / squad rewards
-    together.tsx    Study Squad + invite a friend
-  components/       UI kit, KnowledgeTree, Motion (video), Voice (record → transcribe)
-  lib/
-    ai.ts           Coco's brain (Gemini / Claude, model fallback chain)
-    purchases.ts    RevenueCat
-    cloud.ts        Supabase accounts + backup / restore
-    session.ts      lecture context, PDF page slicing
-  store.ts          app state + SM-2 scheduler
-```
+**Other days: flashcards only**
+
+The cards come back on a spaced repetition schedule (SM-2): forgotten cards come back the same day, easy ones after days or weeks.
+
+Around that: a week view per subject, streaks, stats per tree, and daily reminders that know if you have a lecture session or cards waiting (and stay quiet on days you already studied).
+
+## Pricing and RevenueCat
+
+| | Free | Pro ($9.99/month or $79.99/year) |
+| --- | --- | --- |
+| Trees (subjects) | 1 | 5 |
+| Branches (chapters) per tree | 1, or 2 after inviting a friend | 5 |
+| Lecture files | up to 40 pages | up to 150 pages |
+
+- **Entitlement:** `drrys_pro`. **Offerings:** `default`, `streak25`, `streak30`, `bonus50`.
+- **Streak reward.** Study 30 days in a row and Pro is 25% off (`streak25`), 60 days and it's 30% off (`streak30`). Miss a day and the regular price comes back.
+- **Study Squad.** You and 3 friends join with one code. When the squad is full, each of you gets 25% off while the squad stays together. A squad and a streak stack, up to 50% off (`bonus50`).
+- **Invite a friend.** On the free plan, when a friend joins with your code and finishes their first session, your trees get a second branch.
+- The discounted prices are real products in RevenueCat. The app only decides which offering to show (`currentDiscount()` in `src/lib/purchases.ts`).
+- Pro is linked to the student's account with `Purchases.logIn`, so it follows them to a new phone. You have to sign in before buying. Restore purchases is on the paywall and in Profile.
+- If Pro ends, nothing is deleted. Extra trees and branches "rest": their flashcards still work, and new full sessions ask to renew.
+- Squad and invite codes are checked on the server (Supabase functions): you can't use your own code, each student can be invited once, two friends can't swap codes, one squad per student, 4 people per squad.
+
+## Built with
+
+- Expo SDK 57, React Native, TypeScript, Expo Router
+- RevenueCat (`react-native-purchases`)
+- Gemini API for reading lecture PDFs, questions, grading, flashcards, chat and voice transcription. Only the pages you studied are sent (`pdf-lib`).
+- Supabase for accounts, cloud backup and the squad/invite functions
+- Zustand + AsyncStorage (works offline), Reanimated, expo-video, expo-audio, expo-notifications
+- Coco, the trees, the world and the icons were modelled in Blender. Some animations were made with Flow from those renders, to save rendering time.
+- Screens were designed in Figma with help from Stitch, and turned into the real app with Claude Opus 5.5.
 
 ## Run it
 
 ```bash
 npm install
-cp .env.example .env     # add a Gemini (or Claude) key and the RevenueCat Test Store key
-npx expo start           # open in Expo Go
+cp .env.example .env   # add a Gemini key and the RevenueCat Test Store key
+npx expo start
 ```
 
-- **No AI key?** Coco runs a built-in demo session, so every screen can still be explored.
-- **Android APK** (real RevenueCat purchase sheet): `npx eas-cli build -p android --profile preview`. The preview profile allows RevenueCat's Test Store key in this internal build only (`plugins/withTestStoreRelease.js`).
+- Without an AI key, Coco runs a built-in demo session so every screen can still be tried.
+- Android APK: `npx eas-cli build -p android --profile preview`. This build uses RevenueCat's Test Store, so purchases are free (`plugins/withTestStoreRelease.js` allows the test key in this build only).
 
-## Known limits (honest notes)
+## Project layout
 
-- The AI key is called from the app, which is fine for a competition build. Production would route it through a small server (e.g. a Supabase Edge Function).
-- The UI is English-only for now; voice input already understands Arabic.
+```
+src/
+  app/
+    onboarding/     intro, questions, first tree, sign in, reminder
+    (tabs)/         Coco, the forest, profile
+    session/        choose file, recall, analyze, review, explain, flashcards, done
+    subject.tsx     plant or edit a tree (chapters, files, syllabus, past exams)
+    paywall.tsx     plans and rewards
+    together.tsx    Study Squad and invites
+  components/       UI kit, tree, video, voice
+  lib/
+    ai.ts           Coco (Gemini, with fallback models)
+    purchases.ts    RevenueCat, limits and discounts
+    together.ts     squads and invites
+    cloud.ts        accounts and backup
+    notify.ts       daily reminders
+  store.ts          app state and the flashcard scheduler
+```
 
-## Roadmap
+## Known limits
 
-Mnemonics and memory palaces · AI-generated podcast and concept videos from your lectures · gift a month of Pro to a classmate · Arabic UI · shared forests with friends.
+- The Gemini key ships inside this competition build. For a real release the AI calls will move behind a server (a Supabase Edge Function).
+- The app's screens are in English for now. Voice recall and Coco's chat already understand many languages, including Arabic.
+- Android only so far.
 
----
+## What's next
 
-MIT License · Made with 🌱 in Jordan.
+Mnemonics, AI-made videos and audio podcasts from your lectures, live AI chat with Coco, and a lot more.
+
+## License
+
+MIT
