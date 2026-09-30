@@ -2,6 +2,8 @@
 
 Drrys turns studying into a small daily mission. Every subject is a tree, every chapter is a branch, and you keep your trees alive by watering them every day. The watering is a short study session with Coco, a little clay character who makes you study the way learning research says works, without you having to know any of the method names.
 
+<sub>About the name: in spoken Arabic, *drrys* (درّيس) is someone who studies a lot.</sub>
+
 Made by Yahya Al-Khayyat and Abdelhafeez Shaarawy for the RevenueCat Shipaton 2026 (Next Gen).
 
 ![Drrys screens](docs/screens.jpg)
