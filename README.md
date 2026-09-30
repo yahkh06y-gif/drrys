@@ -6,6 +6,13 @@ Made by Yahya Al-Khayyat and Abdelhafeez Shaarawy for the RevenueCat Shipaton 20
 
 ![Drrys screens](docs/screens.jpg)
 
+## Try it (for judges)
+
+1. Download the APK from [Releases](https://github.com/yahkh06y-gif/drrys/releases/latest) and install it on an Android phone.
+2. Create an account (email + password, no confirmation email) or tap "Not now".
+3. **All purchases are test purchases.** This build runs on RevenueCat's Test Store, so buying Pro is free and no real money is charged. Pro: Profile → View plans → buy.
+4. Study Squad and invites: Profile → Study together (needs an account; a squad unlocks at 4 accounts).
+
 ## Why we built it
 
 Most students (us included) study by re-reading and highlighting. These methods are easy because they ask very little of your brain, and that's exactly the problem: without real mental effort, learning is slow, so you need many more hours to get a result. That's also what makes studying feel so boring and long.
@@ -96,6 +103,7 @@ src/
 - The Gemini key ships inside this competition build. For a real release the AI calls will move behind a server (a Supabase Edge Function).
 - The app's screens are in English for now. Voice recall and Coco's chat already understand many languages, including Arabic.
 - Android only so far.
+- Payments use RevenueCat's Test Store for the competition (no real charges). The products and offerings are ready to connect to Google Play and the App Store for launch.
 
 ## What's next
 
@@ -103,4 +111,8 @@ Mnemonics, AI-made videos and audio podcasts from your lectures, live AI chat wi
 
 ## License
 
-MIT
+Copyright (C) 2026 Yahya Al-Khayyat and Abdelhafeez Shaarawy.
+
+The code is open source under the [GNU AGPL v3.0](LICENSE): you can read, use and change it, but if you share, sell or run a changed version as a service, you have to publish your full source code under the same license.
+
+The name "Drrys", the character Coco and the Drrys logo are our trademarks and are not covered by this license.
