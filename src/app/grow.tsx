@@ -1,11 +1,12 @@
-// After a subject is saved: the seed closes, Coco plants it and the tree grows (18s video, tap to skip).
+// After a subject is saved: the seed closes, Coco plants it and the tree grows (10.7s video, tap to skip).
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Motion } from '@/components/Motion';
-import { haptic, play } from '@/lib/feedback';
+import { useBack } from '@/lib/back';
+import { haptic } from '@/lib/feedback';
 import { F } from '@/theme';
 
 export default function Grow() {
@@ -19,13 +20,20 @@ export default function Grow() {
     else router.dismissTo('/(tabs)/tree');
   }, [onboarding]);
 
+  // the tree is already saved: back would return to the form and plant it twice, so back = skip
+  useBack(
+    useCallback(() => {
+      go();
+      return true;
+    }, [go]),
+  );
+
   useEffect(() => {
-    // sound cues timed to the render: seed closes, lands in the soil, tree bursts out
+    // the clip has its own sound design; haptics are timed to its key moments
     const cues = [
-      setTimeout(() => play('flip'), 3000),
-      setTimeout(() => (play('tap'), haptic('medium')), 8200),
-      setTimeout(() => (play('grow'), haptic('success')), 11600),
-      setTimeout(() => play('celebrate'), 13400),
+      setTimeout(() => haptic('light'), 400), // hands close the seed
+      setTimeout(() => haptic('medium'), 5200), // Coco plants it
+      setTimeout(() => haptic('success'), 7000), // the tree shoots up
     ];
     return () => cues.forEach(clearTimeout);
   }, []);

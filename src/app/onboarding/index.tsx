@@ -1,5 +1,6 @@
 // Splash — Coco peeks over the hill ("Drrys · Grow what you know"), then the teal hill rises (Blender video).
 import { router } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, useWindowDimensions } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
@@ -21,6 +22,7 @@ export default function Splash() {
   }, []);
 
   useEffect(() => {
+    SplashScreen.hideAsync().catch(() => {});
     title.value = withDelay(250, withTiming(1, { duration: 700 }));
     const t = setTimeout(() => {
       title.value = withTiming(0, { duration: 250 });

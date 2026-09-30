@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image, type ImageSource } from 'expo-image';
 import { router } from 'expo-router';
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,6 +27,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useBack } from '@/lib/back';
 import { tap, type Sfx } from '@/lib/feedback';
 import { C, F, R } from '@/theme';
 
@@ -135,9 +138,12 @@ export function Choice({
   onPress,
   style,
   row,
+  icon,
 }: {
   label: string;
   sub?: string;
+  /** optional clay icon: above the label in a grid tile, before it in a row */
+  icon?: number;
   selected?: boolean;
   onPress: () => void;
   style?: StyleProp<ViewStyle>;
@@ -163,17 +169,20 @@ export function Choice({
             borderRadius: row ? 14 : 21.6,
             paddingVertical: row ? 14 : 0,
             paddingHorizontal: 12,
-            alignItems: row ? 'flex-start' : 'center',
-            justifyContent: 'center',
+            alignItems: row ? (icon ? 'center' : 'flex-start') : 'center',
+            flexDirection: row && icon ? 'row' : 'column',
+            gap: icon ? (row ? 12 : 4) : 0,
+            justifyContent: row && icon ? 'flex-start' : 'center',
             minHeight: row ? 56 : 132,
             borderBottomWidth: selected ? 5 : 2,
           },
           a,
         ]}>
+        {icon !== undefined && <Image source={icon} style={row ? { width: 34, height: 34 } : { width: 62, height: 62, marginTop: 8 }} contentFit="contain" />}
         <Text
           adjustsFontSizeToFit
           numberOfLines={row ? 2 : 1}
-          style={{ fontFamily: F.bold, fontSize: row ? 18 : 24, color: C.teal, textAlign: row ? 'left' : 'center', letterSpacing: -0.5 }}>
+          style={{ flexShrink: 1, fontFamily: F.bold, fontSize: row ? 18 : icon ? 20 : 24, color: C.teal, textAlign: row ? 'left' : 'center', letterSpacing: -0.5 }}>
           {label}
         </Text>
         {sub && <Text style={{ fontFamily: F.medium, fontSize: 10, color: C.teal, marginTop: 4, textAlign: 'center' }}>{sub}</Text>}
@@ -214,27 +223,33 @@ export function Screen({
 }) {
   return (
     <SafeAreaView edges={edges} style={{ flex: 1, backgroundColor: bg }}>
-      {scroll ? (
-        <ScrollView contentContainerStyle={[{ padding: 20, paddingBottom: 40 }, style]} showsVerticalScrollIndicator={false}>
-          {children}
-        </ScrollView>
-      ) : (
-        <View style={[{ flex: 1, padding: 20 }, style]}>{children}</View>
-      )}
-      {footer && <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, backgroundColor: bg }}>{footer}</View>}
+      {/* the keyboard pushes the content up instead of covering what you type */}
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+        {scroll ? (
+          <ScrollView contentContainerStyle={[{ padding: 20, paddingBottom: 40 }, style]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {children}
+          </ScrollView>
+        ) : (
+          <View style={[{ flex: 1, padding: 20 }, style]}>{children}</View>
+        )}
+        {footer && <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12, backgroundColor: bg }}>{footer}</View>}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 /* ---------- Session header ("session setup • 2 of 5") ---------- */
 export function SessionHeader({ step, title, onClose }: { step: number; title: string; onClose?: () => void }) {
+  // a stray tap on ✕ shouldn't throw a session away: ask first
+  const [asking, setAsking] = useState(false);
+  useBack(useCallback(() => (setAsking(true), true), [])); // Android back asks too
   return (
     <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10, borderBottomWidth: 1, borderColor: 'rgba(90,66,37,0.1)', gap: 10 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <IconBtn name="close" onPress={onClose ?? (() => router.dismissTo('/(tabs)/tree'))} />
+        <IconBtn name="close" onPress={() => setAsking(true)} />
         <View style={{ flex: 1, alignItems: 'center', marginRight: 40 }}>
           <T v="small" style={{ fontFamily: F.semi, fontSize: 11, color: C.goldInk, letterSpacing: 0.5 }}>
-            session setup • {step} of 5
+            step {step} of 5
           </T>
           <T v="title" style={{ color: C.teal, fontSize: 14 }}>
             {title}
@@ -242,6 +257,51 @@ export function SessionHeader({ step, title, onClose }: { step: number; title: s
         </View>
       </View>
       <Progress value={step / 5} height={8} track={C.track} />
+      <Confirm
+        visible={asking}
+        title="Leave this session?"
+        body="Your tree won’t be watered, and you’ll start this session over next time."
+        yes="Leave"
+        no="Keep studying"
+        onNo={() => setAsking(false)}
+        onYes={() => {
+          setAsking(false);
+          (onClose ?? (() => router.dismissTo('/(tabs)/tree')))();
+        }}
+      />
+    </View>
+  );
+}
+
+/** A small "are you sure?" card (works the same on Android, iOS and web). */
+export function Confirm({ visible, title, body, yes, no, onYes, onNo }: { visible: boolean; title: string; body?: string; yes: string; no: string; onYes: () => void; onNo: () => void }) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onNo}>
+      <Pressable onPress={onNo} style={{ flex: 1, backgroundColor: 'rgba(24,36,28,0.45)', alignItems: 'center', justifyContent: 'center', padding: 28 }}>
+        <Pressable style={{ width: '100%', maxWidth: 360, backgroundColor: C.paper, borderRadius: 24, borderWidth: 2, borderColor: C.brown, padding: 20, gap: 10 }}>
+          <T v="h3" style={{ color: C.teal }}>
+            {title}
+          </T>
+          {!!body && <T v="small" style={{ color: C.ink, lineHeight: 20 }}>{body}</T>}
+          <View style={{ gap: 10, marginTop: 8 }}>
+            <Btn title={no} kind="leaf" height={48} onPress={onNo} />
+            <Btn title={yes} kind="light" height={44} onPress={onYes} />
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+/** Onboarding top bar: a back arrow next to the progress bar. */
+export function OnbBar({ value, onBack, style }: { value: number; onBack?: (() => void) | false; style?: StyleProp<ViewStyle> }) {
+  const back = onBack === false ? undefined : (onBack ?? (router.canGoBack() ? () => router.back() : undefined));
+  return (
+    <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 12 }, style]}>
+      {back ? <IconBtn name="arrow-back" size={36} onPress={back} /> : <View style={{ width: 4 }} />}
+      <View style={{ flex: 1 }}>
+        <Progress value={value} />
+      </View>
     </View>
   );
 }

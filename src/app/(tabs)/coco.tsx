@@ -2,12 +2,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COCO } from '@/art';
 import { Coco, Enter, T } from '@/components/ui';
+import { MicButton, useVoice } from '@/components/Voice';
 import { chatCoco } from '@/lib/ai';
 import { play, tap } from '@/lib/feedback';
 import { activeSubject, useApp } from '@/store';
@@ -19,13 +20,18 @@ const STYLE_LABEL = { friendly: 'Friendly coach', calm: 'Calm tutor', direct: 'D
 export default function CocoTab() {
   const coco = useApp((s) => s.coco);
   const xp = useApp((s) => s.stats.xp);
-  const interests = useApp((s) => s.profile.interests);
+  const interests = useApp((s) => (s.coco.memory ? s.profile.interests : []));
   const subject = useApp(activeSubject);
   const [msgs, setMsgs] = useState<Msg[]>([{ role: 'assistant', text: 'Hey! What should we explore today?' }]);
   const [text, setText] = useState('');
   const [typing, setTyping] = useState(false);
   const input = useRef<TextInput>(null);
   const scroll = useRef<ScrollView>(null);
+  // say it instead of typing: the words land in the box, you check them and send
+  const voice = useVoice(
+    useCallback((t: string) => setText((x) => (x.trim() ? `${x.trim()} ${t}` : t)), []),
+    () => input.current?.focus(),
+  );
 
   const send = async () => {
     const t = text.trim();
@@ -48,8 +54,10 @@ export default function CocoTab() {
       );
       setMsgs((m) => [...m, { role: 'assistant', text: reply.trim() }]);
       play('select');
-    } catch {
-      setMsgs((m) => [...m, { role: 'assistant', text: 'Hmm, I can’t reach the cloud right now. Try again in a moment?' }]);
+    } catch (e) {
+      // while developing, show the real reason (bad key, model name, region, rate limit…)
+      const why = __DEV__ ? `\n\n(${String((e as Error)?.message ?? e).slice(0, 220)})` : '';
+      setMsgs((m) => [...m, { role: 'assistant', text: `Hmm, I can’t reach the cloud right now. Try again in a moment?${why}` }]);
     }
     setTyping(false);
     setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
@@ -58,7 +66,7 @@ export default function CocoTab() {
   return (
     <LinearGradient colors={['#F7EFE2', '#F2E3CF']} style={{ flex: 1 }}>
       <SafeAreaView edges={['top']} style={{ flex: 1 }}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 8 }}>
             <View style={{ flex: 1 }}>
               <T v="h2" style={{ fontSize: 30 }}>
@@ -123,15 +131,20 @@ export default function CocoTab() {
                 onChangeText={setText}
                 onSubmitEditing={send}
                 returnKeyType="send"
-                placeholder="Ask Coco anything… (🎤 on keyboard)"
+                placeholder={voice.state === 'recording' ? 'Listening… tap ■ when done' : voice.state === 'writing' ? 'Writing it down…' : 'Ask Coco anything…'}
                 placeholderTextColor="#A69A8A"
                 style={{ flex: 1, backgroundColor: C.white, borderRadius: 99, borderWidth: 1, borderColor: C.lineStrong, paddingHorizontal: 16, paddingVertical: 12, fontFamily: F.medium, fontSize: 14, color: C.ink }}
               />
-              <Pressable
-                onPress={text.trim() ? send : () => input.current?.focus()}
-                style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: C.teal, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 4, borderColor: C.shadow }}>
-                <Ionicons name={text.trim() ? 'arrow-up' : 'mic'} size={22} color={C.white} />
-              </Pressable>
+              {text.trim() && voice.state === 'idle' ? (
+                <Pressable
+                  accessibilityLabel="Send"
+                  onPress={send}
+                  style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: C.teal, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 4, borderColor: C.shadow }}>
+                  <Ionicons name="arrow-up" size={22} color={C.white} />
+                </Pressable>
+              ) : (
+                <MicButton voice={voice} size={50} />
+              )}
             </View>
           </View>
         </KeyboardAvoidingView>

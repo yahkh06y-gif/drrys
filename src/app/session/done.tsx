@@ -1,12 +1,14 @@
 // "Coco is proud of today's work." — Coco celebrates (video), rewards, then back to the growing tree.
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Motion } from '@/components/Motion';
 import { Btn, Enter } from '@/components/ui';
-import { haptic, play } from '@/lib/feedback';
+import { useBack } from '@/lib/back';
+import { haptic } from '@/lib/feedback';
+import { completeReferral } from '@/lib/together';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
 
@@ -15,15 +17,22 @@ export default function Done() {
   const set = useApp((s) => s.set);
   const [r, setR] = useState({ xp: 0, minutes: 0, accuracy: 0 });
 
+  const leave = useCallback(() => {
+    set({ session: undefined });
+    router.dismissTo('/(tabs)/tree');
+    return true;
+  }, [set]);
+  useBack(leave); // Android back = return to the forest (never back into the finished session)
+
   useEffect(() => {
     setR(finishSession());
-    play('celebrate');
+    completeReferral(); // an invited student's first session unlocks their friend's reward
     haptic('success');
   }, [finishSession]);
 
   return (
     <View style={{ flex: 1 }}>
-      <Motion video="celebrate" style={{ position: 'absolute', inset: 0 }} />
+      <Motion video="celebrate" loop={false} style={{ position: 'absolute', inset: 0 }} />
       <SafeAreaView style={{ flex: 1, padding: 24 }}>
         <Enter>
           <Text style={{ fontFamily: F.bold, fontSize: 40, lineHeight: 42, color: C.teal, textAlign: 'center' }}>Coco is proud of today’s work.</Text>
@@ -39,10 +48,7 @@ export default function Done() {
           title="Return to forest"
           kind="teal"
           sfx="grow"
-          onPress={() => {
-            set({ session: undefined });
-            router.dismissTo('/(tabs)/tree');
-          }}
+          onPress={leave}
         />
         <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted, textAlign: 'center', marginTop: 8 }}>🌱 Your branch just grew. Progress saved.</Text>
       </SafeAreaView>

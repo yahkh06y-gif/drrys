@@ -1,24 +1,26 @@
 // Session step 5 — "Lock in what matters": flashcards scheduled with spaced repetition (SM-2).
 // Also used standalone (mode=review) for cards that are due.
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Enter, IconBtn, Pill, SessionHeader, T } from '@/components/ui';
-import { makeCards } from '@/lib/ai';
-import { haptic, play } from '@/lib/feedback';
+import { askAboutCard, makeCards } from '@/lib/ai';
+import { haptic, play, tap } from '@/lib/feedback';
 import { sessionContext } from '@/lib/session';
-import { today, useApp, type Rating } from '@/store';
+import { isDue, useApp, type Rating } from '@/store';
 import { C, F } from '@/theme';
 
-const RATINGS: { r: Rating; label: string; sub: string; icon: keyof typeof Ionicons.glyphMap; color: string }[] = [
-  { r: 'forgot', label: 'Forgot', sub: 'Again soon', icon: 'refresh', color: '#E56B6B' },
-  { r: 'hard', label: 'Hard', sub: 'With effort', icon: 'barbell-outline', color: C.orange },
-  { r: 'good', label: 'Good', sub: 'Correct', icon: 'thumbs-up-outline', color: C.leaf },
-  { r: 'easy', label: 'Easy', sub: 'Instant', icon: 'flash-outline', color: C.teal },
+// clay icons: refresh = forgot, dumbbell = hard, thumbs up = good, lightning = easy
+const RATINGS: { r: Rating; label: string; sub: string; icon: number }[] = [
+  { r: 'forgot', label: 'Forgot', sub: 'Again soon', icon: require('../../../assets/art/ratings/forgot.png') },
+  { r: 'hard', label: 'Hard', sub: 'With effort', icon: require('../../../assets/art/ratings/hard.png') },
+  { r: 'good', label: 'Good', sub: 'Correct', icon: require('../../../assets/art/ratings/good.png') },
+  { r: 'easy', label: 'Easy', sub: 'Instant', icon: require('../../../assets/art/ratings/easy.png') },
 ];
 
 export default function Cards() {
@@ -32,18 +34,25 @@ export default function Cards() {
   const patchSession = useApp((s) => s.patchSession);
 
   const [ids, setIds] = useState<string[]>(() =>
-    review ? allCards.filter((c) => (!activeId || c.subjectId === activeId) && c.due <= Date.now()).map((c) => c.id) : (session?.newCardIds ?? []),
+    review ? allCards.filter((c) => (!activeId || c.subjectId === activeId) && isDue(c)).map((c) => c.id) : (session?.newCardIds ?? []),
   );
   const [i, setI] = useState(0);
   const [loading, setLoading] = useState(!review && !(session?.newCardIds.length));
   const flip = useSharedValue(0);
-  const [revealed, setRevealed] = useState(false);
+  const [revealed, setRevealed] = useState(false); // the answer has been seen (unlocks rating)
+  const [onBack, setOnBack] = useState(false); // which side is showing now
+  const [ask, setAsk] = useState(false);
 
   useEffect(() => {
     if (!loading || !session?.analysis) return;
     (async () => {
       try {
-        const made = await makeCards(await sessionContext(false), session.analysis!);
+        // usually ready already (made with the analysis); otherwise ask Coco now
+        const general = session.draftCards?.length ? session.draftCards : await makeCards(await sessionContext(false), session.analysis!);
+        // the gaps from active learning come first, then the lecture cards (without repeating a question)
+        const gaps = session.gapCards ?? [];
+        const seen = new Set(gaps.map((c) => c.q.trim().toLowerCase()));
+        const made = [...gaps, ...general.filter((c) => !seen.has(c.q.trim().toLowerCase()))];
         const newIds = addCards(made.map((c) => ({ ...c, subjectId: session.subjectId, chapterId: session.chapterId })));
         patchSession({ newCardIds: newIds });
         setIds(newIds);
@@ -60,18 +69,22 @@ export default function Cards() {
   const front = useAnimatedStyle(() => ({ transform: [{ perspective: 900 }, { rotateY: `${interpolate(flip.value, [0, 1], [0, 180])}deg` }], backfaceVisibility: 'hidden' }));
   const back = useAnimatedStyle(() => ({ transform: [{ perspective: 900 }, { rotateY: `${interpolate(flip.value, [0, 1], [180, 360])}deg` }], backfaceVisibility: 'hidden' }));
 
+  // tap flips the card either way, so the question can be read again after the answer
   const reveal = () => {
-    if (revealed) return;
+    const toBack = !onBack;
     play('flip');
     haptic('light');
-    flip.value = withTiming(1, { duration: 380 });
-    setRevealed(true);
+    flip.value = withTiming(toBack ? 1 : 0, { duration: 380 });
+    setOnBack(toBack);
+    if (toBack) setRevealed(true);
   };
 
   const finish = () => {
     if (review) {
-      const st = useApp.getState().stats;
-      useApp.getState().set({ stats: { ...st, xp: st.xp + ids.length * 2, studyDays: st.studyDays.includes(today()) ? st.studyDays : [...st.studyDays, today()] } });
+      useApp.getState().logReview(activeId, ids.length);
+      // on a day without a lecture, the flashcard review IS the day's session for this tree
+      const sub = useApp.getState().subjects.find((x) => x.id === activeId);
+      if (sub && !sub.days.includes(new Date().getDay())) useApp.getState().markDone(sub.id);
       play('celebrate');
       router.back();
     } else router.replace('/session/done');
@@ -85,6 +98,7 @@ export default function Cards() {
     if (i + 1 >= cards.length) return finish();
     flip.value = 0;
     setRevealed(false);
+    setOnBack(false);
     setI(i + 1);
   };
 
@@ -131,8 +145,8 @@ export default function Cards() {
                 <View style={{ flex: 1 }} />
                 <View style={{ alignItems: 'center', gap: 4 }}>
                   <Ionicons name="hand-left-outline" size={20} color={C.leaf} />
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.leaf }}>Tap card to reveal answer</Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Recall it first, then check.</Text>
+                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.leaf }}>{revealed ? 'Tap to see the answer again' : 'Tap card to reveal answer'}</Text>
+                  {!revealed && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Recall it first, then check.</Text>}
                 </View>
               </Animated.View>
               <Animated.View style={[cardStyle, back, { backgroundColor: '#F0F8E6', borderColor: C.mintBorder }]}>
@@ -140,28 +154,123 @@ export default function Cards() {
                 <Text style={{ fontFamily: F.bold, fontSize: 20, lineHeight: 28, color: C.teal, marginTop: 6 }}>{card.a}</Text>
                 <View style={{ flex: 1 }} />
                 <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted, textAlign: 'center' }}>How well did you remember?</Text>
+                <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.leaf, textAlign: 'center', marginTop: 4 }}>Tap to see the question again</Text>
               </Animated.View>
             </Pressable>
 
-            <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.teal, textAlign: 'center' }}>Rate your answer</Text>
-            <View style={{ flexDirection: 'row', gap: 8, opacity: revealed ? 1 : 0.35 }}>
-              {RATINGS.map((x) => (
-                <Pressable
-                  key={x.r}
-                  disabled={!revealed}
-                  onPress={() => rate(x.r)}
-                  style={{ flex: 1, alignItems: 'center', gap: 2, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, borderRadius: 14, paddingVertical: 10 }}>
-                  <Ionicons name={x.icon} size={18} color={x.color} />
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.ink }}>{x.label}</Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 9, color: C.muted }}>{x.sub}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted, textAlign: 'center' }}>Ratings unlock after you reveal the answer.</Text>
+            {revealed && (
+              <Pressable
+                onPress={() => (tap('select'), setAsk(true))}
+                style={{ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
+                <Ionicons name="chatbubble-ellipses-outline" size={15} color={C.teal} />
+                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.teal }}>Ask Coco about this card</Text>
+              </Pressable>
+            )}
+            {/* the ratings show up once the answer has been seen */}
+            {revealed && (
+              <Enter key="rate" style={{ gap: 14 }}>
+                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.teal, textAlign: 'center' }}>Rate your answer</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                {RATINGS.map((x) => (
+                  <Pressable
+                    key={x.r}
+                    onPress={() => rate(x.r)}
+                    style={{ flex: 1, alignItems: 'center', gap: 2, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, borderRadius: 14, paddingVertical: 10 }}>
+                    <Image source={x.icon} style={{ width: 30, height: 30, marginBottom: 2 }} contentFit="contain" />
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.ink }}>{x.label}</Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 9, color: C.muted }}>{x.sub}</Text>
+                  </Pressable>
+                ))}
+                </View>
+              </Enter>
+            )}
           </>
         )}
       </View>
+      {card && <AskCard visible={ask} card={card} subjectId={card.subjectId} onClose={() => setAsk(false)} />}
     </SafeAreaView>
+  );
+}
+
+// A small chat about the current flashcard (opened after the answer is revealed).
+function AskCard({ visible, card, subjectId, onClose }: { visible: boolean; card: { q: string; a: string }; subjectId: string; onClose: () => void }) {
+  const [thread, setThread] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const cardRef = useRef(card.q); // replies for a card you've moved past are dropped
+  cardRef.current = card.q;
+  useEffect(() => {
+    setThread([]);
+    setText('');
+    setBusy(false);
+  }, [card.q]);
+  const send = async () => {
+    const t = text.trim();
+    if (!t || busy) return;
+    const next = [...thread, { role: 'user' as const, text: t }];
+    setThread(next);
+    setText('');
+    setBusy(true);
+    const at = card.q;
+    try {
+      const st = useApp.getState();
+      const subject = st.subjects.find((x) => x.id === subjectId);
+      const reply = await askAboutCard(
+        {
+          subject: subject?.name ?? 'General',
+          chapter: '',
+          interests: st.coco.memory ? st.profile.interests : [],
+          style: { friendly: 'friendly coach', calm: 'calm tutor', direct: 'direct & focused', playful: 'playful buddy' }[st.coco.style],
+          depth: st.coco.depth,
+        },
+        card,
+        next,
+      );
+      if (cardRef.current === at) setThread([...next, { role: 'assistant', text: reply.trim() }]);
+    } catch {
+      if (cardRef.current === at) setThread([...next, { role: 'assistant', text: 'I lost the connection for a second — try again?' }]);
+    }
+    if (cardRef.current === at) setBusy(false);
+  };
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,36,28,0.35)' }}>
+        <View style={{ backgroundColor: C.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 18, gap: 10, maxHeight: '80%' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.teal }}>Ask Coco</Text>
+            <Pressable hitSlop={10} onPress={onClose}>
+              <Ionicons name="close" size={22} color={C.muted} />
+            </Pressable>
+          </View>
+          <View style={{ backgroundColor: '#F0F8E6', borderRadius: 14, borderWidth: 1, borderColor: C.mintBorder, padding: 12 }}>
+            <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.ink }}>{card.q}</Text>
+            <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.teal, marginTop: 4 }}>{card.a}</Text>
+          </View>
+          <ScrollView style={{ maxHeight: 280 }} contentContainerStyle={{ gap: 8 }}>
+            {!thread.length && <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>Why is this the answer? Want an example? Ask anything about this card.</Text>}
+            {thread.map((m, k) => (
+              <View key={k} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%', backgroundColor: m.role === 'user' ? C.teal : C.white, borderRadius: 16, borderWidth: m.role === 'user' ? 0 : 1, borderColor: C.line, paddingHorizontal: 12, paddingVertical: 8 }}>
+                <Text style={{ fontFamily: F.medium, fontSize: 14, lineHeight: 20, color: m.role === 'user' ? C.white : C.ink }}>{m.text}</Text>
+              </View>
+            ))}
+            {busy && <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>Coco is thinking…</Text>}
+          </ScrollView>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-end' }}>
+            <TextInput
+              value={text}
+              onChangeText={setText}
+              multiline
+              placeholder="Ask about this card…"
+              placeholderTextColor="#A69A8A"
+              style={{ flex: 1, minHeight: 44, maxHeight: 110, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, fontFamily: F.medium, fontSize: 14, color: C.ink }}
+            />
+            <Pressable onPress={send} disabled={!text.trim() || busy} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: text.trim() && !busy ? C.teal : C.lineStrong, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="arrow-up" size={20} color={C.white} />
+            </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 

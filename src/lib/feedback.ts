@@ -1,4 +1,6 @@
-// Sounds + haptics. Every tap in Drrys should feel tactile, like pressing clay.
+// Sounds + haptics. Every tap feels tactile (a light haptic), but sound is saved for the moments that
+// matter — a right or wrong answer, finishing a review, a purchase, watering the tree — the way the best
+// apps do it. Routine UI (taps, selections, page flips) is silent.
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
@@ -13,6 +15,7 @@ const SOURCES = {
   grow: require('../../assets/sounds/grow.wav'),
   flip: require('../../assets/sounds/flip.wav'),
   celebrate: require('../../assets/sounds/celebrate.wav'),
+  water: require('../../assets/sounds/water.m4a'), // from the Blender watering render
 } as const;
 
 export type Sfx = keyof typeof SOURCES;
@@ -28,8 +31,11 @@ export async function initAudio() {
   } catch {}
 }
 
+/** Routine UI sounds: kept as names so call sites stay readable, but they make no sound. */
+const SILENT: ReadonlySet<Sfx> = new Set<Sfx>(['tap', 'select', 'flip']);
+
 export function play(name: Sfx) {
-  if (!useApp.getState().sound) return;
+  if (!useApp.getState().sound || SILENT.has(name)) return;
   try {
     let p = players[name];
     if (!p) {
@@ -48,7 +54,7 @@ export function haptic(kind: 'light' | 'medium' | 'success' | 'error' = 'light')
   else Haptics.impactAsync(kind === 'medium' ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
 }
 
-export const tap = (s: Sfx = 'tap') => {
-  play(s);
+/** Button press: a light haptic only (the `s` hint is kept for call sites, but buttons are silent). */
+export const tap = (_s: Sfx = 'tap') => {
   haptic('light');
 };

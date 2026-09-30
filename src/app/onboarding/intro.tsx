@@ -1,21 +1,27 @@
-// Three intro slides. Each slide is a looping Blender video (the illustration sits in the top half),
-// with copy + buttons layered on the plain lower half. A short zoom-in video plays once on entry.
+// Three intro slides. Each slide is a looping Blender video (the illustration sits in the top of the frame)
+// on a background of the video's own colour, with copy + buttons below.
+//
+// Android note: views that contain video must never be faded with opacity (the video surface can flash
+// black). So all three slides stay mounted and playing, the active one is simply stacked on top, and the
+// change is covered by a quick wash of the next slide's colour (a plain View, safe to fade).
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
-import { ScrollView, Text, View, useWindowDimensions, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
-import Animated, { FadeOut } from 'react-native-reanimated';
+import { Text, View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import type { VideoKey } from '@/art-videos';
+import { VIDEO_BG, type VideoKey } from '@/art-videos';
 import { Motion } from '@/components/Motion';
 import { Btn } from '@/components/ui';
 import { play } from '@/lib/feedback';
-import { useApp } from '@/store';
 import { C, F } from '@/theme';
 
-const SLIDES: { video: VideoKey; fg: string; title: string; body: string; btn: 'light' | 'teal' | 'leaf' }[] = [
+const SLIDES: { video: VideoKey; startAt?: number; fg: string; title: string; body: string; btn: 'light' | 'teal' | 'leaf' }[] = [
   {
     video: 'intro1',
+    startAt: 6, // the clip opens on its zoom-in; skip straight to the settled tree
     fg: '#0E6E6A',
     title: 'Grow Your Knowledge, One Day at a Time.',
     body: 'We turn complex study goals into small daily sessions, so you always know what to focus on next.',
@@ -37,67 +43,89 @@ const SLIDES: { video: VideoKey; fg: string; title: string; body: string; btn: '
   },
 ];
 
+const WASH_IN = 170;
+const WASH_OUT = 260;
+
 export default function Intro() {
-  const { width, height } = useWindowDimensions();
-  const ref = useRef<ScrollView>(null);
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
   const [i, setI] = useState(0);
-  const [entering, setEntering] = useState(true);
-  const setProfile = useApp((s) => s.setProfile);
+  const [wash, setWash] = useState(VIDEO_BG.intro1);
+  const busy = useRef(false);
+  const washO = useSharedValue(0);
 
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const n = Math.round(e.nativeEvent.contentOffset.x / width);
-    if (n !== i) {
-      setI(n);
-      play('flip');
-    }
+  const go = (n: number) => {
+    if (busy.current || n < 0 || n >= SLIDES.length || n === i) return;
+    busy.current = true;
+    play('flip');
+    setWash(VIDEO_BG[SLIDES[n].video]);
+    washO.value = withSequence(
+      withTiming(1, { duration: WASH_IN }, (ok) => {
+        if (ok) runOnJS(setI)(n); // swap slides while fully covered
+      }),
+      withTiming(0, { duration: WASH_OUT }),
+    );
+    setTimeout(() => (busy.current = false), WASH_IN + WASH_OUT);
   };
+  const next = () => (i < SLIDES.length - 1 ? go(i + 1) : router.push('/onboarding/hello'));
 
-  const next = () => {
-    if (i < SLIDES.length - 1) ref.current?.scrollTo({ x: (i + 1) * width, animated: true });
-    else router.push('/onboarding/hello');
-  };
+  const swipe = Gesture.Pan()
+    .runOnJS(true)
+    .activeOffsetX([-20, 20])
+    .onEnd((e) => {
+      if (e.translationX < -50) go(i + 1);
+      else if (e.translationX > 50) go(i - 1);
+    });
+
+  const washA = useAnimatedStyle(() => ({ opacity: washO.value }));
 
   const s = SLIDES[i];
   return (
-    <View style={{ flex: 1, backgroundColor: '#BCE1F0' }}>
-      <ScrollView ref={ref} horizontal pagingEnabled bounces={false} showsHorizontalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={16}>
-        {SLIDES.map((sl, k) => (
-          <View key={k} style={{ width, height }}>
-            <Motion video={sl.video} playing={Math.abs(k - i) <= 1} style={{ position: 'absolute', inset: 0 }} />
-            <SafeAreaView edges={['top']} style={{ flex: 1, paddingHorizontal: 28 }}>
-              <View style={{ height: height * 0.5 }} />
-              <Text style={{ fontFamily: F.bold, fontSize: 32, lineHeight: 38, color: sl.fg }}>{sl.title}</Text>
-              <Text style={{ fontFamily: F.medium, fontSize: 15, lineHeight: 22, color: sl.fg, opacity: 0.9, marginTop: 12 }}>{sl.body}</Text>
-            </SafeAreaView>
+    <GestureDetector gesture={swipe}>
+      <View
+        style={{ flex: 1, backgroundColor: VIDEO_BG[s.video] }}
+        onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+        {size && SLIDES.map((sl, k) => <Slide key={k} slide={sl} active={k === i} w={size.w} h={size.h} />)}
+
+        {/* colour wash that covers the swap */}
+        <Animated.View pointerEvents="none" style={[{ position: 'absolute', inset: 0, zIndex: 5, backgroundColor: wash }, washA]} />
+
+        <SafeAreaView edges={['bottom']} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 6, paddingHorizontal: 40, paddingBottom: 16, gap: 12 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 12 }}>
+            {SLIDES.map((_, k) => (
+              <View key={k} style={{ height: 8, width: k === i ? 28 : 12, borderRadius: 4, backgroundColor: k === i ? C.white : 'rgba(0,0,0,0.18)' }} />
+            ))}
           </View>
-        ))}
-      </ScrollView>
+          <Btn title={i === 2 ? 'Get started' : 'continue'} kind={s.btn} onPress={next} mono={i < 2} />
+          {i === 2 && (
+            <Btn
+              title="I already have an account"
+              kind="green"
+              height={46}
+              onPress={() => router.push({ pathname: '/onboarding/signin', params: { mode: 'signin' } })}
+            />
+          )}
+        </SafeAreaView>
 
-      <SafeAreaView edges={['bottom']} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 40, paddingBottom: 16, gap: 12 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 12 }}>
-          {SLIDES.map((_, k) => (
-            <View key={k} style={{ height: 8, width: k === i ? 28 : 12, borderRadius: 4, backgroundColor: k === i ? C.white : 'rgba(0,0,0,0.18)' }} />
-          ))}
-        </View>
-        <Btn title={i === 2 ? 'Get started' : 'continue'} kind={s.btn} onPress={next} mono={i < 2} />
-        {i === 2 && (
-          <Btn
-            title="I already have an account"
-            kind="green"
-            height={46}
-            onPress={() => {
-              setProfile({ signedIn: true });
-              router.push('/onboarding/signin');
-            }}
-          />
-        )}
+      </View>
+    </GestureDetector>
+  );
+}
+
+function Slide({ slide, active, w, h }: { slide: (typeof SLIDES)[number]; active: boolean; w: number; h: number }) {
+  const bg = VIDEO_BG[slide.video];
+  // The video keeps its true 9:16 shape at full width; the rest of the screen is the video's own colour.
+  const vh = Math.min(w * (16 / 9), h);
+  return (
+    <View
+      pointerEvents="none"
+      style={{ position: 'absolute', left: 0, top: 0, width: w, height: h, backgroundColor: bg, zIndex: active ? 2 : 1, elevation: active ? 2 : 1 }}>
+      <Motion video={slide.video} startAt={slide.startAt} style={{ position: 'absolute', left: 0, top: 0, width: w, height: vh }} />
+      <LinearGradient colors={['transparent', bg]} style={{ position: 'absolute', left: 0, right: 0, top: vh - 60, height: 60 }} />
+      <SafeAreaView edges={['top']} style={{ flex: 1, paddingHorizontal: 28 }}>
+        <View style={{ height: Math.min(vh * 0.5, h * 0.5) }} />
+        <Text style={{ fontFamily: F.bold, fontSize: 32, lineHeight: 38, color: slide.fg }}>{slide.title}</Text>
+        <Text style={{ fontFamily: F.medium, fontSize: 15, lineHeight: 22, color: slide.fg, opacity: 0.9, marginTop: 12 }}>{slide.body}</Text>
       </SafeAreaView>
-
-      {entering && (
-        <Animated.View exiting={FadeOut.duration(250)} style={{ position: 'absolute', inset: 0 }}>
-          <Motion video="introEnter" loop={false} onEnd={() => setEntering(false)} style={{ flex: 1 }} />
-        </Animated.View>
-      )}
     </View>
   );
 }

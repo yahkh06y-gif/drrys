@@ -1,12 +1,13 @@
-// "Get daily reminder" — Coco rings the bell.
+// "Get a daily reminder" — Coco rings the bell.
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { COCO } from '@/art';
-import { Btn, Bubble, Coco, Enter, Progress, Screen, T } from '@/components/ui';
+import { Btn, Bubble, Coco, Enter, OnbBar, Screen, T } from '@/components/ui';
 import { play } from '@/lib/feedback';
 import { enableReminders } from '@/lib/notify';
+import { progressOf } from '@/lib/onboarding';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
 
@@ -45,9 +46,7 @@ export default function Reminder() {
           </Pressable>
         </View>
       }>
-      <View style={{ paddingHorizontal: 10, marginBottom: 28 }}>
-        <Progress value={1} />
-      </View>
+      <OnbBar value={progressOf('reminder')} style={{ marginBottom: 28 }} />
       <Enter>
         <T v="h1" style={{ fontSize: 38 }}>
           Get daily reminder

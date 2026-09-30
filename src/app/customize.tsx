@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COCO } from '@/art';
 import { Btn, Coco, IconBtn, T } from '@/components/ui';
-import { play, tap } from '@/lib/feedback';
+import { haptic, play, tap } from '@/lib/feedback';
 import { useApp, type CocoStyle, type Depth, type Outfit } from '@/store';
 import { C, F } from '@/theme';
 
@@ -28,7 +28,6 @@ const DEPTHS: Depth[] = ['quick', 'balanced', 'deep'];
 export default function Customize() {
   const coco = useApp((s) => s.coco);
   const xp = useApp((s) => s.stats.xp);
-  const profile = useApp((s) => s.profile);
   const buyOutfit = useApp((s) => s.buyOutfit);
   const set = useApp((s) => s.set);
   const setC = (p: Partial<typeof coco>) => set({ coco: { ...coco, ...p } });
@@ -36,7 +35,7 @@ export default function Customize() {
   const pick = (o: (typeof CLOSET)[number]) => {
     const owned = coco.owned.includes(o.id);
     if (!owned && xp < o.cost) {
-      play('wrong');
+      haptic('error');
       Alert.alert('Not enough XP yet', `You need ${o.cost - xp} more XP. Finish a study session to earn some!`);
       return;
     }
@@ -106,39 +105,17 @@ export default function Customize() {
           </View>
         </View>
 
-        <View style={{ gap: 8 }}>
-          <T v="title" style={{ color: C.teal }}>
-            About you
-          </T>
-          <View style={{ backgroundColor: C.white, borderRadius: 16, borderWidth: 1, borderColor: C.line }}>
-            <Line icon="football-outline" label="Interests" value={profile.interests.join(' • ') || '—'} />
-            <Line icon="school-outline" label="Studying" value={[profile.field, profile.subfield].filter(Boolean).join(' • ') || '—'} />
-            <Line icon="flag-outline" label="Goal" value={profile.goal ?? '—'} last />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.white, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 12 }}>
+          <Ionicons name="football-outline" size={22} color={C.leaf} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.ink }}>Explain with my interests</Text>
+            <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Coco uses what you love for analogies. Edit them in Profile → About you.</Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.white, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 12 }}>
-            <Ionicons name="shield-checkmark" size={22} color={C.leaf} />
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.ink }}>Remember helpful details</Text>
-              <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Coco uses your interests to explain things. Stored only on this device.</Text>
-            </View>
-            <Switch value={coco.memory} onValueChange={(v) => (tap(), setC({ memory: v }))} trackColor={{ true: C.leaf }} />
-          </View>
+          <Switch value={coco.memory} onValueChange={(v) => (tap(), setC({ memory: v }))} trackColor={{ true: C.leaf }} />
         </View>
 
-        <Btn title="Save changes" kind="leaf" onPress={() => (play('success'), router.back())} />
+        <Btn title="Save changes" kind="leaf" onPress={() => (haptic('success'), router.back())} />
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function Line({ icon, label, value, last }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; last?: boolean }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderBottomWidth: last ? 0 : 1, borderColor: C.line }}>
-      <Ionicons name={icon} size={16} color={C.teal} />
-      <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.ink }}>{label}</Text>
-      <Text numberOfLines={1} style={{ flex: 1, textAlign: 'right', fontFamily: F.medium, fontSize: 12, color: C.muted }}>
-        {value}
-      </Text>
-    </View>
   );
 }

@@ -1,41 +1,72 @@
 // Plans & Pricing — Drrys Pro via RevenueCat.
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { COCO } from '@/art';
-import { Btn, Coco, Enter, IconBtn, T } from '@/components/ui';
+import { Image } from 'expo-image';
+
+import { COCO, STAT_ICONS } from '@/art';
+import { Btn, Coco, Enter, IconBtn, Progress, T } from '@/components/ui';
 import { haptic, play, tap } from '@/lib/feedback';
-import { buy, getPlans, rcEnabled, restore, type Plan } from '@/lib/purchases';
+import { buy, getPricing, nextReward, rcEnabled, restore, studyStreak, type Discount, type Plan } from '@/lib/purchases';
+import { friendBranches, MAX_OFF, refreshTogether, SQUAD_OFF, SQUAD_SIZE } from '@/lib/together';
+import { cloudEnabled } from '@/lib/cloud';
+import { PDF_LIMITS } from '@/lib/session';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
 
+// What Pro really changes (keep this list honest: judges and students test it).
 const PRO = [
-  { icon: 'git-network-outline', t: '5 Knowledge Trees in parallel', d: 'Manage multiple subjects simultaneously' },
-  { icon: 'layers-outline', t: 'Up to 7 chapters per tree', d: 'Complete end-to-end semester breakdown' },
-  { icon: 'infinite-outline', t: 'Unlimited daily study actions', d: 'Learn at your highest natural momentum' },
-  { icon: 'albums-outline', t: 'Unlimited flashcards & active recall', d: 'Adaptive spaced-repetition memory engine' },
-  { icon: 'sparkles-outline', t: 'High-speed AI companion memory', d: 'Coco remembers your past mistakes & queries' },
-  { icon: 'shirt-outline', t: 'Exclusive Coco outfits', d: 'Seasonal closet drops for Pro gardeners' },
+  { icon: 'git-network-outline', t: '5 Knowledge Trees in parallel', d: 'A tree for every subject this semester' },
+  { icon: 'layers-outline', t: 'Up to 5 chapters per tree', d: `A branch for every chapter, files up to ${PDF_LIMITS.proPages} pages` },
+  { icon: 'flame-outline', t: 'Rewards that stack', d: `Study streak (25–30% off) + a full Study Squad (${SQUAD_OFF}% off), up to ${MAX_OFF}% off` },
+  { icon: 'leaf-outline', t: 'Everything in Free', d: 'Voice recall, Coco’s feedback, spaced-repetition cards' },
 ] as const;
 
-const FREE = ['1 Knowledge Tree (1 subject at a time)', 'Up to 5 chapters per tree', 'Limited daily study actions', 'Standard AI answers with Coco'];
+const FREE = ['1 Knowledge Tree (1 subject at a time)', `1 chapter per tree (files up to ${PDF_LIMITS.freePages} pages), 2 when you invite a friend`, 'Full study sessions with Coco: voice recall, feedback, flashcards', 'Cloud backup with a free account'];
 
 export default function Paywall() {
   const isPro = useApp((s) => s.isPro);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [discount, setDiscount] = useState<Discount>();
+  const together = useApp((s) => s.together);
+  const squadCount = together?.squad?.members.length ?? 0;
+  const canInvite = friendBranches(together) < 1;
+  const days = studyStreak();
+  const goal = nextReward(days);
   const [sel, setSel] = useState<'monthly' | 'yearly'>('yearly');
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    getPlans().then(setPlans);
-  }, []);
+  // fresh squad / invite state first: it decides the price. Runs again when the paywall comes back
+  // into view (e.g. after "Sign in to upgrade").
+  useFocusEffect(
+    useCallback(() => {
+      refreshTogether().finally(() =>
+        getPricing().then((p) => {
+          setPlans(p.plans);
+          setDiscount(p.discount);
+        }),
+      );
+    }, []),
+  );
 
   const plan = plans.find((p) => p.id === sel) ?? plans[0];
+  // yearly saving vs paying monthly for 12 months, from the real store prices
+  const mo = plans.find((p) => p.id === 'monthly')?.amount;
+  const yr = plans.find((p) => p.id === 'yearly')?.amount;
+  const save = mo && yr ? Math.round((1 - yr / (mo * 12)) * 100) : 0;
+
+  // Pro belongs to an account (so it follows the student to any phone): sign in first
+  const signedIn = useApp((s) => !!s.profile.uid);
+  const needsAccount = cloudEnabled && !signedIn;
 
   const purchase = async () => {
+    if (needsAccount) {
+      tap();
+      return router.push('/account'); // comes back here after signing in
+    }
     if (!plan) return;
     setBusy(true);
     try {
@@ -46,7 +77,7 @@ export default function Paywall() {
         Alert.alert('Welcome to Drrys Pro 🌳', 'Your forest can now grow up to 5 trees.', [{ text: 'Let’s grow', onPress: () => router.back() }]);
       }
     } catch (e) {
-      play('wrong');
+      haptic('error');
       Alert.alert('Purchase failed', String((e as Error).message ?? e));
     }
     setBusy(false);
@@ -77,12 +108,69 @@ export default function Paywall() {
           </View>
         ) : (
           <>
+            {/* rewards: a study streak and a full Study Squad make Pro cheaper (stacked, up to 50% off) */}
+            {discount ? (
+              <Enter>
+                <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', backgroundColor: '#FFF1DC', borderRadius: 18, borderWidth: 2, borderColor: C.orange, padding: 14 }}>
+                  <Image source={STAT_ICONS.fire} style={{ width: 44, height: 44 }} contentFit="contain" />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.ink }}>Your reward: {discount.off}% off</Text>
+                    {discount.streak && (
+                      <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.body }}>
+                        🔥 {discount.streak.off}% for studying {days} days in a row (while your streak lives)
+                      </Text>
+                    )}
+                    {discount.squad && <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.body }}>🌳 {SQUAD_OFF}% for your full Study Squad</Text>}
+                    {discount.streak && discount.squad && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Rewards stack up to {MAX_OFF}% off.</Text>}
+                  </View>
+                </View>
+              </Enter>
+            ) : goal ? (
+              <View style={{ gap: 6, backgroundColor: C.white, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Image source={STAT_ICONS.fire} style={{ width: 22, height: 22 }} contentFit="contain" />
+                  <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 13, color: C.ink }}>
+                    Study {goal.days} days in a row → {goal.off}% off Pro
+                  </Text>
+                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.orange }}>
+                    {days}/{goal.days}
+                  </Text>
+                </View>
+                <Progress value={days / goal.days} height={6} track={C.track} fill={C.orange} />
+                {goal.days < 60 && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Keep it for 60 days and it’s 30% off.</Text>}
+              </View>
+            ) : null}
+
+            {/* studying together: squad discount + a free branch for inviting a friend */}
+            {!discount?.squad && (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => (tap(), router.push('/together'))}
+                style={{ gap: 8, backgroundColor: C.white, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ fontSize: 18 }}>👥</Text>
+                  <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 13, color: C.ink }}>
+                    Study Squad: {SQUAD_SIZE} friends → {SQUAD_OFF}% off each
+                  </Text>
+                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.teal }}>{together?.squad ? `${squadCount}/${SQUAD_SIZE}` : 'Start'}</Text>
+                </View>
+                {together?.squad && <Progress value={squadCount / SQUAD_SIZE} height={6} track={C.track} fill={C.teal} />}
+                {canInvite && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 18 }}>🌿</Text>
+                    <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 13, color: C.ink }}>Invite 1 friend → a free 2nd branch</Text>
+                    <Ionicons name="chevron-forward" size={16} color={C.muted} />
+                  </View>
+                )}
+              </Pressable>
+            )}
+
             <View style={{ flexDirection: 'row', backgroundColor: C.sand, borderRadius: 14, padding: 4, borderWidth: 1, borderColor: C.line }}>
               {(['monthly', 'yearly'] as const).map((p) => (
                 <Pressable key={p} onPress={() => (tap('select'), setSel(p))} style={{ flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, borderRadius: 11, backgroundColor: sel === p ? C.teal : 'transparent' }}>
                   <Text style={{ fontFamily: F.bold, fontSize: 13, color: sel === p ? C.white : C.body, textTransform: 'capitalize' }}>{p}</Text>
-                  {p === 'yearly' && (
-                    <Text style={{ fontFamily: F.bold, fontSize: 9, color: C.mossDark, backgroundColor: '#BEF37F', borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2 }}>save 20%</Text>
+                  {p === 'yearly' && save > 0 && (
+                    <Text style={{ fontFamily: F.bold, fontSize: 9, color: C.mossDark, backgroundColor: '#BEF37F', borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2 }}>save {save}%</Text>
                   )}
                 </Pressable>
               ))}
@@ -91,11 +179,20 @@ export default function Paywall() {
             <View style={{ backgroundColor: C.white, borderRadius: 22, borderWidth: 2, borderColor: C.teal, borderBottomWidth: 6, padding: 18, gap: 12 }}>
               <View>
                 <Text style={{ fontFamily: F.bold, fontSize: 22, color: C.teal }}>Drrys Pro</Text>
-                <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>For dedicated learners looking to master their curriculum without boundaries.</Text>
+                <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>For students with a full semester: every subject and every chapter in one forest.</Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, backgroundColor: C.paper, borderRadius: 12, padding: 10 }}>
                 <Text style={{ fontFamily: F.bold, fontSize: 30, color: C.teal }}>{plan?.perMonth ?? '—'}</Text>
-                <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>/ month{sel === 'yearly' ? `, billed ${plan?.price ?? ''} yearly` : ''}</Text>
+                <Text style={{ flex: 1, fontFamily: F.medium, fontSize: 12, color: C.muted }}>
+                  / month{sel === 'yearly' ? `, billed ${plan?.price ?? ''} yearly` : ''}
+                  {plan?.fullPrice ? (
+                    <>
+                      {'\n'}
+                      <Text style={{ textDecorationLine: 'line-through' }}>{plan.fullPrice}</Text>
+                      <Text style={{ color: C.orange, fontFamily: F.bold }}>{`  ${discount?.off ?? ''}% off`}</Text>
+                    </>
+                  ) : null}
+                </Text>
               </View>
               {PRO.map((f) => (
                 <View key={f.t} style={{ flexDirection: 'row', gap: 10 }}>
@@ -108,7 +205,10 @@ export default function Paywall() {
                   </View>
                 </View>
               ))}
-              <Btn title="Upgrade to Forest Pro" iconLeft="leaf" kind="teal" loading={busy} onPress={purchase} />
+              <Btn title={needsAccount ? 'Sign in to upgrade' : 'Upgrade to Drrys Pro'} iconLeft={needsAccount ? 'person' : 'leaf'} kind="teal" loading={busy} onPress={purchase} />
+              {needsAccount && (
+                <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted, textAlign: 'center' }}>A free account keeps your Pro and your forest safe on any phone.</Text>
+              )}
             </View>
 
             <View style={{ backgroundColor: '#F1EEE6', borderRadius: 20, padding: 16, gap: 6 }}>

@@ -19,7 +19,8 @@ export default function TabsLayout() {
   return (
     <Tabs
       initialRouteName="tree"
-      screenOptions={{ headerShown: false, animation: 'shift' }}
+      backBehavior="initialRoute"
+      screenOptions={{ headerShown: false, animation: 'shift', sceneStyle: { backgroundColor: '#8FC9EC' } }}
       tabBar={({ state, navigation }) => (
         <View
           style={{

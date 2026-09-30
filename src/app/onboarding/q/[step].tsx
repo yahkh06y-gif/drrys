@@ -1,13 +1,25 @@
 // The onboarding questionnaire (Figma: onboard \ study 1–5). One component drives every question.
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { TextInput, View } from 'react-native';
 
-import { Btn, Choice, Enter, Progress, Screen, T } from '@/components/ui';
+import { Btn, Choice, Enter, IconBtn, OnbBar, Screen, T } from '@/components/ui';
+import { OPTION_ICONS } from '@/art';
+import { MAIN_QUESTIONS, progressOf, type OnboardingStep } from '@/lib/onboarding';
 import { useApp, type Profile } from '@/store';
+import { C, F } from '@/theme';
 
 type Opt = { label: string; sub?: string };
-type Q = { key: keyof Profile; title: string; subtitle?: string; layout: 'grid' | 'rows'; multi?: boolean; options: (p: Profile) => Opt[] };
+type Q = {
+  key: keyof Profile;
+  title: string;
+  subtitle?: string;
+  layout: 'grid' | 'rows';
+  multi?: boolean;
+  /** adds an "Other…" tile that opens a text box for the student's own answer */
+  other?: string;
+  options: (p: Profile) => Opt[];
+};
 
 const SUBFIELDS: Record<string, Opt[]> = {
   IT: [
@@ -34,15 +46,11 @@ const QUESTIONS: Q[] = [
   },
   { key: 'subfield', title: 'I Study .....', layout: 'grid', options: (p) => SUBFIELDS[p.field ?? 'Other'] ?? SUBFIELDS.Other },
   {
-    key: 'source',
-    title: 'How did you hear about us?',
-    layout: 'grid',
-    options: () => ['YouTube', 'Facebook', 'TV', 'Friend', 'TikTok', 'Google', 'News', 'Other...'].map((label) => ({ label })),
-  },
-  {
     key: 'goal',
     title: 'What would you like us to help you with?',
+    subtitle: 'Pick as many as you like.',
     layout: 'rows',
+    multi: true,
     options: () => ['Prepare for an exam', 'Study during semester', 'Keep knowledge for long', 'Learn a skill / certificate', 'I am not sure yet'].map((label) => ({ label })),
   },
   {
@@ -51,17 +59,35 @@ const QUESTIONS: Q[] = [
     subtitle: 'That helps Coco connect tricky ideas to things you already enjoy.',
     layout: 'grid',
     multi: true,
+    other: 'Something else? e.g. chess, cooking…',
     options: () => ['Gaming', 'Football', 'Cars', 'UFC', 'Tech', 'Anime', 'Basketball', 'Music'].map((label) => ({ label })),
+  },
+  // asked last, after the tree is planted and saved
+  {
+    key: 'source',
+    title: 'One last thing: how did you hear about us?',
+    layout: 'grid',
+    options: () => ['YouTube', 'Facebook', 'TV', 'Friend', 'TikTok', 'Google', 'News', 'Other...'].map((label) => ({ label })),
   },
 ];
 
 export default function Question() {
-  const n = Number(useLocalSearchParams<{ step: string }>().step ?? 0);
+  const params = useLocalSearchParams<{ step: string; edit?: string }>();
+  return <QuestionView n={Number(params.step ?? 0)} editing={params.edit === '1'} />;
+}
+
+/** One questionnaire screen. `editing`: opened later from Profile to change an answer. */
+export function QuestionView({ n, editing }: { n: number; editing: boolean }) {
   const q = QUESTIONS[n];
   const profile = useApp((s) => s.profile);
   const setProfile = useApp((s) => s.setProfile);
   const current = profile[q.key];
-  const [picked, setPicked] = useState<string[]>(Array.isArray(current) ? current : current ? [String(current)] : []);
+  const known = q.options(profile).map((o) => o.label);
+  const saved = Array.isArray(current) ? current : current ? [String(current)] : [];
+  // answers the student typed themselves (not one of the tiles) come back into the text box
+  const [custom, setCustom] = useState(q.other ? saved.filter((x) => !known.includes(x)).join(', ') : '');
+  const [picked, setPicked] = useState<string[]>(q.other ? [...saved.filter((x) => known.includes(x)), ...(custom ? [OTHER] : [])] : saved.filter((x) => known.includes(x)));
+  const otherOn = !!q.other && picked.includes(OTHER);
 
   const toggle = (label: string) => {
     if (q.multi) setPicked((p) => (p.includes(label) ? p.filter((x) => x !== label) : [...p, label]));
@@ -69,17 +95,40 @@ export default function Question() {
   };
 
   const next = () => {
-    setProfile({ [q.key]: q.multi ? picked : picked[0] } as Partial<Profile>);
-    if (n + 1 < QUESTIONS.length) router.push(`/onboarding/q/${n + 1}`);
-    else router.push('/onboarding/plant');
+    const typed = custom.split(',').map((t) => t.trim()).filter(Boolean);
+    const answer = [...picked.filter((x) => x !== OTHER), ...(otherOn ? typed : [])];
+    const changedField = q.key === 'field' && answer[0] !== profile.field;
+    setProfile({ [q.key]: q.multi ? answer : answer[0], ...(changedField ? { subfield: undefined } : {}) } as Partial<Profile>);
+    if (editing) {
+      // a new field needs its speciality too
+      if (n === 0) return router.replace({ pathname: '/about/[step]', params: { step: '1' } });
+      return router.back();
+    }
+    if (n + 1 < MAIN_QUESTIONS) router.push(`/onboarding/q/${n + 1}`);
+    else if (n + 1 === MAIN_QUESTIONS) router.push('/onboarding/payoff'); // Coco shows what the answers buy you
+    else router.push('/onboarding/reminder');
   };
 
-  const opts = q.options(profile);
+  const opts = q.other ? [...q.options(profile), { label: OTHER }] : q.options(profile);
+  const ready = picked.length > 0 && (!otherOn || custom.trim().length > 0 || picked.length > 1);
   return (
-    <Screen scroll footer={<Btn title="continue" mono disabled={!picked.length} onPress={next} />}>
-      <View style={{ paddingHorizontal: 10, marginBottom: 28 }}>
-        <Progress value={(n + 1) / 6} />
-      </View>
+    <Screen
+      scroll
+      // the button shows up once there's an answer to continue with
+      footer={
+        ready ? (
+          <Enter key="go">
+            <Btn title={editing ? 'save' : 'continue'} mono onPress={next} />
+          </Enter>
+        ) : undefined
+      }>
+      {editing ? (
+        <View style={{ marginBottom: 18 }}>
+          <IconBtn name="arrow-back" onPress={() => router.back()} />
+        </View>
+      ) : (
+        <OnbBar value={progressOf(n < MAIN_QUESTIONS ? (`q${n}` as OnboardingStep) : 'source')} style={{ marginBottom: 28 }} />
+      )}
       <Enter>
         <T v="h1" style={{ marginBottom: q.subtitle ? 8 : 26 }}>
           {q.title}
@@ -94,7 +143,7 @@ export default function Question() {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
           {opts.map((o, k) => (
             <Enter key={o.label} delay={k * 40} style={{ width: '47%' }}>
-              <Choice label={o.label} sub={o.sub} selected={picked.includes(o.label)} onPress={() => toggle(o.label)} />
+              <Choice label={o.label} sub={o.sub} icon={OPTION_ICONS[`${q.key}:${o.label}`]} selected={picked.includes(o.label)} onPress={() => toggle(o.label)} />
             </Enter>
           ))}
         </View>
@@ -102,13 +151,26 @@ export default function Question() {
         <View style={{ gap: 14 }}>
           {opts.map((o, k) => (
             <Enter key={o.label} delay={k * 50}>
-              <Choice row label={o.label} selected={picked.includes(o.label)} onPress={() => toggle(o.label)} />
+              <Choice row label={o.label} icon={OPTION_ICONS[`${q.key}:${o.label}`]} selected={picked.includes(o.label)} onPress={() => toggle(o.label)} />
             </Enter>
           ))}
         </View>
+      )}
+      {otherOn && (
+        <Enter style={{ marginTop: 16 }}>
+          <TextInput
+            value={custom}
+            onChangeText={setCustom}
+            placeholder={q.other}
+            placeholderTextColor="#A69A8A"
+            autoFocus
+            style={{ fontFamily: F.bold, fontSize: 17, color: C.ink, backgroundColor: C.white, borderWidth: 2, borderColor: C.brown, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14 }}
+          />
+        </Enter>
       )}
     </Screen>
   );
 }
 
 const C_TITLE = '#7A9C3E';
+const OTHER = 'Other…';

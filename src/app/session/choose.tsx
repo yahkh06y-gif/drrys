@@ -2,11 +2,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Btn, Enter, SessionHeader, T } from '@/components/ui';
 import { play, tap } from '@/lib/feedback';
+import { checkPdf, keepFile } from '@/lib/session';
 import { uid, useApp } from '@/store';
 import { C, F } from '@/theme';
 
@@ -22,7 +23,9 @@ export default function Choose() {
     const r = await DocumentPicker.getDocumentAsync({ type: ['application/pdf'], copyToCacheDirectory: true });
     if (r.canceled) return;
     const f = r.assets[0];
-    const m = { id: uid(), name: f.name, uri: f.uri, size: f.size, mime: f.mimeType };
+    const bad = await checkPdf(f, { chapter: true, isPro: useApp.getState().isPro });
+    if (bad) return Alert.alert('Can’t use this file', bad);
+    const m = { id: uid(), name: f.name, uri: await keepFile(f.uri), size: f.size, mime: f.mimeType };
     updateSubject(subject.id, { chapters: subject.chapters.map((c) => (c.id === chapter.id ? { ...c, materials: [...c.materials, m] } : c)) });
     patchSession({ materialId: m.id });
     play('select');
