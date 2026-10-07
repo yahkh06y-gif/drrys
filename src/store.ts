@@ -30,6 +30,12 @@ export type Card = {
   interval: number; // days
   reps: number;
   due: number; // epoch ms
+  // how many times in a row the student forgot (wrong) / remembered (right) this card
+  wrong?: number;
+  right?: number;
+  mnemonic?: string; // the student's own memory hook, made when a card kept slipping; it blooms as a rose on the tree
+  leveled?: boolean; // already upgraded to a harder question after 3 right in a row
+  level?: number; // 2 = a harder question made from a card the student mastered
 };
 
 export type Rating = 'forgot' | 'hard' | 'good' | 'easy';
@@ -64,6 +70,9 @@ export type SessionDraft = {
   questions?: ActiveQuestion[];
   answers: string[];
   newCardIds: string[];
+  pretest?: { q: string; ideal: string; guess: string }[]; // warm-up: guesses made before the recall
+  groups?: { name: string; items: string[] }[]; // the student's own grouping of what they missed
+  chest?: number; // bonus XP from the end-of-session chest (set once it has been opened)
   draftCards?: { q: string; a: string }[]; // made together with the analysis, added to the deck at the end
   gapCards?: { q: string; a: string }[]; // from active learning: one card per thing the student didn't get
   startedAt: number;
@@ -113,7 +122,10 @@ type State = {
   startSession: (subjectId: string, chapterId: string) => void;
   patchSession: (p: Partial<SessionDraft>) => void;
   addCards: (cards: Omit<Card, 'id' | 'ease' | 'interval' | 'reps' | 'due'>[]) => string[];
-  rateCard: (id: string, r: Rating) => void;
+  rateCard: (id: string, r: Rating) => { wrong: number; right: number } | undefined;
+  patchCard: (id: string, p: Partial<Card>) => void;
+  plantRose: (id: string, hook: string) => void;
+  bonusXp: (subjectId: string, xp: number) => void;
   finishSession: () => { xp: number; minutes: number; accuracy: number };
   buyOutfit: (o: Outfit, cost: number) => boolean;
   reset: () => void;
@@ -246,6 +258,7 @@ export const useApp = create<State>()(
       // Lightweight SM-2 spaced repetition.
       rateCard: (id, r) => {
         const q = { forgot: 1, hard: 3, good: 4, easy: 5 }[r];
+        let streaks: { wrong: number; right: number } | undefined;
         set({
           cards: get().cards.map((c) => {
             if (c.id !== id) return c;
@@ -263,10 +276,36 @@ export const useApp = create<State>()(
             const start = new Date();
             start.setHours(0, 0, 0, 0);
             const due = interval === 0 ? Date.now() + 10 * 60_000 : start.getTime() + interval * DAY + 60 * 60_000; // +1h: safe across DST
-            return { ...c, ease, interval, reps, due };
+            // streaks: forgot → wrong +1, right resets · good/easy → right +1, wrong resets · hard changes neither
+            const wrong = r === 'forgot' ? (c.wrong ?? 0) + 1 : r === 'hard' ? (c.wrong ?? 0) : 0;
+            const right = r === 'forgot' ? 0 : r === 'hard' ? (c.right ?? 0) : (c.right ?? 0) + 1;
+            streaks = { wrong, right };
+            return { ...c, ease, interval, reps, due, wrong, right };
           }),
         });
+        return streaks;
       },
+
+      patchCard: (id, p) => set({ cards: get().cards.map((c) => (c.id === id ? { ...c, ...p } : c)) }),
+
+      // The student made a memory hook for a card that kept slipping: it's saved on the card and blooms as a rose (+5 XP).
+      plantRose: (id, hook) => {
+        const c = get().cards.find((x) => x.id === id);
+        if (!c) return;
+        const d = { xp: 5 };
+        set({
+          cards: get().cards.map((x) => (x.id === id ? { ...x, mnemonic: hook.trim() } : x)),
+          stats: addStats(get().stats, d),
+          subjects: get().subjects.map((x) => (x.id === c.subjectId ? { ...x, stats: addStats(x.stats, d) } : x)),
+        });
+      },
+
+      // Bonus from the end-of-session chest.
+      bonusXp: (subjectId, xp) =>
+        set({
+          stats: addStats(get().stats, { xp }),
+          subjects: get().subjects.map((x) => (x.id === subjectId ? { ...x, stats: addStats(x.stats, { xp }) } : x)),
+        }),
 
       finishSession: () => {
         const s = get().session;

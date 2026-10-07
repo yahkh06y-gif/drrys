@@ -286,12 +286,18 @@ function TreePage({ clock, subjectId, width, topInset, near, coco, onInsights }:
   const isPro = useApp((s) => s.isPro);
   const together = useApp((s) => s.together);
   const due = useMemo(() => cards.filter((c) => c.subjectId === subjectId && isDue(c)), [cards, subjectId, clock]); // eslint-disable-line react-hooks/exhaustive-deps
+  // memory-hook roses: one per card with a hook, wilted while that card is due for review
+  const roses = useMemo(() => {
+    const out: Record<string, { id: string; wilted: boolean }[]> = {};
+    for (const c of cards) if (c.subjectId === subjectId && c.mnemonic) (out[c.chapterId] ??= []).push({ id: c.id, wilted: isDue(c) });
+    return out;
+  }, [cards, subjectId, clock]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!subject) return null;
   // default: the first unfinished branch that isn't resting (Pro ended), else the first branch
   const open = subject.chapters.filter((_, i) => !isResting(subjectIdx, i, isPro, together));
   const chapter = subject.chapters.find((c) => c.id === sel) ?? open.find((c) => c.mastery < 1) ?? open[0] ?? subject.chapters[0];
   return (
-    <KnowledgeTree width={width} chapters={subject.chapters} selected={chapter?.id} coco={coco} onSelect={(id) => (tap('select'), setSel(id))}>
+    <KnowledgeTree width={width} chapters={subject.chapters} roses={roses} selected={chapter?.id} coco={coco} onSelect={(id) => (tap('select'), setSel(id))}>
       <View style={{ position: 'absolute', top: topInset + 8, left: 16, right: 16, flexDirection: 'row', alignItems: 'center' }}>
         <Pressable hitSlop={10} onPress={() => (tap(), router.push({ pathname: '/subject', params: { id: subject.id } }))} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name="create-outline" size={24} color={C.ink} />

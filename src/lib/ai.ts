@@ -31,7 +31,12 @@ export type Analysis = {
   corrections: Correction[];
   keywords: string[]; // words from the recall that were correct (highlighted in the UI)
 };
-export type ActiveQuestion = { q: string; hint: string; ideal: string };
+/** How the idea is best practised (PACER): conceptual = how ideas relate · procedural = steps / working it out ·
+ *  analogous = a comparison and where it breaks · evidence = using a fact or example on a new case. */
+export type QKind = 'conceptual' | 'procedural' | 'analogous' | 'evidence';
+export type ActiveQuestion = { q: string; hint: string; ideal: string; kind?: QKind };
+export type PretestQ = { q: string; ideal: string };
+export type GroupCheck = { groups: { name: string; ok: boolean; note: string }[]; overall: string };
 /** `card`: when the answer shows a gap, one flashcard aimed at exactly what the student didn't get. */
 export type Grade = { correct: boolean; feedback: string; card?: FlashCard | null };
 export type FlashCard = { q: string; a: string };
@@ -238,14 +243,20 @@ Return ONLY JSON with this shape:
    "corrections": [{"concept": "name", "youSaid": "their wrong statement (quote/paraphrase)", "truth": "the correct idea in 1-2 sentences", "formula": "optional short formula"}],
    "keywords": ["exact short phrases copied from the student's text that are correct"]
  },
- "questions": [{"q": "...", "hint": "a nudge, not the answer", "ideal": "model answer in 1-2 sentences"}],
+ "questions": [{"kind": "conceptual|procedural|analogous|evidence", "q": "...", "hint": "a nudge, not the answer", "ideal": "model answer in 1-2 sentences"}],
  "cards": [{"q": "short question", "a": "short, accurate answer"}]
 }
 Rules:
 - analysis.forgotten: list EVERY important idea of these pages the student left out (not just a few), most important first; max 8. Each detail must actually teach the idea, because the student reads these before being questioned.
 - analysis.corrections: every wrong statement, max 6. nailed: max 6. Empty lists are fine.
 - questions: no fixed number — as many as it takes to cover every missed and corrected idea that matters (a light lecture may need 3, a dense one 8 or more). They make the student EXPLAIN (why/how), one idea each: mostly the missed and corrected ideas (only ones taught in analysis above), plus one that deepens something they already got right. Ask them the way an exam would: prioritise ideas the syllabus/past papers emphasise and mirror the past papers' question style when those files are attached. ${c.interests.length ? 'At most ONE question may invite an analogy from their interests, and only if an idea is abstract enough to need it; the rest are plain exam-style questions.' : ''} Never ask about something that is not in today's lecture pages or the analysis.
-- cards: built from the LECTURE content, not from the student's wording: the corrected misconceptions first, then the missed ideas, then the key facts of these pages. No fixed number — one card per fact or idea worth memorising, as many as the material holds; dense pages get many cards, light pages few. Never pad with trivia, never skip a key idea, never add facts that aren't in the lecture.`,
+  Give each question a "kind" that fits the idea (this is how Drrys picks the right way to practise it):
+    conceptual — how two or more ideas relate ("how does X change Y?", "why does X lead to Y?");
+    procedural — a process or calculation: the student writes the steps in order or works a tiny example;
+    analogous — a comparison from the lecture: the student says where it fits AND where it stops working;
+    evidence — a fact or example from the lecture: the student uses it on a new, short scenario.
+  Mix the kinds; use whichever fits each idea, never force a kind that doesn't fit.
+- cards: only REFERENCE material — terms, definitions, numbers, formulas, lists, labels — the things that are simply remembered. Ideas that are better practised by explaining (the questions above) do not get a card. Built from the LECTURE content, not from the student's wording: the corrected misconceptions first, then the missed reference facts, then the other key reference facts of these pages. No fixed number — one card per fact worth memorising, as many as the material holds; dense pages get many cards, light pages few. Never pad with trivia, never skip a key idea, never add facts that aren't in the lecture.`,
       },
     ],
     9000, // dense lectures can need many questions and cards
@@ -255,7 +266,8 @@ Rules:
   if (!a) throw new Error('Coco’s answer came back incomplete');
   // the model sometimes leaves a list out: make every list safe to read
   const analysis = { ...a, nailed: a.nailed ?? [], forgotten: a.forgotten ?? [], corrections: a.corrections ?? [], keywords: a.keywords ?? [] };
-  const questions = (plan.questions ?? []).filter((q) => q?.q);
+  const KINDS: QKind[] = ['conceptual', 'procedural', 'analogous', 'evidence'];
+  const questions = (plan.questions ?? []).filter((q) => q?.q).map((q) => ({ ...q, kind: KINDS.includes(q.kind as QKind) ? q.kind : 'conceptual' }) as ActiveQuestion);
   const cards = (plan.cards ?? []).filter((c) => c?.q && c?.a);
   return { analysis, questions, cards };
 }
@@ -339,8 +351,8 @@ export async function gradeAnswer(c: Context, q: ActiveQuestion, answer: string)
   const raw = await call(persona(c), [
     {
       type: 'text',
-      text: `Question: ${q.q}\nModel answer: ${q.ideal}\nStudent answer: """${answer}"""
-Judge if the student's explanation captures the key idea (be fair, not pedantic). The model answer comes from the lecture: judge against it and add nothing from outside it.
+      text: `Question (${q.kind ?? 'conceptual'}): ${q.q}\nModel answer: ${q.ideal}\nStudent answer: """${answer}"""
+${q.kind === 'analogous' ? 'This is a comparison question: the answer must say where the comparison fits AND where it stops working.\n' : ''}${q.kind === 'procedural' ? 'This is a procedure question: the steps must be right and in the right order.\n' : ''}Judge if the student's explanation captures the key idea (be fair, not pedantic). The model answer comes from the lecture: judge against it and add nothing from outside it.
 Also spot the gap: if the answer is wrong, incomplete or mixes something up, write ONE flashcard aimed at exactly that
 missing or confused point (not the whole question again), answered from the lecture. If the answer is fully right, "card" is null.
 Return ONLY JSON: {"correct": true|false, "feedback": "1-2 sentences in Coco's voice; if wrong, give the missing piece",
@@ -415,4 +427,108 @@ export async function transcribe(base64: string, mime: string): Promise<string> 
   );
   const text = out.trim();
   return /^\[silence\]$/i.test(text) ? '' : text;
+}
+
+
+/* ---------- warm-up, grouping, memory hooks, level-up ---------- */
+
+/** Warm-up before the recall: two short questions on today's pages. They are meant to be hard — a wrong guess still primes the brain. */
+export async function makePretest(c: Context): Promise<PretestQ[]> {
+  if (!aiEnabled) {
+    await wait(900);
+    return DEMO.pretest;
+  }
+  const raw = await call(
+    persona(c),
+    [
+      ...material(c),
+      {
+        type: 'text',
+        text: `The student is about to study ${c.pdfBase64 ? "today's lecture pages" : 'this chapter'}. Write exactly 2 warm-up questions on the big ideas they are about to meet.
+They are guesses, not a test: the student has NOT studied this yet, so ask about the "why" or "how" of a central idea, answerable in one sentence, never a trivia fact.
+Answer ONLY from ${c.pdfBase64 ? 'the lecture pages' : 'standard curriculum knowledge for this chapter'}.
+Return ONLY JSON: [{"q": "...", "ideal": "the answer in 1-2 simple sentences"}]`,
+      },
+    ],
+    900,
+  );
+  return parseJSON<PretestQ[]>(raw).filter((x) => x?.q && x?.ideal).slice(0, 2);
+}
+
+/** The student grouped what they missed on their own. Coco only CHECKS the grouping — it never regroups for them. */
+export async function verifyGrouping(
+  c: Context,
+  groups: { name: string; items: { title: string; detail: string }[] }[],
+): Promise<GroupCheck> {
+  if (!aiEnabled) {
+    await wait(900);
+    return DEMO.groupCheck(groups.map((g) => g.name));
+  }
+  const raw = await call(
+    persona(c) +
+      "\nYou are checking a student's OWN grouping of ideas. Never regroup the ideas for them and never hand them the right grouping. Match the language the student writes in.",
+    [
+      {
+        type: 'text',
+        text: `The student sorted these ideas into groups and named each group (the name is what they think connects the ideas):
+${JSON.stringify(groups)}
+For each group decide whether its ideas really belong together for the reason in the name.
+- ok: true → one short sentence saying what they connected well.
+- ok: false → ONE short sentence naming which idea doesn't fit or what the name misses, plus a question that nudges them to see it. Do not say where it belongs.
+Also give "overall": one encouraging sentence.
+Return ONLY JSON: {"groups": [{"name": "same name", "ok": true|false, "note": "..."}], "overall": "..."}`,
+      },
+    ],
+    900,
+  );
+  const r = parseJSON<GroupCheck>(raw);
+  return { groups: r.groups ?? [], overall: r.overall ?? '' };
+}
+
+/** A few ideas for a memory hook when the student asks for help (they can always write their own). */
+export async function suggestHooks(c: Context, card: { q: string; a: string }): Promise<string[]> {
+  if (!aiEnabled) {
+    await wait(700);
+    return DEMO.hooks;
+  }
+  const raw = await call(
+    persona(c) + '\nMatch the language the student writes in.',
+    [
+      {
+        type: 'text',
+        text: `The student keeps forgetting this flashcard:
+Q: ${card.q}
+A: ${card.a}
+Suggest 3 different memory hooks (a vivid image, a short rhyme, an acronym, or a silly sentence), each one line, that make the ANSWER easy to recall. They must be accurate: never change the answer.
+Return ONLY JSON: ["hook 1", "hook 2", "hook 3"]`,
+      },
+    ],
+    500,
+  );
+  return parseJSON<string[]>(raw).filter((x) => typeof x === 'string' && x.trim()).slice(0, 3);
+}
+
+/** A card the student got right 3 times in a row graduates: one harder, apply-it question replaces re-asking the same fact. */
+export async function levelUp(c: Context, card: { q: string; a: string }): Promise<FlashCard> {
+  if (!aiEnabled) {
+    await wait(500);
+    return DEMO.levelUp(card);
+  }
+  const raw = await call(
+    persona(c) + '\nMatch the language the student writes in.',
+    [
+      {
+        type: 'text',
+        text: `The student has mastered this flashcard:
+Q: ${card.q}
+A: ${card.a}
+Write ONE harder question on the same idea: it asks them to apply it to a new short situation, or to compare it with a related idea, instead of repeating the fact. Short, with a short accurate answer.
+Return ONLY JSON: {"q": "...", "a": "..."}`,
+      },
+    ],
+    500,
+  );
+  const r = parseJSON<FlashCard>(raw);
+  if (!r?.q || !r?.a) throw new Error('empty level-up');
+  return r;
 }

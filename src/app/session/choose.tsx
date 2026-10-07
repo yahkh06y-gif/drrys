@@ -107,7 +107,7 @@ export default function Choose() {
         )}
       </ScrollView>
       <View style={{ padding: 20, gap: 6 }}>
-        <Btn title="Continue to recall" icon="arrow-forward" kind="teal" pill onPress={() => router.push('/session/recall')} />
+        <Btn title="Continue to recall" icon="arrow-forward" kind="teal" pill onPress={() => router.push('/session/pretest')} />
         <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted, textAlign: 'center' }}>Your material will be hidden during recall — that’s the point 😉</Text>
       </View>
     </SafeAreaView>

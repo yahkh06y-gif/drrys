@@ -158,3 +158,16 @@ export async function sessionContext(withPdf = true): Promise<Context> {
     depth: s.coco.depth,
   };
 }
+
+/** A light context (no lecture file, no running session): for chats about a single card, memory hooks and level-ups. */
+export function cardContext(subjectId: string): Context {
+  const st = useApp.getState();
+  const subject = st.subjects.find((x) => x.id === subjectId);
+  return {
+    subject: subject?.name ?? 'General',
+    chapter: '',
+    interests: st.coco.memory ? st.profile.interests : [],
+    style: { friendly: 'friendly coach', calm: 'calm tutor', direct: 'direct & focused', playful: 'playful buddy' }[st.coco.style],
+    depth: st.coco.depth,
+  };
+}

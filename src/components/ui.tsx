@@ -239,6 +239,8 @@ export function Screen({
 }
 
 /* ---------- Session header ("session setup • 2 of 5") ---------- */
+export const SESSION_STEPS = 7; // setup · warm-up · recall · analyze · organize · explain · cards
+
 export function SessionHeader({ step, title, onClose }: { step: number; title: string; onClose?: () => void }) {
   // a stray tap on ✕ shouldn't throw a session away: ask first
   const [asking, setAsking] = useState(false);
@@ -249,14 +251,14 @@ export function SessionHeader({ step, title, onClose }: { step: number; title: s
         <IconBtn name="close" onPress={() => setAsking(true)} />
         <View style={{ flex: 1, alignItems: 'center', marginRight: 40 }}>
           <T v="small" style={{ fontFamily: F.semi, fontSize: 11, color: C.goldInk, letterSpacing: 0.5 }}>
-            step {step} of 5
+            step {step} of {SESSION_STEPS}
           </T>
           <T v="title" style={{ color: C.teal, fontSize: 14 }}>
             {title}
           </T>
         </View>
       </View>
-      <Progress value={step / 5} height={8} track={C.track} />
+      <Progress value={step / SESSION_STEPS} height={8} track={C.track} />
       <Confirm
         visible={asking}
         title="Leave this session?"

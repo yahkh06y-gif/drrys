@@ -8,11 +8,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COCO } from '@/art';
 import { Btn, Coco, Enter, Pill, SessionHeader, T } from '@/components/ui';
 import { MicButton, useVoice } from '@/components/Voice';
-import { discussAnswer, gradeAnswer, type Grade } from '@/lib/ai';
+import { discussAnswer, gradeAnswer, type Grade, type QKind } from '@/lib/ai';
 import { haptic, play, tap } from '@/lib/feedback';
 import { sessionContext } from '@/lib/session';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
+
+// How each kind of idea is practised (PACER): the question type decides what the student is asked to do.
+const KIND: Record<QKind, { pill: string; line: string; placeholder: string }> = {
+  conceptual: { pill: 'CONNECT IT', line: 'Think about how the ideas relate, then explain it your way.', placeholder: 'It connects because…' },
+  procedural: { pill: 'WORK IT OUT', line: 'Write the steps in order, or work a tiny example.', placeholder: 'Step 1…, then…' },
+  analogous: { pill: 'TEST THE COMPARISON', line: 'Say where the comparison fits and where it stops working.', placeholder: 'It fits because… but it breaks when…' },
+  evidence: { pill: 'USE IT', line: 'Use the idea on a new, short situation.', placeholder: 'In this case…' },
+};
 
 export default function Active() {
   const qs = useApp((s) => s.session?.questions ?? []);
@@ -99,15 +107,15 @@ export default function Active() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
-      <SessionHeader step={4} title="Active learning" />
+      <SessionHeader step={6} title="Active learning" />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView key={i} contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
           <Enter>
-            <Pill text="COCO ASKS" />
+            <Pill text={KIND[q.kind ?? 'conceptual'].pill} />
             <T v="h2" style={{ marginTop: 6 }}>
               {i === qs.length - 1 ? 'Explain it your way' : 'One idea at a time'}
             </T>
-            <T>Answer from memory, then talk it through with Coco.</T>
+            <T>{KIND[q.kind ?? 'conceptual'].line} Then talk it through with Coco.</T>
             <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.leaf, marginTop: 4 }}>
               Question {i + 1} of {qs.length}
             </Text>
@@ -143,7 +151,7 @@ export default function Active() {
                   value={answer}
                   onChangeText={setAnswer}
                   multiline
-                  placeholder="Explain it in your own words…"
+                  placeholder={KIND[q.kind ?? 'conceptual'].placeholder}
                   placeholderTextColor="#A69A8A"
                   style={{ flex: 1, minHeight: 90, fontFamily: F.medium, fontSize: 15, lineHeight: 22, color: C.ink, textAlignVertical: 'top' }}
                 />

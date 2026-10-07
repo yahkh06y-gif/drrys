@@ -28,9 +28,24 @@ const layer = { position: 'absolute', left: 0, top: 0, width: '100%', height: '1
 const shown = new Set<string>();
 const lastMastery = new Map<string, number>();
 
+/** One memory-hook rose: it blooms while the card is fresh and wilts when the card is due for review. */
+export type RoseInfo = { id: string; wilted: boolean };
+const bloomed = new Set<string>(); // roses already seen: only a new one pops in
+
+// Where roses sit on a canopy: offsets from its centre, as fractions of its half-width / half-height.
+const ROSE_SLOTS = [
+  [-0.55, -0.25],
+  [0.5, -0.4],
+  [0.1, 0.3],
+  [-0.3, 0.5],
+  [0.65, 0.2],
+  [0, -0.75],
+] as const;
+
 export function KnowledgeTree({
   width,
   chapters,
+  roses,
   selected,
   onSelect,
   coco,
@@ -38,6 +53,8 @@ export function KnowledgeTree({
 }: {
   width: number;
   chapters: Chapter[];
+  /** memory-hook roses by chapter id */
+  roses?: Record<string, RoseInfo[]>;
   selected?: string;
   onSelect: (id: string) => void;
   /** set on the tree you're looking at: Coco lands there */
@@ -85,6 +102,13 @@ export function KnowledgeTree({
           {T.branches.map((src, i) => (
             <Branch key={i} src={src} anchor={T.anchors[i]} chapter={chapters[i]} grow={growNew && !!chapters[i] && !shown.has(chapters[i].id)} />
           ))}
+          {chapters.slice(0, TREE_MAX_BRANCHES).map((ch, i) =>
+            (roses?.[ch.id] ?? []).slice(0, ROSE_SLOTS.length).map((r, k) => {
+              const a = T.anchors[i];
+              const [dx, dy] = ROSE_SLOTS[k];
+              return <Rose key={r.id} rose={r} size={width * 0.075} left={(a.x + dx * ((a.r - a.l) / 2)) * width} top={(a.cy + dy * (a.cy - a.top)) * height} />;
+            }),
+          )}
         </StageTree>
       </Animated.View>
 
@@ -123,6 +147,21 @@ export function KnowledgeTree({
       })}
       {children}
     </View>
+  );
+}
+
+function Rose({ rose, size, left, top }: { rose: RoseInfo; size: number; left: number; top: number }) {
+  const s = useSharedValue(bloomed.has(rose.id) ? 1 : 0);
+  useEffect(() => {
+    if (bloomed.has(rose.id)) return;
+    bloomed.add(rose.id);
+    s.value = withDelay(500, withSpring(1, { damping: 7, stiffness: 120 })); // a new rose pops in
+  }, [rose.id, s]);
+  const st = useAnimatedStyle(() => ({ opacity: s.value > 0.02 ? 1 : 0, transform: [{ scale: s.value }] }));
+  return (
+    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: left - size / 2, top: top - size / 2, width: size, height: size, alignItems: 'center', justifyContent: 'center' }, st]}>
+      <Text style={{ fontSize: size * 0.8, opacity: rose.wilted ? 0.8 : 1, transform: [{ rotate: rose.wilted ? '28deg' : '0deg' }] }}>{rose.wilted ? '🥀' : '🌹'}</Text>
+    </Animated.View>
   );
 }
 

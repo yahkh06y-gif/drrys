@@ -9,10 +9,10 @@ import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } f
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Enter, IconBtn, Pill, SessionHeader, T } from '@/components/ui';
-import { askAboutCard, makeCards } from '@/lib/ai';
+import { askAboutCard, levelUp, makeCards, suggestHooks } from '@/lib/ai';
 import { haptic, play, tap } from '@/lib/feedback';
-import { sessionContext } from '@/lib/session';
-import { isDue, useApp, type Rating } from '@/store';
+import { cardContext, sessionContext } from '@/lib/session';
+import { isDue, useApp, type Card, type Rating } from '@/store';
 import { C, F } from '@/theme';
 
 // clay icons: refresh = forgot, dumbbell = hard, thumbs up = good, lightning = easy
@@ -42,6 +42,10 @@ export default function Cards() {
   const [revealed, setRevealed] = useState(false); // the answer has been seen (unlocks rating)
   const [onBack, setOnBack] = useState(false); // which side is showing now
   const [ask, setAsk] = useState(false);
+  // a card that slipped 3 times in a row offers a memory hook (the student's choice); `go` carries on afterwards
+  const [hook, setHook] = useState<{ card: Card; go: () => void }>();
+  const [hookShown, setHookShown] = useState(false); // the card's saved hook is showing as a hint
+  const [toast, setToast] = useState<string>();
 
   useEffect(() => {
     if (!loading || !session?.analysis) return;
@@ -90,16 +94,38 @@ export default function Cards() {
     } else router.replace('/session/done');
   };
 
+  // 3 right in a row: the card graduates — a harder, apply-it question is added for a few days later
+  const graduate = async (c: Card) => {
+    try {
+      const harder = await levelUp(cardContext(c.subjectId), c);
+      const st = useApp.getState();
+      const [id] = st.addCards([{ q: harder.q, a: harder.a, subjectId: c.subjectId, chapterId: c.chapterId, level: 2 }]);
+      st.patchCard(id, { due: Date.now() + 3 * 86_400_000 });
+      st.patchCard(c.id, { leveled: true });
+      play('success');
+      setToast('Level up! You’ve mastered that card, so Coco added a harder question on it.');
+      setTimeout(() => setToast(undefined), 4000);
+    } catch {
+      // no connection: it will graduate the next time it is answered right
+    }
+  };
+
   const rate = (r: Rating) => {
     if (!card) return;
-    rateCard(card.id, r);
+    const res = rateCard(card.id, r);
     play(r === 'forgot' ? 'wrong' : 'select');
     haptic(r === 'forgot' ? 'error' : 'light');
-    if (i + 1 >= cards.length) return finish();
-    flip.value = 0;
-    setRevealed(false);
-    setOnBack(false);
-    setI(i + 1);
+    const advance = () => {
+      if (i + 1 >= cards.length) return finish();
+      flip.value = 0;
+      setRevealed(false);
+      setOnBack(false);
+      setHookShown(false);
+      setI(i + 1);
+    };
+    if (res && res.wrong >= 3 && res.wrong % 3 === 0 && !card.mnemonic) return setHook({ card, go: advance });
+    if (res && res.right === 3 && !card.leveled) graduate(card);
+    advance();
   };
 
   return (
@@ -112,7 +138,7 @@ export default function Cards() {
           </T>
         </View>
       ) : (
-        <SessionHeader step={5} title="Active learning" />
+        <SessionHeader step={7} title="Lock it in" />
       )}
       <View style={{ flex: 1, padding: 20, gap: 14 }}>
         <Enter>
@@ -142,6 +168,15 @@ export default function Cards() {
                 <Pill text={card.reps ? 'REVIEW' : 'NEW'} bg="#FDE7C8" border={C.amber} fg="#8A4B0F" />
                 <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.muted, marginTop: 14 }}>QUESTION</Text>
                 <Text style={{ fontFamily: F.bold, fontSize: 21, lineHeight: 28, color: C.ink, marginTop: 4 }}>{card.q}</Text>
+                {!!card.mnemonic && (
+                  <Pressable
+                    onPress={() => (tap('select'), setHookShown((v) => !v))}
+                    style={{ marginTop: 14, alignSelf: 'flex-start', backgroundColor: '#FFF6E3', borderWidth: 1, borderColor: C.amber, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, maxWidth: '100%' }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 18, color: C.goldInk }}>
+                      {hookShown ? `🌹 ${card.mnemonic}` : '🌹 Show my memory hook'}
+                    </Text>
+                  </Pressable>
+                )}
                 <View style={{ flex: 1 }} />
                 <View style={{ alignItems: 'center', gap: 4 }}>
                   <Ionicons name="hand-left-outline" size={20} color={C.leaf} />
@@ -187,8 +222,102 @@ export default function Cards() {
           </>
         )}
       </View>
+      {toast && (
+        <View pointerEvents="none" style={{ position: 'absolute', left: 16, right: 16, top: 70, backgroundColor: C.teal, borderRadius: 16, padding: 12 }}>
+          <Text style={{ fontFamily: F.bold, fontSize: 13, lineHeight: 19, color: C.white, textAlign: 'center' }}>⬆️ {toast}</Text>
+        </View>
+      )}
+      <HookSheet
+        card={hook?.card}
+        onClose={() => {
+          const go = hook?.go;
+          setHook(undefined);
+          go?.();
+        }}
+      />
       {card && <AskCard visible={ask} card={card} subjectId={card.subjectId} onClose={() => setAsk(false)} />}
     </SafeAreaView>
+  );
+}
+
+// "Stuck on this one?" — the student makes a memory hook (their own, or one of Coco's ideas to start from).
+// A saved hook blooms as a rose on the tree and comes back as a hint on the card.
+function HookSheet({ card, onClose }: { card?: Card; onClose: () => void }) {
+  const [text, setText] = useState('');
+  const [ideas, setIdeas] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    setText('');
+    setIdeas([]);
+    setBusy(false);
+  }, [card?.id]);
+  if (!card) return null;
+  const getIdeas = async () => {
+    setBusy(true);
+    try {
+      setIdeas(await suggestHooks(cardContext(card.subjectId), card));
+    } catch {
+      setIdeas([]);
+    }
+    setBusy(false);
+  };
+  const plant = () => {
+    if (!text.trim()) return;
+    useApp.getState().plantRose(card.id, text);
+    play('grow');
+    haptic('success');
+    onClose();
+  };
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,36,28,0.35)' }}>
+        <View style={{ backgroundColor: C.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 18, gap: 10, maxHeight: '88%' }}>
+          <ScrollView contentContainerStyle={{ gap: 10 }} keyboardShouldPersistTaps="handled">
+            <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.teal }}>This one keeps slipping 🌹</Text>
+            <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.body }}>
+              Make a memory hook for it: a picture, a rhyme, a silly sentence. It blooms as a rose on your tree and comes back as a hint on this card.
+            </Text>
+            <View style={{ backgroundColor: '#F0F8E6', borderRadius: 14, borderWidth: 1, borderColor: C.mintBorder, padding: 12 }}>
+              <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.ink }}>{card.q}</Text>
+              <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.teal, marginTop: 4 }}>{card.a}</Text>
+            </View>
+            <TextInput
+              value={text}
+              onChangeText={setText}
+              multiline
+              placeholder="My hook is…"
+              placeholderTextColor="#A69A8A"
+              style={{ minHeight: 70, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, fontFamily: F.medium, fontSize: 15, color: C.ink, textAlignVertical: 'top' }}
+            />
+            {ideas.length > 0 && (
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.muted }}>COCO’S IDEAS — TAP ONE, THEN MAKE IT YOURS</Text>
+                {ideas.map((h, k) => (
+                  <Pressable key={k} onPress={() => (tap('select'), setText(h))} style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 10 }}>
+                    <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.ink }}>{h}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+            {!ideas.length && (
+              <Pressable onPress={getIdeas} disabled={busy} style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
+                {busy ? <ActivityIndicator size="small" color={C.teal} /> : <Ionicons name="bulb-outline" size={14} color={C.body} />}
+                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.body }}>Give me ideas</Text>
+              </Pressable>
+            )}
+          </ScrollView>
+          <Pressable
+            onPress={plant}
+            disabled={!text.trim()}
+            style={{ height: 52, borderRadius: 26, backgroundColor: text.trim() ? C.teal : C.lineStrong, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.white }}>Plant my rose 🌹</Text>
+          </Pressable>
+          <Pressable onPress={onClose} hitSlop={10} style={{ alignSelf: 'center' }}>
+            <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>Not now</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 

@@ -73,7 +73,7 @@ export default function Analyze() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
-      <SessionHeader step={3} title="Analyze" />
+      <SessionHeader step={4} title="Analyze" />
       <View style={{ flex: 1, padding: 20 }}>
         <Enter>
           <T v="h2" style={{ textAlign: 'center' }}>
