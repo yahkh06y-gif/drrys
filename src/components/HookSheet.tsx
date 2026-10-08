@@ -3,6 +3,7 @@
 // the card, and is listed when the student holds that chapter's branch.
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
+import { Image } from 'expo-image';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -11,6 +12,7 @@ import { describeSketch, suggestHooks } from '@/lib/ai';
 import { haptic, play, tap } from '@/lib/feedback';
 import { cardContext } from '@/lib/session';
 import { saveSketch } from '@/lib/sketch';
+import { makeHookPicture, savePicture, youcamEnabled } from '@/lib/youcam';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
 
@@ -25,6 +27,12 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
   const [drawing, setDrawing] = useState(false); // a stroke is in progress (the sheet must not scroll)
   const [look, setLook] = useState<{ saw: string; caption: string }>();
   const [looking, setLooking] = useState(false);
+  // a clay-style picture made from the hook (YouCam). One picture costs 1 credit, so a hook gets 3 tries at most.
+  const [pic, setPic] = useState<string>();
+  const [making, setMaking] = useState(false);
+  const [picErr, setPicErr] = useState(false);
+  const [withCoco, setWithCoco] = useState(false);
+  const [tries, setTries] = useState(0);
   const pad = useRef<SketchHandle>(null);
   const tried = text.trim().split(/\s+/).filter(Boolean).length >= 3; // your own first try comes before Coco's ideas
   useEffect(() => {
@@ -34,6 +42,11 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
     setDraw(false);
     setInk(false);
     setLook(undefined);
+    setPic(undefined);
+    setMaking(false);
+    setPicErr(false);
+    setWithCoco(false);
+    setTries(0);
   }, [card?.id]);
   if (!card) return null;
   const getIdeas = async () => {
@@ -55,14 +68,29 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
     }
     setLooking(false);
   };
+  const makePic = async () => {
+    if (making || text.trim().length < 3) return;
+    setMaking(true);
+    setPicErr(false);
+    setTries((n) => n + 1);
+    try {
+      setPic(await makeHookPicture({ hook: text.trim(), q: card.q, a: card.a, withCoco }));
+      play('success');
+      haptic('success');
+    } catch {
+      setPicErr(true);
+    }
+    setMaking(false);
+  };
   const plant = async () => {
     if (!text.trim() && !ink) return;
     setBusy(true);
-    const img = ink ? await pad.current?.capture() : undefined;
+    const img = ink && !pic ? await pad.current?.capture() : undefined;
     const st = useApp.getState();
     // a question that has no flashcard yet becomes one (so the hook has somewhere to live and is reviewed later)
     const id = card.id ?? st.addCards([{ subjectId: card.subjectId, chapterId: card.chapterId, q: card.q, a: card.a }])[0];
-    const uri = img ? await saveSketch(id, img) : undefined;
+    // the made picture wins over a drawing (the drawing is only kept when there is no picture)
+    const uri = pic ? await savePicture(id, pic) : img ? await saveSketch(id, img) : undefined;
     st.saveHook(id, text.trim() || look?.caption || 'My drawing', uri);
     setBusy(false);
     play('grow');
@@ -91,6 +119,35 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
               placeholderTextColor="#A69A8A"
               style={{ minHeight: 70, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, fontFamily: F.medium, fontSize: 15, color: C.ink, textAlignVertical: 'top' }}
             />
+            {youcamEnabled && (
+              <View style={{ gap: 8 }}>
+                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <Pressable
+                    onPress={makePic}
+                    disabled={making || text.trim().length < 3 || tries >= 3}
+                    style={{ flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.teal, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 8, opacity: text.trim().length < 3 || tries >= 3 ? 0.5 : 1 }}>
+                    {making ? <ActivityIndicator size="small" color={C.white} /> : <Ionicons name="image-outline" size={15} color={C.white} />}
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.white }}>{making ? 'Shaping it in clay…' : pic ? 'Try another picture' : 'Make a picture'}</Text>
+                  </Pressable>
+                  <Pressable onPress={() => (tap('select'), setWithCoco((v) => !v))} style={{ flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: withCoco ? C.leaf : C.sand, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 8 }}>
+                    <Ionicons name={withCoco ? 'checkmark-circle' : 'ellipse-outline'} size={14} color={withCoco ? C.white : C.body} />
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: withCoco ? C.white : C.body }}>Coco in it</Text>
+                  </Pressable>
+                </View>
+                {text.trim().length < 3 && !pic && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Write your hook first, then Drrys can turn it into a picture.</Text>}
+                {making && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>This takes about half a minute.</Text>}
+                {picErr && <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.orange }}>Couldn’t make the picture right now. Your hook is still fine: you can save it as it is.</Text>}
+                {tries >= 3 && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>That’s the most pictures for one hook.</Text>}
+                {!!pic && (
+                  <View style={{ backgroundColor: C.white, borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 6, gap: 6 }}>
+                    <Image source={{ uri: pic }} style={{ width: '100%', aspectRatio: 1664 / 928, borderRadius: 10 }} contentFit="cover" />
+                    <Pressable onPress={() => (tap('select'), setPic(undefined))} style={{ alignSelf: 'flex-end', paddingHorizontal: 8, paddingVertical: 4 }}>
+                      <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.muted }}>Remove picture</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            )}
             <Pressable onPress={() => (tap('select'), setDraw((v) => !v))} style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: draw ? C.teal : C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
               <Ionicons name="brush-outline" size={14} color={draw ? C.white : C.body} />
               <Text style={{ fontFamily: F.bold, fontSize: 12, color: draw ? C.white : C.body }}>{draw ? 'Hide the drawing pad' : 'Draw it instead (or as well)'}</Text>
