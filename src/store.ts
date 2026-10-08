@@ -33,7 +33,8 @@ export type Card = {
   // how many times in a row the student forgot (wrong) / remembered (right) this card
   wrong?: number;
   right?: number;
-  mnemonic?: string; // the student's own memory hook, made when a card kept slipping; it blooms as a rose on the tree
+  mnemonic?: string; // the student's own memory hook, made when a card kept slipping (shown as a hint, listed in the branch's hook gallery)
+  mnemonicImg?: string; // a drawing for the hook: a file on this device
   leveled?: boolean; // already upgraded to a harder question after 3 right in a row
   level?: number; // 2 = a harder question made from a card the student mastered
 };
@@ -70,7 +71,6 @@ export type SessionDraft = {
   questions?: ActiveQuestion[];
   answers: string[];
   newCardIds: string[];
-  pretest?: { q: string; ideal: string; guess: string }[]; // warm-up: guesses made before the recall
   groups?: { name: string; items: string[] }[]; // the student's own grouping of what they missed
   chest?: number; // bonus XP from the end-of-session chest (set once it has been opened)
   draftCards?: { q: string; a: string }[]; // made together with the analysis, added to the deck at the end
@@ -110,6 +110,7 @@ type State = {
   sound: boolean;
   session?: SessionDraft;
   coachSeen: boolean; // Coco has explained the daily watering once
+  hookTipSeen: boolean; // Coco has told the student where to find their memory hooks (hold a branch)
   justWatered?: string; // subject whose full session just finished → Coco waters that tree once
 
   set: (p: Partial<State>) => void;
@@ -124,7 +125,7 @@ type State = {
   addCards: (cards: Omit<Card, 'id' | 'ease' | 'interval' | 'reps' | 'due'>[]) => string[];
   rateCard: (id: string, r: Rating) => { wrong: number; right: number } | undefined;
   patchCard: (id: string, p: Partial<Card>) => void;
-  plantRose: (id: string, hook: string) => void;
+  saveHook: (id: string, hook: string, img?: string) => void;
   bonusXp: (subjectId: string, xp: number) => void;
   finishSession: () => { xp: number; minutes: number; accuracy: number };
   buyOutfit: (o: Outfit, cost: number) => boolean;
@@ -149,6 +150,7 @@ const initial = {
   sound: true,
   session: undefined as SessionDraft | undefined,
   coachSeen: false,
+  hookTipSeen: false,
 };
 
 const DAY = 86_400_000;
@@ -288,13 +290,13 @@ export const useApp = create<State>()(
 
       patchCard: (id, p) => set({ cards: get().cards.map((c) => (c.id === id ? { ...c, ...p } : c)) }),
 
-      // The student made a memory hook for a card that kept slipping: it's saved on the card and blooms as a rose (+5 XP).
-      plantRose: (id, hook) => {
+      // The student made a memory hook for a card that kept slipping: it's saved on the card (+5 XP) and shows up in the branch's hook gallery.
+      saveHook: (id, hook, img) => {
         const c = get().cards.find((x) => x.id === id);
         if (!c) return;
         const d = { xp: 5 };
         set({
-          cards: get().cards.map((x) => (x.id === id ? { ...x, mnemonic: hook.trim() } : x)),
+          cards: get().cards.map((x) => (x.id === id ? { ...x, mnemonic: hook.trim(), ...(img ? { mnemonicImg: img } : {}) } : x)),
           stats: addStats(get().stats, d),
           subjects: get().subjects.map((x) => (x.id === c.subjectId ? { ...x, stats: addStats(x.stats, d) } : x)),
         });

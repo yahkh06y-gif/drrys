@@ -239,7 +239,7 @@ export function Screen({
 }
 
 /* ---------- Session header ("session setup • 2 of 5") ---------- */
-export const SESSION_STEPS = 7; // setup · warm-up · recall · analyze · organize · explain · cards
+export const SESSION_STEPS = 6; // setup · recall · analyze · organize (only with 4+ missed ideas) · explain · cards
 
 export function SessionHeader({ step, title, onClose }: { step: number; title: string; onClose?: () => void }) {
   // a stray tap on ✕ shouldn't throw a session away: ask first

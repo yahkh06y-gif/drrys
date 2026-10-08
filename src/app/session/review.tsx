@@ -10,6 +10,7 @@ import { Image } from 'expo-image';
 import { HERO } from '@/art';
 import { Btn, Enter, Pill, SessionHeader, T } from '@/components/ui';
 import { play, tap } from '@/lib/feedback';
+import { missedIdeas, ORGANIZE_MIN } from '@/lib/session';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
 
@@ -26,7 +27,7 @@ export default function Review() {
   const last = i >= pages.length - 1;
 
   const next = () => {
-    if (last) router.replace('/session/group');
+    if (last) router.replace(missedIdeas(a).length >= ORGANIZE_MIN ? '/session/group' : '/session/active');
     else {
       play('flip');
       setI(i + 1);
@@ -41,7 +42,7 @@ export default function Review() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
-      <SessionHeader step={4} title="Analyze" />
+      <SessionHeader step={3} title="Analyze" />
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, paddingTop: 10 }}>
         {pages.map((_, k) => (
           <View key={k} style={{ width: k === i ? 22 : 12, height: 5, borderRadius: 3, backgroundColor: k === i ? C.leaf : C.track }} />
@@ -96,7 +97,7 @@ export default function Review() {
         {page === 'forgotten' &&
           a.forgotten.map((c, k) => (
             <Enter key={k} delay={100 + k * 80}>
-              <Row icon={<View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: C.amber }} />} title={c.title} tag={c.page ? `Missed · ${c.page}` : 'Missed'} tagColor="#FDE7C8" body={c.detail} />
+              <Row icon={<View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: C.amber }} />} title={c.title} tag={c.page ? `Missed · ${c.page}` : 'Missed'} tagColor="#FDE7C8" body={c.detail} why={c.why} />
             </Enter>
           ))}
         {page === 'corrections' &&
@@ -134,7 +135,7 @@ export default function Review() {
   );
 }
 
-function Row({ icon, title, tag, tagColor, body }: { icon: React.ReactNode; title: string; tag: string; tagColor: string; body: string }) {
+function Row({ icon, title, tag, tagColor, body, why }: { icon: React.ReactNode; title: string; tag: string; tagColor: string; body: string; why?: string }) {
   return (
     <View style={{ backgroundColor: C.white, borderRadius: 18, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, padding: 14, gap: 6 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -143,6 +144,11 @@ function Row({ icon, title, tag, tagColor, body }: { icon: React.ReactNode; titl
         <Pill text={tag} bg={tagColor} border="transparent" fg={C.ink} />
       </View>
       <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.body, paddingLeft: 30 }}>{body}</Text>
+      {!!why && (
+        <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 18, color: C.goldInk, paddingLeft: 30 }}>
+          So what? <Text style={{ fontFamily: F.medium }}>{why}</Text>
+        </Text>
+      )}
     </View>
   );
 }

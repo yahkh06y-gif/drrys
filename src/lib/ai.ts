@@ -22,7 +22,7 @@ export const aiEnabled = aiProvider !== null;
 /** Shown in Profile → "Coco's brain". */
 export const aiLabel = aiProvider === 'claude' ? 'Claude AI · live' : aiProvider === 'gemini' ? 'Gemini AI · live' : 'Demo mode';
 
-export type Concept = { title: string; detail: string; tag: string };
+export type Concept = { title: string; detail: string; tag: string; why?: string }; // why: where this idea matters (exam / real use)
 export type Correction = { concept: string; youSaid: string; truth: string; formula?: string };
 export type Analysis = {
   summary: string;
@@ -34,8 +34,19 @@ export type Analysis = {
 /** How the idea is best practised (PACER): conceptual = how ideas relate · procedural = steps / working it out ·
  *  analogous = a comparison and where it breaks · evidence = using a fact or example on a new case. */
 export type QKind = 'conceptual' | 'procedural' | 'analogous' | 'evidence';
-export type ActiveQuestion = { q: string; hint: string; ideal: string; kind?: QKind };
-export type PretestQ = { q: string; ideal: string };
+/** How the student answers: explain (type / say it) · order (drag steps into sequence) · sort (drag items into groups) ·
+ *  match (connect pairs) · work (solve on paper: type or sketch). order / sort / match are marked by the app itself. */
+export type QFormat = 'explain' | 'order' | 'sort' | 'match' | 'work';
+export type ActiveQuestion = {
+  q: string;
+  hint: string;
+  ideal: string;
+  kind?: QKind;
+  format?: QFormat;
+  steps?: string[]; // order: the right sequence
+  buckets?: { name: string; items: string[] }[]; // sort
+  pairs?: { left: string; right: string }[]; // match
+};
 export type GroupCheck = { groups: { name: string; ok: boolean; note: string }[]; overall: string };
 /** `card`: when the answer shows a gap, one flashcard aimed at exactly what the student didn't get. */
 export type Grade = { correct: boolean; feedback: string; card?: FlashCard | null };
@@ -56,6 +67,7 @@ export type Context = {
 type Block =
   | { type: 'text'; text: string }
   | { type: 'document'; source: { type: 'base64'; media_type: 'application/pdf'; data: string } }
+  | { type: 'image'; source: { type: 'base64'; media_type: 'image/png'; data: string } } // a student's sketch
   | { type: 'audio'; mime: string; data: string }; // Gemini only (voice → text)
 
 async function call(system: string, content: Block[], maxTokens = 2000): Promise<string> {
@@ -212,6 +224,22 @@ function material(c: Context): Block[] {
 }
 
 
+/** Keep a question's format only if its payload is usable; otherwise it is simply an "explain" question. */
+export function cleanQuestion(q: ActiveQuestion): ActiveQuestion {
+  const s = (x: unknown) => (typeof x === 'string' ? x.trim() : '');
+  const steps = (q.steps ?? []).map(s).filter(Boolean).slice(0, 6);
+  const buckets = (q.buckets ?? [])
+    .map((b) => ({ name: s(b?.name), items: (b?.items ?? []).map(s).filter(Boolean).slice(0, 4) }))
+    .filter((b) => b.name && b.items.length)
+    .slice(0, 3);
+  const pairs = (q.pairs ?? []).map((p) => ({ left: s(p?.left), right: s(p?.right) })).filter((p) => p.left && p.right).slice(0, 5);
+  const base = { ...q, steps: undefined, buckets: undefined, pairs: undefined };
+  if (q.format === 'order' && steps.length >= 3) return { ...base, steps, ideal: q.ideal || steps.join(' → ') };
+  if (q.format === 'sort' && buckets.length >= 2 && buckets.reduce((n, b) => n + b.items.length, 0) >= 4) return { ...base, buckets };
+  if (q.format === 'match' && pairs.length >= 3) return { ...base, pairs };
+  return { ...base, format: q.format === 'work' ? 'work' : 'explain' };
+}
+
 export type SessionPlan = { analysis: Analysis; questions: ActiveQuestion[]; cards: FlashCard[] };
 
 /**
@@ -239,11 +267,11 @@ Return ONLY JSON with this shape:
  "analysis": {
    "summary": "1 short encouraging sentence",
    "nailed": [{"title": "concept", "detail": "what they got right (1 sentence)", "tag": "Strong Recall|Exact Match|Firmly Grasped"}],
-   "forgotten": [{"title": "important idea from the lecture they did not mention", "detail": "teach it clearly in 2-3 simple sentences, as if explaining it for the first time", "tag": "Missed", "page": "page ref if known"}],
+   "forgotten": [{"title": "important idea from the lecture they did not mention", "detail": "teach it clearly in 2-3 simple sentences, as if explaining it for the first time", "why": "ONE short sentence: why it matters, i.e. where it shows up (a typical exam question, or what it is needed for); use the syllabus / past papers when attached", "tag": "Missed", "page": "page ref if known"}],
    "corrections": [{"concept": "name", "youSaid": "their wrong statement (quote/paraphrase)", "truth": "the correct idea in 1-2 sentences", "formula": "optional short formula"}],
    "keywords": ["exact short phrases copied from the student's text that are correct"]
  },
- "questions": [{"kind": "conceptual|procedural|analogous|evidence", "q": "...", "hint": "a nudge, not the answer", "ideal": "model answer in 1-2 sentences"}],
+ "questions": [{"kind": "conceptual|procedural|analogous|evidence", "format": "explain|order|sort|match|work", "q": "...", "hint": "a nudge, not the answer", "ideal": "model answer in 1-2 sentences"}],
  "cards": [{"q": "short question", "a": "short, accurate answer"}]
 }
 Rules:
@@ -256,6 +284,12 @@ Rules:
     analogous — a comparison from the lecture: the student says where it fits AND where it stops working;
     evidence — a fact or example from the lecture: the student uses it on a new, short scenario.
   Mix the kinds; use whichever fits each idea, never force a kind that doesn't fit.
+  Also give each question a "format" (how the student answers). The default is "explain": typing or saying an explanation. Use the others only when the lecture content naturally has that shape, and for at most about a third of the questions:
+    order — a sequence or process (steps, stages, a cause→effect chain): add "steps", the 3-6 items in the CORRECT order, each at most 8 words. The app shuffles them; the student drags them into order.
+    sort — a classification: add "buckets", 2-3 of {"name": "...", "items": ["...", "..."]} with 2-4 short items each; every item clearly belongs to exactly one bucket.
+    match — pairs that belong together (term↔meaning, cause↔effect, idea↔example): add "pairs", 3-5 of {"left": "...", "right": "..."}, each side at most 8 words, one right answer per left.
+    work — a problem to solve on paper (a calculation, derivation, code, proof): "q" is the problem and "ideal" is the worked solution in a few lines.
+  For order, sort and match, "ideal" is ONE sentence saying why it is that way (it becomes the student's flashcard if they miss it).
 - cards: only REFERENCE material — terms, definitions, numbers, formulas, lists, labels — the things that are simply remembered. Ideas that are better practised by explaining (the questions above) do not get a card. Built from the LECTURE content, not from the student's wording: the corrected misconceptions first, then the missed reference facts, then the other key reference facts of these pages. No fixed number — one card per fact worth memorising, as many as the material holds; dense pages get many cards, light pages few. Never pad with trivia, never skip a key idea, never add facts that aren't in the lecture.`,
       },
     ],
@@ -267,7 +301,7 @@ Rules:
   // the model sometimes leaves a list out: make every list safe to read
   const analysis = { ...a, nailed: a.nailed ?? [], forgotten: a.forgotten ?? [], corrections: a.corrections ?? [], keywords: a.keywords ?? [] };
   const KINDS: QKind[] = ['conceptual', 'procedural', 'analogous', 'evidence'];
-  const questions = (plan.questions ?? []).filter((q) => q?.q).map((q) => ({ ...q, kind: KINDS.includes(q.kind as QKind) ? q.kind : 'conceptual' }) as ActiveQuestion);
+  const questions = (plan.questions ?? []).filter((q) => q?.q).map((q) => cleanQuestion({ ...q, kind: KINDS.includes(q.kind as QKind) ? q.kind : 'conceptual' } as ActiveQuestion));
   const cards = (plan.cards ?? []).filter((c) => c?.q && c?.a);
   return { analysis, questions, cards };
 }
@@ -342,17 +376,18 @@ Return ONLY JSON: [{"q": "...", "hint": "a nudge, not the answer", "ideal": "mod
   return parseJSON<ActiveQuestion[]>(raw);
 }
 
-export async function gradeAnswer(c: Context, q: ActiveQuestion, answer: string): Promise<Grade> {
+export async function gradeAnswer(c: Context, q: ActiveQuestion, answer: string, sketch?: string): Promise<Grade> {
   if (!aiEnabled) {
     await wait(900);
     const ok = answer.trim().split(/\s+/).length >= 5;
     return { correct: ok, feedback: ok ? DEMO.goodFeedback : DEMO.tryFeedback };
   }
   const raw = await call(persona(c), [
+    ...(sketch ? ([{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: sketch } }] as Block[]) : []),
     {
       type: 'text',
-      text: `Question (${q.kind ?? 'conceptual'}): ${q.q}\nModel answer: ${q.ideal}\nStudent answer: """${answer}"""
-${q.kind === 'analogous' ? 'This is a comparison question: the answer must say where the comparison fits AND where it stops working.\n' : ''}${q.kind === 'procedural' ? 'This is a procedure question: the steps must be right and in the right order.\n' : ''}Judge if the student's explanation captures the key idea (be fair, not pedantic). The model answer comes from the lecture: judge against it and add nothing from outside it.
+      text: `${sketch ? 'The image above is what the student sketched or wrote by hand for this question.\n' : ''}Question (${q.kind ?? 'conceptual'}): ${q.q}\nModel answer: ${q.ideal}\nStudent answer: """${answer}"""
+${q.format === 'work' ? 'This is a worked problem: judge the method, each step and the final answer (from the typed working and/or the sketch). If only the final answer is wrong, say which step to recheck.\n' : ''}${q.kind === 'analogous' ? 'This is a comparison question: the answer must say where the comparison fits AND where it stops working.\n' : ''}${q.kind === 'procedural' ? 'This is a procedure question: the steps must be right and in the right order.\n' : ''}Judge if the student's explanation captures the key idea (be fair, not pedantic). The model answer comes from the lecture: judge against it and add nothing from outside it.
 Also spot the gap: if the answer is wrong, incomplete or mixes something up, write ONE flashcard aimed at exactly that
 missing or confused point (not the whole question again), answered from the lecture. If the answer is fully right, "card" is null.
 Return ONLY JSON: {"correct": true|false, "feedback": "1-2 sentences in Coco's voice; if wrong, give the missing piece",
@@ -432,29 +467,6 @@ export async function transcribe(base64: string, mime: string): Promise<string> 
 
 /* ---------- warm-up, grouping, memory hooks, level-up ---------- */
 
-/** Warm-up before the recall: two short questions on today's pages. They are meant to be hard — a wrong guess still primes the brain. */
-export async function makePretest(c: Context): Promise<PretestQ[]> {
-  if (!aiEnabled) {
-    await wait(900);
-    return DEMO.pretest;
-  }
-  const raw = await call(
-    persona(c),
-    [
-      ...material(c),
-      {
-        type: 'text',
-        text: `The student is about to study ${c.pdfBase64 ? "today's lecture pages" : 'this chapter'}. Write exactly 2 warm-up questions on the big ideas they are about to meet.
-They are guesses, not a test: the student has NOT studied this yet, so ask about the "why" or "how" of a central idea, answerable in one sentence, never a trivia fact.
-Answer ONLY from ${c.pdfBase64 ? 'the lecture pages' : 'standard curriculum knowledge for this chapter'}.
-Return ONLY JSON: [{"q": "...", "ideal": "the answer in 1-2 simple sentences"}]`,
-      },
-    ],
-    900,
-  );
-  return parseJSON<PretestQ[]>(raw).filter((x) => x?.q && x?.ideal).slice(0, 2);
-}
-
 /** The student grouped what they missed on their own. Coco only CHECKS the grouping — it never regroups for them. */
 export async function verifyGrouping(
   c: Context,
@@ -531,4 +543,29 @@ Return ONLY JSON: {"q": "...", "a": "..."}`,
   const r = parseJSON<FlashCard>(raw);
   if (!r?.q || !r?.a) throw new Error('empty level-up');
   return r;
+}
+
+/** Coco looks at a memory-hook drawing and says what she sees, then suggests a short caption. She never redraws it. */
+export async function describeSketch(c: Context, card: { q: string; a: string }, sketch: string): Promise<{ saw: string; caption: string }> {
+  if (!aiEnabled) {
+    await wait(900);
+    return DEMO.sketchLook;
+  }
+  const raw = await call(
+    persona(c) + '\nMatch the language the student writes in.',
+    [
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: sketch } },
+      {
+        type: 'text',
+        text: `The student drew a memory hook for this flashcard:
+Q: ${card.q}
+A: ${card.a}
+Say in ONE short sentence what you see in the drawing, and whether it would help them remember the ANSWER (if not, one tip, such as adding the key word). Then write a caption of at most 8 words, in their drawing's own idea, to put under it.
+Return ONLY JSON: {"saw": "...", "caption": "..."}`,
+      },
+    ],
+    400,
+  );
+  const r = parseJSON<{ saw: string; caption: string }>(raw);
+  return { saw: r.saw ?? '', caption: r.caption ?? '' };
 }

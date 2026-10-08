@@ -7,6 +7,7 @@ import { Pressable, Text, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
+  type SharedValue,
   useSharedValue,
   withDelay,
   withRepeat,
@@ -17,7 +18,7 @@ import Animated, {
 
 import { COCO_ON_TREE, COCO_TREE, TREE, type CocoClip, TREE_ASPECT, TREE_MAX_BRANCHES, TREE_STAGES, type BranchAnchor } from '@/art';
 import type { Chapter } from '@/store';
-import { play } from '@/lib/feedback';
+import { haptic, play } from '@/lib/feedback';
 import { C, F } from '@/theme';
 
 const layer = { position: 'absolute', left: 0, top: 0, width: '100%', height: '100%' } as const;
@@ -28,35 +29,24 @@ const layer = { position: 'absolute', left: 0, top: 0, width: '100%', height: '1
 const shown = new Set<string>();
 const lastMastery = new Map<string, number>();
 
-/** One memory-hook rose: it blooms while the card is fresh and wilts when the card is due for review. */
-export type RoseInfo = { id: string; wilted: boolean };
-const bloomed = new Set<string>(); // roses already seen: only a new one pops in
-
-// Where roses sit on a canopy: offsets from its centre, as fractions of its half-width / half-height.
-const ROSE_SLOTS = [
-  [-0.55, -0.25],
-  [0.5, -0.4],
-  [0.1, 0.3],
-  [-0.3, 0.5],
-  [0.65, 0.2],
-  [0, -0.75],
-] as const;
-
 export function KnowledgeTree({
   width,
   chapters,
-  roses,
   selected,
   onSelect,
+  onHold,
+  wilt = 0,
   coco,
   children,
 }: {
   width: number;
   chapters: Chapter[];
-  /** memory-hook roses by chapter id */
-  roses?: Record<string, RoseInfo[]>;
   selected?: string;
   onSelect: (id: string) => void;
+  /** press and hold a branch label (its memory hooks) */
+  onHold?: (id: string) => void;
+  /** 0–1: how long the student has been away. The leaves turn yellow as it grows, and green again once watered. */
+  wilt?: number;
   /** set on the tree you're looking at: Coco lands there */
   coco?: CocoLanding;
   children?: React.ReactNode;
@@ -71,6 +61,14 @@ export function KnowledgeTree({
   useEffect(() => {
     chapters.forEach((c) => shown.add(c.id));
   }, [chapters]);
+  // the yellow wash: fades in a moment after the tree appears (the student opens the app and sees it), fades out after watering
+  const yellow = useSharedValue(0);
+  const wiltPrev = useRef(0);
+  useEffect(() => {
+    const down = wilt < wiltPrev.current;
+    wiltPrev.current = wilt;
+    yellow.value = withDelay(down ? 2600 : 700, withTiming(wilt, { duration: 1800, easing: Easing.inOut(Easing.cubic) }));
+  }, [wilt, yellow]);
   const sway = useSharedValue(0);
   const cloud = useSharedValue(0);
   useEffect(() => {
@@ -100,15 +98,8 @@ export function KnowledgeTree({
         <StageTree stage={stage}>
           <Image pointerEvents="none" source={T.tree} style={layer} contentFit="cover" cachePolicy="memory-disk" />
           {T.branches.map((src, i) => (
-            <Branch key={i} src={src} anchor={T.anchors[i]} chapter={chapters[i]} grow={growNew && !!chapters[i] && !shown.has(chapters[i].id)} />
+            <Branch key={i} src={src} anchor={T.anchors[i]} chapter={chapters[i]} yellow={yellow} grow={growNew && !!chapters[i] && !shown.has(chapters[i].id)} />
           ))}
-          {chapters.slice(0, TREE_MAX_BRANCHES).map((ch, i) =>
-            (roses?.[ch.id] ?? []).slice(0, ROSE_SLOTS.length).map((r, k) => {
-              const a = T.anchors[i];
-              const [dx, dy] = ROSE_SLOTS[k];
-              return <Rose key={r.id} rose={r} size={width * 0.075} left={(a.x + dx * ((a.r - a.l) / 2)) * width} top={(a.cy + dy * (a.cy - a.top)) * height} />;
-            }),
-          )}
         </StageTree>
       </Animated.View>
 
@@ -121,6 +112,8 @@ export function KnowledgeTree({
           <Pressable
             key={ch.id}
             onPress={() => onSelect(ch.id)}
+            onLongPress={onHold ? () => (haptic('medium'), onHold(ch.id)) : undefined}
+            delayLongPress={350}
             hitSlop={14}
             style={{
               position: 'absolute',
@@ -150,22 +143,7 @@ export function KnowledgeTree({
   );
 }
 
-function Rose({ rose, size, left, top }: { rose: RoseInfo; size: number; left: number; top: number }) {
-  const s = useSharedValue(bloomed.has(rose.id) ? 1 : 0);
-  useEffect(() => {
-    if (bloomed.has(rose.id)) return;
-    bloomed.add(rose.id);
-    s.value = withDelay(500, withSpring(1, { damping: 7, stiffness: 120 })); // a new rose pops in
-  }, [rose.id, s]);
-  const st = useAnimatedStyle(() => ({ opacity: s.value > 0.02 ? 1 : 0, transform: [{ scale: s.value }] }));
-  return (
-    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: left - size / 2, top: top - size / 2, width: size, height: size, alignItems: 'center', justifyContent: 'center' }, st]}>
-      <Text style={{ fontSize: size * 0.8, opacity: rose.wilted ? 0.8 : 1, transform: [{ rotate: rose.wilted ? '28deg' : '0deg' }] }}>{rose.wilted ? '🥀' : '🌹'}</Text>
-    </Animated.View>
-  );
-}
-
-function Branch({ src, anchor: a, chapter, grow }: { src: number; anchor: BranchAnchor; chapter?: Chapter; grow: boolean }) {
+function Branch({ src, anchor: a, chapter, grow, yellow }: { src: number; anchor: BranchAnchor; chapter?: Chapter; grow: boolean; yellow: SharedValue<number> }) {
   // Every planted chapter shows its canopy at the full Blender size. A new chapter's canopy grows
   // out of its arm; studying (mastery going up) makes it pulse.
   const s = useSharedValue(chapter && !grow ? 1 : 0);
@@ -188,9 +166,14 @@ function Branch({ src, anchor: a, chapter, grow }: { src: number; anchor: Branch
     transform: [{ scale: s.value * pulse.value }],
     transformOrigin: `${a.jx * 100}% ${a.jy * 100}%`,
   }));
+  const wash = useAnimatedStyle(() => ({ opacity: yellow.value * 0.6 }));
   return (
     <Animated.View style={[layer, st]}>
       <Image pointerEvents="none" source={src} style={layer} contentFit="cover" cachePolicy="memory-disk" />
+      {/* the same canopy, tinted: only the leaves turn yellow */}
+      <Animated.View pointerEvents="none" style={[layer, wash]}>
+        <Image pointerEvents="none" source={src} style={layer} contentFit="cover" cachePolicy="memory-disk" tintColor="#E4C13C" />
+      </Animated.View>
     </Animated.View>
   );
 }

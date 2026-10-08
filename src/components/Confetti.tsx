@@ -3,7 +3,7 @@ import { useEffect, useMemo } from 'react';
 import { Text, useWindowDimensions } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 
-const BITS = ['🎉', '✨', '🌿', '⭐', '🍃', '🌹'];
+const BITS = ['🎉', '✨', '🌿', '⭐', '🍃', '💚'];
 
 function Bit({ x, delay, dur, spin, glyph, size, fall }: { x: number; delay: number; dur: number; spin: number; glyph: string; size: number; fall: number }) {
   const t = useSharedValue(0);

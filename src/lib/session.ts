@@ -2,7 +2,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { PDFDocument } from 'pdf-lib';
 import { Platform } from 'react-native';
 
-import type { Context } from '@/lib/ai';
+import type { Analysis, Context } from '@/lib/ai';
 import { useApp } from '@/store';
 
 /** A picked PDF lives in the cache, which Android may clear: copy it into the app's own documents
@@ -170,4 +170,18 @@ export function cardContext(subjectId: string): Context {
     style: { friendly: 'friendly coach', calm: 'calm tutor', direct: 'direct & focused', playful: 'playful buddy' }[st.coco.style],
     depth: st.coco.depth,
   };
+}
+
+/** What the student missed or mixed up (de-duplicated, at most 8). The "Organize" step shows when there are 4 or more. */
+export const ORGANIZE_MIN = 4;
+export function missedIdeas(a?: Analysis): { id: string; title: string; detail: string }[] {
+  const raw = [
+    ...(a?.forgotten ?? []).map((f) => ({ title: f.title, detail: f.detail })),
+    ...(a?.corrections ?? []).map((c) => ({ title: c.concept, detail: c.truth })),
+  ];
+  const seen = new Set<string>();
+  return raw
+    .filter((x) => x.title && !seen.has(x.title.toLowerCase()) && !!seen.add(x.title.toLowerCase()))
+    .slice(0, 8)
+    .map((x, i) => ({ id: String(i), ...x }));
 }

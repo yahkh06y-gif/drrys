@@ -8,7 +8,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COCO } from '@/art';
 import { Btn, Coco, Enter, Pill, SessionHeader, T } from '@/components/ui';
 import { MicButton, useVoice } from '@/components/Voice';
-import { discussAnswer, gradeAnswer, type Grade, type QKind } from '@/lib/ai';
+import { discussAnswer, gradeAnswer, type Grade, type QFormat, type QKind } from '@/lib/ai';
+import { SketchPad, type SketchHandle } from '@/components/SketchPad';
+import { MatchQ } from '@/components/questions/Match';
+import { OrderQ } from '@/components/questions/Order';
+import { SortQ } from '@/components/questions/Sort';
+import { gradeMatch, gradeOrder, gradeSort } from '@/lib/grade';
 import { haptic, play, tap } from '@/lib/feedback';
 import { sessionContext } from '@/lib/session';
 import { useApp } from '@/store';
@@ -20,6 +25,14 @@ const KIND: Record<QKind, { pill: string; line: string; placeholder: string }> =
   procedural: { pill: 'WORK IT OUT', line: 'Write the steps in order, or work a tiny example.', placeholder: 'Step 1…, then…' },
   analogous: { pill: 'TEST THE COMPARISON', line: 'Say where the comparison fits and where it stops working.', placeholder: 'It fits because… but it breaks when…' },
   evidence: { pill: 'USE IT', line: 'Use the idea on a new, short situation.', placeholder: 'In this case…' },
+};
+
+// What the student is asked to do, for the question formats that aren't "explain".
+const FORMAT_LINE: Partial<Record<QFormat, { pill: string; line: string }>> = {
+  order: { pill: 'PUT IN ORDER', line: 'Hold the handle and drag the steps into the right order.' },
+  sort: { pill: 'SORT IT', line: 'Drag each item into the group it belongs to.' },
+  match: { pill: 'CONNECT THE PAIRS', line: 'Drag from a card on the left to its partner on the right.' },
+  work: { pill: 'WORK IT OUT', line: 'Solve it below. Type your working.' },
 };
 
 export default function Active() {
@@ -34,6 +47,16 @@ export default function Active() {
   const [thread, setThread] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
   const [reply, setReply] = useState('');
   const [talking, setTalking] = useState(false);
+  // answers for the formats the app marks itself
+  const [order, setOrder] = useState<string[]>([]);
+  const [assigned, setAssigned] = useState<Record<string, string>>({});
+  const [matched, setMatched] = useState<Record<string, string>>({});
+  const [ready, setReady] = useState(false); // the sort / match is filled in
+  const [marks, setMarks] = useState<{ order?: boolean[]; map?: Record<string, boolean> }>({});
+  const [sketching, setSketching] = useState(false); // the sketch pad is open (work questions)
+  const [ink, setInk] = useState(false);
+  const [drawing, setDrawing] = useState(false);
+  const pad = useRef<SketchHandle>(null);
   const answerInput = useRef<TextInput>(null);
   const voice = useVoice(
     useCallback((t: string) => setAnswer((a) => (a.trim() ? `${a.trim()} ${t}` : t)), []),
@@ -49,25 +72,46 @@ export default function Active() {
   qRef.current = i;
   if (!q) return null;
 
+  const fmt: QFormat = q.format ?? 'explain';
+  const marked = fmt === 'order' || fmt === 'sort' || fmt === 'match'; // the app marks these itself
+
+  // keep the grade, count it, and turn a gap into a flashcard (added to the deck at the end of the session)
+  const record = (g: Grade, summary: string) => {
+    setGrade(g);
+    const st = useApp.getState().session!;
+    const gap = g.card?.q && g.card?.a ? g.card : !g.correct ? { q: q.q, a: q.ideal } : undefined;
+    patchSession({
+      answers: [...st.answers, summary],
+      correct: st.correct + (g.correct ? 1 : 0),
+      ...(gap ? { gapCards: [...(st.gapCards ?? []), { q: gap.q, a: gap.a }] } : {}),
+    });
+    if (g.correct) {
+      play('success');
+      haptic('success');
+    } else {
+      play('wrong');
+      haptic('error');
+    }
+  };
+
   const submit = async () => {
     setBusy(true);
     try {
-      const g = await gradeAnswer(await sessionContext(false), q, answer);
-      setGrade(g);
-      const st = useApp.getState().session!;
-      // what exactly wasn't understood becomes a flashcard (added to the deck at the end of the session)
-      const gap = g.card?.q && g.card?.a ? g.card : !g.correct ? { q: q.q, a: q.ideal } : undefined;
-      patchSession({
-        answers: [...st.answers, answer],
-        correct: st.correct + (g.correct ? 1 : 0),
-        ...(gap ? { gapCards: [...(st.gapCards ?? []), { q: gap.q, a: gap.a }] } : {}),
-      });
-      if (g.correct) {
-        play('success');
-        haptic('success');
+      if (fmt === 'order') {
+        const r = gradeOrder(q, order);
+        setMarks({ order: r.marks });
+        record(r, order.join(' → '));
+      } else if (fmt === 'sort') {
+        const r = gradeSort(q, assigned);
+        setMarks({ map: r.marks });
+        record(r, JSON.stringify(assigned));
+      } else if (fmt === 'match') {
+        const r = gradeMatch(q, matched);
+        setMarks({ map: r.marks });
+        record(r, JSON.stringify(matched));
       } else {
-        play('wrong');
-        haptic('error');
+        const img = fmt === 'work' && ink ? await pad.current?.capture() : undefined;
+        record(await gradeAnswer(await sessionContext(false), q, answer, img), answer || (img ? '(sketch)' : ''));
       }
     } catch {
       setGrade({ correct: false, feedback: 'Coco lost connection — compare with the model answer below.' });
@@ -102,20 +146,27 @@ export default function Active() {
       setGrade(undefined);
       setThread([]);
       setReply('');
+      setOrder([]);
+      setAssigned({});
+      setMatched({});
+      setReady(false);
+      setMarks({});
+      setSketching(false);
+      setInk(false);
     }
   };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
-      <SessionHeader step={6} title="Active learning" />
+      <SessionHeader step={5} title="Active learning" />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-        <ScrollView key={i} contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
+        <ScrollView key={i} scrollEnabled={!drawing} contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
           <Enter>
-            <Pill text={KIND[q.kind ?? 'conceptual'].pill} />
+            <Pill text={(FORMAT_LINE[fmt] ?? KIND[q.kind ?? 'conceptual']).pill} />
             <T v="h2" style={{ marginTop: 6 }}>
-              {i === qs.length - 1 ? 'Explain it your way' : 'One idea at a time'}
+              {fmt === 'explain' && i === qs.length - 1 ? 'Explain it your way' : 'One idea at a time'}
             </T>
-            <T>{KIND[q.kind ?? 'conceptual'].line} Then talk it through with Coco.</T>
+            <T>{(FORMAT_LINE[fmt] ?? KIND[q.kind ?? 'conceptual']).line} Then talk it through with Coco.</T>
             <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.leaf, marginTop: 4 }}>
               Question {i + 1} of {qs.length}
             </Text>
@@ -127,7 +178,7 @@ export default function Active() {
             </View>
           </Enter>
 
-          {!grade && <Coco src={i === qs.length - 1 ? COCO.pointer : COCO.stand} size={130} />}
+          {!grade && fmt === 'explain' && <Coco src={i === qs.length - 1 ? COCO.pointer : COCO.stand} size={130} />}
 
           {hint && !grade && (
             <Enter>
@@ -137,10 +188,28 @@ export default function Active() {
             </Enter>
           )}
 
-          {!grade ? (
+          {fmt === 'order' && !!q.steps && <OrderQ steps={q.steps} locked={!!grade} marks={marks.order} onChange={setOrder} />}
+          {fmt === 'sort' && !!q.buckets && (
+            <SortQ
+              buckets={q.buckets}
+              locked={!!grade}
+              marks={marks.map}
+              onChange={(a, done) => (setAssigned(a), setReady(done))}
+            />
+          )}
+          {fmt === 'match' && !!q.pairs && (
+            <MatchQ
+              pairs={q.pairs}
+              locked={!!grade}
+              marks={marks.map}
+              onChange={(m, done) => (setMatched(m), setReady(done))}
+            />
+          )}
+
+          {!grade && !marked ? (
             <View style={{ backgroundColor: C.white, borderRadius: 20, borderWidth: 1, borderColor: C.lineStrong, padding: 12, gap: 8 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 10, letterSpacing: 0.5, color: C.goldInk }}>YOU’RE EXPLAINING</Text>
+                <Text style={{ fontFamily: F.bold, fontSize: 10, letterSpacing: 0.5, color: C.goldInk }}>{fmt === 'work' ? 'YOUR WORKING' : 'YOU’RE EXPLAINING'}</Text>
                 <Text style={{ fontFamily: F.bold, fontSize: 10, color: voice.state === 'recording' ? C.red : C.leaf }}>
                   {voice.state === 'recording' ? `● ${voice.seconds}s · tap ■ to stop` : voice.state === 'writing' ? 'Writing it down…' : '🎤 or just say it'}
                 </Text>
@@ -151,14 +220,23 @@ export default function Active() {
                   value={answer}
                   onChangeText={setAnswer}
                   multiline
-                  placeholder={KIND[q.kind ?? 'conceptual'].placeholder}
+                  placeholder={fmt === 'work' ? 'Write your working, line by line…' : KIND[q.kind ?? 'conceptual'].placeholder}
                   placeholderTextColor="#A69A8A"
-                  style={{ flex: 1, minHeight: 90, fontFamily: F.medium, fontSize: 15, lineHeight: 22, color: C.ink, textAlignVertical: 'top' }}
+                  style={{ flex: 1, minHeight: fmt === 'work' ? 150 : 90, fontFamily: F.medium, fontSize: 15, lineHeight: 22, color: C.ink, textAlignVertical: 'top' }}
                 />
                 <MicButton voice={voice} size={44} />
               </View>
+              {fmt === 'work' && (
+                <View style={{ gap: 8 }}>
+                  <Pressable onPress={() => (tap('select'), setSketching((v) => !v))} style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: sketching ? C.teal : C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
+                    <Ionicons name="brush-outline" size={14} color={sketching ? C.white : C.body} />
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: sketching ? C.white : C.body }}>{sketching ? 'Hide the sketch pad' : 'Sketch or write by hand'}</Text>
+                  </Pressable>
+                  {sketching && <SketchPad ref={pad} height={260} onInk={setInk} onDrawing={setDrawing} />}
+                </View>
+              )}
             </View>
-          ) : (
+          ) : !grade ? null : (
             <Enter>
               <View style={{ backgroundColor: grade.correct ? '#F0F8E6' : '#FFF1EC', borderRadius: 20, borderWidth: 2, borderColor: grade.correct ? C.mintBorder : '#F2A58A', padding: 16, gap: 10 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -169,6 +247,15 @@ export default function Active() {
                 <View style={{ borderTopWidth: 1, borderColor: C.line, paddingTop: 8 }}>
                   <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.muted }}>MODEL ANSWER</Text>
                   <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.body, marginTop: 2 }}>{q.ideal}</Text>
+                  {fmt === 'order' && !!q.steps && (
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.steps.map((x, k) => `${k + 1}. ${x}`).join('\n')}</Text>
+                  )}
+                  {fmt === 'match' && !!q.pairs && (
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.pairs.map((p) => `${p.left}  =  ${p.right}`).join('\n')}</Text>
+                  )}
+                  {fmt === 'sort' && !!q.buckets && (
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.buckets.map((b) => `${b.name}: ${b.items.join(', ')}`).join('\n')}</Text>
+                  )}
                 </View>
               </View>
 
@@ -216,9 +303,9 @@ export default function Active() {
           {!grade ? (
             <>
               {/* shows up once there's an answer to send (like "continue" in onboarding) */}
-              {(!!answer.trim() && voice.state === 'idle') || busy ? (
+              {(marked ? fmt === 'order' || ready : (!!answer.trim() || (fmt === 'work' && ink)) && voice.state === 'idle') || busy ? (
                 <Enter key="finish">
-                  <Btn title="Finish explanation" iconLeft="checkmark-circle" kind="teal" pill loading={busy} onPress={submit} />
+                  <Btn title={marked ? 'Check my answer' : fmt === 'work' ? 'Check my working' : 'Finish explanation'} iconLeft="checkmark-circle" kind="teal" pill loading={busy} onPress={submit} />
                 </Enter>
               ) : null}
               {!hint && (

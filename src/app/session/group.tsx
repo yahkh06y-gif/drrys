@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Btn, Enter, Pill, SessionHeader, T } from '@/components/ui';
 import { verifyGrouping, type GroupCheck } from '@/lib/ai';
 import { haptic, play, tap } from '@/lib/feedback';
-import { sessionContext } from '@/lib/session';
+import { missedIdeas, ORGANIZE_MIN, sessionContext } from '@/lib/session';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
 
@@ -17,27 +17,26 @@ type Item = { id: string; title: string; detail: string };
 type Group = { name: string; items: string[] };
 
 const MAX_GROUPS = 4;
+const MAX_PER_GROUP = 4; // about how many things a mind holds at once
+
+// rough check of a typed memory against an idea's title (shares at least half of its meaningful words)
+const remembered = (typed: string, title: string) => {
+  const words = title.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 3);
+  if (!words.length) return typed.toLowerCase().includes(title.toLowerCase());
+  const t = typed.toLowerCase();
+  return words.filter((w) => t.includes(w.slice(0, Math.max(4, w.length - 2)))).length >= Math.ceil(words.length / 2);
+};
 
 export default function Group() {
   const analysis = useApp((s) => s.session?.analysis);
   const patchSession = useApp((s) => s.patchSession);
 
-  // everything the student missed or mixed up (de-duplicated, at most 8)
-  const items = useMemo<Item[]>(() => {
-    const raw = [
-      ...(analysis?.forgotten ?? []).map((f) => ({ title: f.title, detail: f.detail })),
-      ...(analysis?.corrections ?? []).map((c) => ({ title: c.concept, detail: c.truth })),
-    ];
-    const seen = new Set<string>();
-    return raw
-      .filter((x) => x.title && !seen.has(x.title.toLowerCase()) && !!seen.add(x.title.toLowerCase()))
-      .slice(0, 8)
-      .map((x, i) => ({ id: String(i), ...x }));
-  }, [analysis]);
+  // everything the student missed or mixed up
+  const items = useMemo<Item[]>(() => missedIdeas(analysis), [analysis]);
 
-  // too few ideas to group: carry on
+  // this step is only for sessions with 4+ missed ideas: otherwise carry on
   useEffect(() => {
-    if (items.length < 3) router.replace('/session/active');
+    if (items.length < ORGANIZE_MIN) router.replace('/session/active');
   }, [items.length]);
 
   const [groups, setGroups] = useState<Group[]>([
@@ -48,6 +47,10 @@ export default function Group() {
   const [busy, setBusy] = useState(false);
   const [check, setCheck] = useState<GroupCheck>();
   const [failed, setFailed] = useState(false);
+  // after the check: cover the ideas and try to say what was in each group from memory
+  const [phase, setPhase] = useState<'sort' | 'recall'>('sort');
+  const [typed, setTyped] = useState<string[]>([]);
+  const [revealed, setRevealed] = useState(false);
 
   const placed = new Set(groups.flatMap((g) => g.items));
   const loose = items.filter((x) => !placed.has(x.id));
@@ -84,11 +87,71 @@ export default function Group() {
     setBusy(false);
   };
 
-  if (items.length < 3) return null;
+  if (items.length < ORGANIZE_MIN) return null;
+
+  if (phase === 'recall') {
+    const total = used.reduce((n, g) => n + g.items.length, 0);
+    const got = used.reduce((n, g, gi) => n + g.items.filter((id) => remembered(typed[gi] ?? '', byId(id).title)).length, 0);
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
+        <SessionHeader step={4} title="Organize" />
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+          <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
+            <Enter>
+              <Pill text="30 SECONDS" />
+              <T v="h2" style={{ marginTop: 6 }}>
+                Cover and recall
+              </T>
+              <T>The ideas are hidden. Look at each group’s name and write what was inside it, from memory.</T>
+            </Enter>
+            {used.map((g, gi) => (
+              <View key={gi} style={{ backgroundColor: C.white, borderRadius: 18, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, padding: 12, gap: 8 }}>
+                <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.teal }}>{g.name}</Text>
+                <TextInput
+                  value={typed[gi] ?? ''}
+                  onChangeText={(t) => setTyped((a) => a.map((x, k) => (k === gi ? t : x)))}
+                  editable={!revealed}
+                  multiline
+                  placeholder="What was in this group?"
+                  placeholderTextColor="#A69A8A"
+                  style={{ minHeight: 56, fontFamily: F.medium, fontSize: 14, lineHeight: 20, color: C.ink, textAlignVertical: 'top' }}
+                />
+                {revealed &&
+                  g.items.map((id) => {
+                    const ok = remembered(typed[gi] ?? '', byId(id).title);
+                    return (
+                      <View key={id} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name={ok ? 'checkmark-circle' : 'ellipse-outline'} size={16} color={ok ? C.leaf : C.muted} />
+                        <Text style={{ flex: 1, fontFamily: F.medium, fontSize: 13, color: ok ? C.moss : C.body }}>{byId(id).title}</Text>
+                      </View>
+                    );
+                  })}
+              </View>
+            ))}
+            {revealed && (
+              <Enter>
+                <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.teal, textAlign: 'center' }}>
+                  {got} of {total} came back from memory
+                </Text>
+                <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted, textAlign: 'center', marginTop: 2 }}>A rough check by matching words — you know best.</Text>
+              </Enter>
+            )}
+          </ScrollView>
+          <View style={{ padding: 20 }}>
+            {revealed ? (
+              <Btn title="On to the questions" icon="arrow-forward" kind="teal" pill onPress={() => router.replace('/session/active')} />
+            ) : (
+              <Btn title="Reveal" iconLeft="eye" kind="teal" pill onPress={() => (play('success'), haptic('light'), setRevealed(true))} />
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
-      <SessionHeader step={5} title="Organize" />
+      <SessionHeader step={4} title="Organize" />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
           <Enter>
@@ -174,6 +237,11 @@ export default function Group() {
                     <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>{picked ? 'Nothing here yet' : 'Empty'}</Text>
                   )}
                 </View>
+                {g.items.length > MAX_PER_GROUP && (
+                  <Text style={{ fontFamily: F.medium, fontSize: 12, lineHeight: 18, color: C.goldInk }}>
+                    💡 That’s a lot for one group. Four or fewer are easier to hold: can you split it?
+                  </Text>
+                )}
                 {res && (
                   <Enter>
                     <View
@@ -217,7 +285,22 @@ export default function Group() {
         </ScrollView>
         <View style={{ padding: 20, gap: 10 }}>
           {check || failed ? (
-            <Btn title="On to the questions" icon="arrow-forward" kind="teal" pill onPress={() => router.replace('/session/active')} />
+            <>
+              <Btn
+                title="Cover and recall"
+                icon="arrow-forward"
+                kind="teal"
+                pill
+                onPress={() => {
+                  setTyped(used.map(() => ''));
+                  setRevealed(false);
+                  setPhase('recall');
+                }}
+              />
+              <Pressable onPress={() => router.replace('/session/active')} style={{ alignSelf: 'center' }}>
+                <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>Skip to the questions</Text>
+              </Pressable>
+            </>
           ) : (
             <>
               <Btn title="Ask Coco to check" iconLeft="checkmark-circle" kind="teal" pill loading={busy} disabled={!ready} onPress={submit} />

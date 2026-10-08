@@ -11,6 +11,7 @@ import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay,
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { COCO, STAT_ICONS, TREE, TREE_ASPECT } from '@/art';
+import { HookGallery } from '@/components/HookGallery';
 import { KnowledgeTree, type CocoLanding } from '@/components/Tree';
 import { Btn, Coco, Enter, Pill, T } from '@/components/ui';
 import { play, tap } from '@/lib/feedback';
@@ -286,18 +287,25 @@ function TreePage({ clock, subjectId, width, topInset, near, coco, onInsights }:
   const isPro = useApp((s) => s.isPro);
   const together = useApp((s) => s.together);
   const due = useMemo(() => cards.filter((c) => c.subjectId === subjectId && isDue(c)), [cards, subjectId, clock]); // eslint-disable-line react-hooks/exhaustive-deps
-  // memory-hook roses: one per card with a hook, wilted while that card is due for review
-  const roses = useMemo(() => {
-    const out: Record<string, { id: string; wilted: boolean }[]> = {};
-    for (const c of cards) if (c.subjectId === subjectId && c.mnemonic) (out[c.chapterId] ??= []).push({ id: c.id, wilted: isDue(c) });
-    return out;
-  }, [cards, subjectId, clock]); // eslint-disable-line react-hooks/exhaustive-deps
+  // memory hooks the student made on this tree (listed when a branch is held)
+  const hooks = useMemo(() => cards.filter((c) => c.subjectId === subjectId && !!c.mnemonic), [cards, subjectId]);
+  const [holdId, setHoldId] = useState<string>();
+  // days since this tree was last watered → how yellow its leaves are (nothing until the 2nd day away)
+  const wilt = useMemo(() => {
+    const last = subject?.doneOn;
+    if (!last) return 0;
+    const [y, m, d] = last.split('-').map(Number);
+    const gap = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(y, m - 1, d).getTime()) / 86_400_000);
+    return Math.max(0, Math.min(1, (gap - 1) / 5));
+  }, [subject?.doneOn, clock]); // eslint-disable-line react-hooks/exhaustive-deps
+  const hookTipSeen = useApp((s) => s.hookTipSeen);
+  const setApp = useApp((s) => s.set);
   if (!subject) return null;
   // default: the first unfinished branch that isn't resting (Pro ended), else the first branch
   const open = subject.chapters.filter((_, i) => !isResting(subjectIdx, i, isPro, together));
   const chapter = subject.chapters.find((c) => c.id === sel) ?? open.find((c) => c.mastery < 1) ?? open[0] ?? subject.chapters[0];
   return (
-    <KnowledgeTree width={width} chapters={subject.chapters} roses={roses} selected={chapter?.id} coco={coco} onSelect={(id) => (tap('select'), setSel(id))}>
+    <KnowledgeTree width={width} chapters={subject.chapters} wilt={wilt} selected={chapter?.id} coco={coco} onSelect={(id) => (tap('select'), setSel(id))} onHold={(id) => (setHoldId(id), setApp({ hookTipSeen: true }))}>
       <View style={{ position: 'absolute', top: topInset + 8, left: 16, right: 16, flexDirection: 'row', alignItems: 'center' }}>
         <Pressable hitSlop={10} onPress={() => (tap(), router.push({ pathname: '/subject', params: { id: subject.id } }))} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name="create-outline" size={24} color={C.ink} />
@@ -309,11 +317,25 @@ function TreePage({ clock, subjectId, width, topInset, near, coco, onInsights }:
         </Text>
       </View>
 
+      {near && hooks.length > 0 && !hookTipSeen && (
+        <Enter delay={600} style={{ position: 'absolute', top: topInset + 58, left: 24, right: 24 }}>
+          <Pressable onPress={() => setApp({ hookTipSeen: true })} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.teal, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 }}>
+            <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 13, lineHeight: 18, color: C.white }}>💡 Your first memory hook! Hold any branch to see all your hooks for that chapter.</Text>
+            <Ionicons name="close" size={16} color={C.white} />
+          </Pressable>
+        </Enter>
+      )}
+
       {near && chapter && (
         <Enter delay={200} style={{ position: 'absolute', bottom: 20, left: 24, right: 24 }}>
           <TodayCard subject={subject} chapter={chapter} due={due.length} onInsights={onInsights} />
         </Enter>
       )}
+      <HookGallery
+        title={holdId ? `Ch ${subject.chapters.findIndex((c) => c.id === holdId) + 1}` : undefined}
+        cards={hooks.filter((c) => c.chapterId === holdId)}
+        onClose={() => setHoldId(undefined)}
+      />
     </KnowledgeTree>
   );
 }

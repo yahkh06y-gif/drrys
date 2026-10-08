@@ -7,6 +7,9 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Image } from 'expo-image';
+
+import { REWARD_ART } from '@/art-rewards';
 import { Confetti } from '@/components/Confetti';
 import { Motion } from '@/components/Motion';
 import { Btn, Enter } from '@/components/ui';
@@ -171,7 +174,13 @@ export default function Done() {
           {/* reward chest */}
           <Enter delay={1500}>
             <Pressable onPress={open} disabled={!!chest} style={{ marginTop: 10, backgroundColor: chest ? '#FDE9C4' : 'rgba(255,246,227,0.97)', borderRadius: 18, borderWidth: 2, borderColor: C.amber, borderBottomWidth: 4, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-              <Animated.Text style={[{ fontSize: 46 }, chestStyle]}>{chest ? '🎁' : '🎁'}</Animated.Text>
+              <Animated.View style={chestStyle}>
+                {(chest ? REWARD_ART.chestOpen : REWARD_ART.chestClosed) ? (
+                  <Image source={chest ? REWARD_ART.chestOpen : REWARD_ART.chestClosed} style={{ width: 72, height: 72 }} contentFit="contain" />
+                ) : (
+                  <Text style={{ fontSize: 46 }}>🎁</Text>
+                )}
+              </Animated.View>
               <View style={{ flex: 1 }}>
                 {chest ? (
                   <>
