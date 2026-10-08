@@ -252,18 +252,23 @@ export async function prepareSession(c: Context, recall: string): Promise<Sessio
     await wait(2200);
     return { analysis: DEMO.analysis, questions: DEMO.questions, cards: DEMO.cards };
   }
-  const raw = await call(
+  // One retry if the answer came back cut off or as broken JSON (a dense lecture makes a long answer).
+  let plan: SessionPlan | undefined;
+  for (let attempt = 0; !plan; attempt++) {
+    try {
+      const raw = await call(
     persona(c),
     [
       ...material(c),
       {
         type: 'text',
-        text: `The student did a "brain dump" — everything they remember about this, from memory:
+        text: (attempt ? 'YOUR PREVIOUS ANSWER WAS CUT OFF OR NOT VALID JSON. Answer again with COMPLETE, valid JSON: keep every "detail" and "ideal" short (one sentence) and the map entries minimal, but keep all the ideas, questions and cards.\n\n' : '') + `The student did a "brain dump" — everything they remember about this, from memory:
 """${recall}"""
 
 Compare it with ${c.pdfBase64 ? "today's lecture pages" : 'the topic (no lecture file attached, so use standard curriculum knowledge for this chapter)'} and prepare today's session.
 Return ONLY JSON with this shape:
 {
+ "map": [{"idea": "short name", "page": "page ref if known", "weight": 3, "status": "nailed|missed|wrong"}],
  "analysis": {
    "summary": "1 short encouraging sentence",
    "nailed": [{"title": "concept", "detail": "what they got right (1 sentence)", "tag": "Strong Recall|Exact Match|Firmly Grasped"}],
@@ -275,9 +280,11 @@ Return ONLY JSON with this shape:
  "cards": [{"q": "short question", "a": "short, accurate answer"}]
 }
 Rules:
-- analysis.forgotten: list EVERY important idea of these pages the student left out (not just a few), most important first; max 8. Each detail must actually teach the idea, because the student reads these before being questioned.
+- map (do this FIRST, it is your working list): walk through the lecture pages in order and list EVERY distinct idea, definition, formula, number or example worth knowing, whether or not the student mentioned it. weight: 3 = core and likely examined, 2 = important support, 1 = detail. status compares it with the brain dump: nailed (stated correctly), missed (not mentioned), wrong (stated incorrectly). Names only, no explanations here. The LECTURE decides what matters, never the student's text. Everything below is built from this map, so nothing in the pages gets forgotten.
+- analysis.forgotten: every "missed" idea of weight 3 and 2 (weight 1 only if the page stresses it), most important first; max 12. Each detail must actually teach the idea, because the student reads these before being questioned.
 - analysis.corrections: every wrong statement, max 6. nailed: max 6. Empty lists are fine.
 - questions: no fixed number — as many as it takes to cover every missed and corrected idea that matters (a light lecture may need 3, a dense one 8 or more). They make the student EXPLAIN (why/how), one idea each: mostly the missed and corrected ideas (only ones taught in analysis above), plus one that deepens something they already got right. Ask them the way an exam would: prioritise ideas the syllabus/past papers emphasise and mirror the past papers' question style when those files are attached. ${c.interests.length ? 'At most ONE question may invite an analogy from their interests, and only if an idea is abstract enough to need it; the rest are plain exam-style questions.' : ''} Never ask about something that is not in today's lecture pages or the analysis.
+  At least a quarter of the questions must NOT be about the student's mistakes: take ideas from the map that the student got right or never needed to state, and ask them to apply it to a new short scenario, compare two ideas, or explain why it works that way. The session must not feel like only correcting errors.
   Give each question a "kind" that fits the idea (this is how Drrys picks the right way to practise it):
     conceptual — how two or more ideas relate ("how does X change Y?", "why does X lead to Y?");
     procedural — a process or calculation: the student writes the steps in order or works a tiny example;
@@ -290,12 +297,17 @@ Rules:
     match — pairs that belong together (term↔meaning, cause↔effect, idea↔example): add "pairs", 3-5 of {"left": "...", "right": "..."}, each side at most 8 words, one right answer per left.
     work — a problem to solve on paper (a calculation, derivation, code, proof): "q" is the problem and "ideal" is the worked solution in a few lines.
   For order, sort and match, "ideal" is ONE sentence saying why it is that way (it becomes the student's flashcard if they miss it).
-- cards: only REFERENCE material — terms, definitions, numbers, formulas, lists, labels — the things that are simply remembered. Ideas that are better practised by explaining (the questions above) do not get a card. Built from the LECTURE content, not from the student's wording: the corrected misconceptions first, then the missed reference facts, then the other key reference facts of these pages. No fixed number — one card per fact worth memorising, as many as the material holds; dense pages get many cards, light pages few. Never pad with trivia, never skip a key idea, never add facts that aren't in the lecture.`,
+- cards: only REFERENCE material — terms, definitions, numbers, formulas, lists, labels — the things that are simply remembered. Ideas that are better practised by explaining (the questions above) do not get a card. Built from the LECTURE content, not from the student's wording: the corrected misconceptions first, then the missed reference facts, then the other key reference facts of these pages. No fixed number — one card per fact worth memorising, as many as the material holds; dense pages get many cards, light pages few. Never pad with trivia, never skip a key idea, never add facts that aren't in the lecture.
+- COVERAGE CHECK before you answer: go through the map once more. Every idea of weight 3 and 2 must be handled by at least one question (if it is understood by explaining) or one card (if it is reference), and every weight-3 reference fact gets a card even if the student already nailed it. If an idea is not covered yet, add the missing question or card now. Give each important idea its due: do not drop ideas to keep the answer short.`,
       },
     ],
-    9000, // dense lectures can need many questions and cards
+    16000, // dense lectures can need many questions and cards
   );
-  const plan = parseJSON<SessionPlan>(raw);
+      plan = parseJSON<SessionPlan>(raw);
+    } catch (e) {
+      if (!(e instanceof SyntaxError) || attempt >= 1) throw e;
+    }
+  }
   const a = plan?.analysis;
   if (!a) throw new Error('Coco’s answer came back incomplete');
   // the model sometimes leaves a list out: make every list safe to read

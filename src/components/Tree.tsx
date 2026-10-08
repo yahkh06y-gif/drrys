@@ -7,6 +7,7 @@ import { Pressable, Text, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
+  useDerivedValue,
   type SharedValue,
   useSharedValue,
   withDelay,
@@ -63,6 +64,7 @@ export function KnowledgeTree({
   }, [chapters]);
   // the yellow wash: fades in a moment after the tree appears (the student opens the app and sees it), fades out after watering
   const yellow = useSharedValue(0);
+  const pressed = useSharedValue(-1); // which canopy is being pressed (it swells a little under the finger)
   const wiltPrev = useRef(0);
   useEffect(() => {
     const down = wilt < wiltPrev.current;
@@ -98,7 +100,7 @@ export function KnowledgeTree({
         <StageTree stage={stage}>
           <Image pointerEvents="none" source={T.tree} style={layer} contentFit="cover" cachePolicy="memory-disk" />
           {T.branches.map((src, i) => (
-            <Branch key={i} src={src} anchor={T.anchors[i]} chapter={chapters[i]} yellow={yellow} grow={growNew && !!chapters[i] && !shown.has(chapters[i].id)} />
+            <Branch key={i} index={i} pressed={pressed} src={src} anchor={T.anchors[i]} chapter={chapters[i]} yellow={yellow} grow={growNew && !!chapters[i] && !shown.has(chapters[i].id)} />
           ))}
         </StageTree>
       </Animated.View>
@@ -112,6 +114,8 @@ export function KnowledgeTree({
           <Pressable
             key={ch.id}
             onPress={() => onSelect(ch.id)}
+            onPressIn={() => (pressed.value = i)}
+            onPressOut={() => (pressed.value = -1)}
             onLongPress={onHold ? () => (haptic('medium'), onHold(ch.id)) : undefined}
             delayLongPress={350}
             hitSlop={14}
@@ -143,7 +147,7 @@ export function KnowledgeTree({
   );
 }
 
-function Branch({ src, anchor: a, chapter, grow, yellow }: { src: number; anchor: BranchAnchor; chapter?: Chapter; grow: boolean; yellow: SharedValue<number> }) {
+function Branch({ src, anchor: a, chapter, grow, yellow, index, pressed }: { index: number; pressed: SharedValue<number>; src: number; anchor: BranchAnchor; chapter?: Chapter; grow: boolean; yellow: SharedValue<number> }) {
   // Every planted chapter shows its canopy at the full Blender size. A new chapter's canopy grows
   // out of its arm; studying (mastery going up) makes it pulse.
   const s = useSharedValue(chapter && !grow ? 1 : 0);
@@ -161,9 +165,10 @@ function Branch({ src, anchor: a, chapter, grow, yellow }: { src: number; anchor
       pulse.value = withDelay(500, withSequence(withTiming(1.06, { duration: 180 }), withSpring(1, { damping: 12 })));
     }
   }, [chapter, mastery, pulse]);
+  const swell = useDerivedValue(() => withSpring(pressed.value === index ? 1 : 0, { damping: 12, stiffness: 160 }));
   const st = useAnimatedStyle(() => ({
     opacity: s.value > 0.02 ? 1 : 0,
-    transform: [{ scale: s.value * pulse.value }],
+    transform: [{ scale: s.value * pulse.value * (1 + swell.value * 0.07) }],
     transformOrigin: `${a.jx * 100}% ${a.jy * 100}%`,
   }));
   const wash = useAnimatedStyle(() => ({ opacity: yellow.value * 0.6 }));
