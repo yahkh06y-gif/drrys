@@ -294,7 +294,7 @@ export const useApp = create<State>()(
       saveHook: (id, hook, img) => {
         const c = get().cards.find((x) => x.id === id);
         if (!c) return;
-        const d = { xp: 5 };
+        const d = { xp: c.mnemonic ? 0 : 5 }; // the +5 is for a first hook (editing one earns nothing)
         set({
           cards: get().cards.map((x) => (x.id === id ? { ...x, mnemonic: hook.trim(), ...(img ? { mnemonicImg: img } : {}) } : x)),
           stats: addStats(get().stats, d),

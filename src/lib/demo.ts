@@ -115,10 +115,10 @@ export const DEMO = {
     q: `A friend says they understand this but can’t use it. Give one new example that shows it in action: ${c.q}`,
     a: `Any new example that applies the same idea, built on: ${c.a}`,
   }),
-  goodFeedback: 'Yes! That’s exactly the idea — you explained it in your own words. 🌱',
+  goodFeedback: 'Yes! That’s exactly the idea — you explained it in your own words.',
   tryFeedback: 'Close! Try adding the “why” — what would break if that step didn’t happen?',
   chat: [
-    'Hey! What should we explore today? 🌿',
+    'Hey! What should we explore today?',
     'Great question. Think of it like a relay race — the energy gets passed along step by step.',
     'Want me to turn that into a quick 2-minute recall so it sticks?',
     'Nice! Your tree grows every time you explain things in your own words.',

@@ -9,6 +9,7 @@ import { COCO } from '@/art';
 import { Btn, Coco, Enter, Pill, SessionHeader, T } from '@/components/ui';
 import { MicButton, useVoice } from '@/components/Voice';
 import { discussAnswer, gradeAnswer, type Grade, type QFormat, type QKind } from '@/lib/ai';
+import { HookSheet, type HookTarget } from '@/components/HookSheet';
 import { SketchPad, type SketchHandle } from '@/components/SketchPad';
 import { MatchQ } from '@/components/questions/Match';
 import { OrderQ } from '@/components/questions/Order';
@@ -38,6 +39,10 @@ const FORMAT_LINE: Partial<Record<QFormat, { pill: string; line: string }>> = {
 export default function Active() {
   const qs = useApp((s) => s.session?.questions ?? []);
   const patchSession = useApp((s) => s.patchSession);
+  // a memory hook for this question: it lives on a flashcard made from it (made when the hook is saved)
+  const [hook, setHook] = useState<HookTarget>();
+  const cards = useApp((s) => s.cards);
+  const sess = useApp((s) => s.session);
   const [i, setI] = useState(0);
   const [answer, setAnswer] = useState('');
   const [hint, setHint] = useState(false);
@@ -74,6 +79,13 @@ export default function Active() {
 
   const fmt: QFormat = q.format ?? 'explain';
   const marked = fmt === 'order' || fmt === 'sort' || fmt === 'match'; // the app marks these itself
+
+  const existing = cards.find((c) => c.subjectId === sess?.subjectId && c.chapterId === sess?.chapterId && c.q === q?.q);
+  const openHook = () => {
+    if (!sess || !q) return;
+    tap('select');
+    setHook(existing ?? { subjectId: sess.subjectId, chapterId: sess.chapterId, q: q.q, a: q.ideal });
+  };
 
   // keep the grade, count it, and turn a gap into a flashcard (added to the deck at the end of the session)
   const record = (g: Grade, summary: string) => {
@@ -316,9 +328,16 @@ export default function Active() {
               )}
             </>
           ) : (
-            <Btn title={i + 1 >= qs.length ? 'Lock it in' : 'Next question'} icon="arrow-forward" kind="teal" pill onPress={next} />
+            <>
+              <Pressable onPress={openHook} style={{ alignSelf: 'center', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.white, borderWidth: 1, borderColor: C.amber, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
+                <Ionicons name="bulb-outline" size={15} color={C.goldInk} />
+                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.goldInk }}>{existing?.mnemonic ? 'My memory hook' : 'Make a memory hook'}</Text>
+              </Pressable>
+              <Btn title={i + 1 >= qs.length ? 'Lock it in' : 'Next question'} icon="arrow-forward" kind="teal" pill onPress={next} />
+            </>
           )}
         </View>
+        <HookSheet card={hook} onClose={() => setHook(undefined)} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
