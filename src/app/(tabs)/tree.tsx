@@ -320,7 +320,7 @@ function TreePage({ clock, subjectId, width, topInset, near, coco, onInsights }:
       {near && hooks.length > 0 && !hookTipSeen && (
         <Enter delay={600} style={{ position: 'absolute', top: topInset + 58, left: 24, right: 24 }}>
           <Pressable onPress={() => setApp({ hookTipSeen: true })} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.teal, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 }}>
-            <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 13, lineHeight: 18, color: C.white }}>💡 Your first memory hook! Hold any branch to see all your hooks for that chapter.</Text>
+            <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 13, lineHeight: 18, color: C.white }}>Your first memory hook! Hold any branch to see all your hooks for that chapter.</Text>
             <Ionicons name="close" size={16} color={C.white} />
           </Pressable>
         </Enter>

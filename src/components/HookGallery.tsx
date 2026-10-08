@@ -12,7 +12,7 @@ export function HookGallery({ title, cards, onClose }: { title?: string; cards: 
       <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,36,28,0.35)' }}>
         <View style={{ backgroundColor: C.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 18, gap: 10, maxHeight: '80%' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={{ fontFamily: F.bold, fontSize: 17, color: C.teal }}>💡 Your memory hooks · {title}</Text>
+            <Text style={{ fontFamily: F.bold, fontSize: 17, color: C.teal }}>Your memory hooks · {title}</Text>
             <Pressable hitSlop={10} onPress={onClose}>
               <Ionicons name="close" size={22} color={C.muted} />
             </Pressable>
@@ -28,7 +28,7 @@ export function HookGallery({ title, cards, onClose }: { title?: string; cards: 
                   <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.ink }}>{c.q}</Text>
                   <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.teal }}>{c.a}</Text>
                   <View style={{ backgroundColor: '#FFF6E3', borderRadius: 12, borderWidth: 1, borderColor: C.amber, padding: 10 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 13, lineHeight: 19, color: C.goldInk }}>💡 {c.mnemonic}</Text>
+                    <Text style={{ fontFamily: F.bold, fontSize: 13, lineHeight: 19, color: C.goldInk }}>{c.mnemonic}</Text>
                     {!!c.mnemonicImg && <Image source={{ uri: c.mnemonicImg }} style={{ width: '100%', height: 150, marginTop: 8, borderRadius: 10, backgroundColor: C.white }} contentFit="contain" />}
                   </View>
                 </View>

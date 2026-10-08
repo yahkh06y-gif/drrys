@@ -545,7 +545,7 @@ Return ONLY JSON: {"q": "...", "a": "..."}`,
   return r;
 }
 
-/** Coco looks at a memory-hook drawing and says what she sees, then suggests a short caption. She never redraws it. */
+/** Coco looks at a memory-hook drawing and says what he sees, then suggests a short caption. He never redraws it. */
 export async function describeSketch(c: Context, card: { q: string; a: string }, sketch: string): Promise<{ saw: string; caption: string }> {
   if (!aiEnabled) {
     await wait(900);

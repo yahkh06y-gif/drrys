@@ -160,7 +160,7 @@ export default function Cards() {
           </View>
         ) : !card ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.teal }}>No cards due — your memory is fresh 🌿</Text>
+            <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.teal }}>No cards due — your memory is fresh </Text>
             <Pressable onPress={finish}>
               <Text style={{ fontFamily: F.bold, color: C.leaf }}>Continue</Text>
             </Pressable>
@@ -177,7 +177,7 @@ export default function Cards() {
                     onPress={() => (tap('select'), setHookShown((v) => !v))}
                     style={{ marginTop: 14, alignSelf: 'flex-start', backgroundColor: '#FFF6E3', borderWidth: 1, borderColor: C.amber, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, maxWidth: '100%' }}>
                     <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 18, color: C.goldInk }}>
-                      {hookShown ? `💡 ${card.mnemonic}` : '💡 Show my memory hook'}
+                      {hookShown ? `${card.mnemonic}` : 'Show my memory hook'}
                     </Text>
                     {hookShown && !!card.mnemonicImg && <Image source={{ uri: card.mnemonicImg }} style={{ width: 160, height: 100, marginTop: 6, borderRadius: 8, backgroundColor: C.white }} contentFit="contain" />}
                   </Pressable>
@@ -303,7 +303,7 @@ function HookSheet({ card, onClose }: { card?: Card; onClose: () => void }) {
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,36,28,0.35)' }}>
         <View style={{ backgroundColor: C.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 18, gap: 10, maxHeight: '90%' }}>
           <ScrollView contentContainerStyle={{ gap: 10 }} keyboardShouldPersistTaps="handled" scrollEnabled={!drawing}>
-            <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.teal }}>This one keeps slipping 💡</Text>
+            <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.teal }}>This one keeps slipping</Text>
             <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.body }}>
               Make a memory hook for it: a picture, a rhyme, a silly sentence. It’s saved with this branch and comes back as a hint on this card.
             </Text>
@@ -331,7 +331,7 @@ function HookSheet({ card, onClose }: { card?: Card; onClose: () => void }) {
                   disabled={!ink || looking}
                   style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7, opacity: ink ? 1 : 0.6 }}>
                   {looking ? <ActivityIndicator size="small" color={C.teal} /> : <Ionicons name="eye-outline" size={14} color={C.body} />}
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.body }}>Ask Coco what she sees</Text>
+                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.body }}>Ask Coco what he sees</Text>
                 </Pressable>
                 {look && (
                   <View style={{ backgroundColor: C.white, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 10, gap: 6 }}>

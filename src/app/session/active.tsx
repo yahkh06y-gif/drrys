@@ -183,7 +183,7 @@ export default function Active() {
           {hint && !grade && (
             <Enter>
               <View style={{ backgroundColor: '#FFF6E3', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.amber }}>
-                <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.goldInk }}>💡 {q.hint}</Text>
+                <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.goldInk }}>{q.hint}</Text>
               </View>
             </Enter>
           )}
