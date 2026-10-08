@@ -24,10 +24,10 @@ const STYLE =
 const COCO =
   ' Include Coco as the helper in the scene: the small beige clay character from the reference image (a rounded block-shaped creature with two small round eyes and thin black stick legs). Keep the character looking exactly like the reference.';
 
-function buildPrompt(p: { hook: string; q: string; a: string; withCoco: boolean }) {
+function buildPrompt(p: { hook: string; q: string; a: string; withCoco: boolean; scene?: string }) {
   const cut = (s: string, n: number) => (s.length > n ? s.slice(0, n) : s);
   return cut(
-    `${STYLE} It is a memory aid picture that makes this idea unforgettable: "${cut(p.hook, 300)}". The idea: ${cut(p.q, 200)} Answer: ${cut(p.a, 250)}.${p.withCoco ? COCO : ''}`,
+    `${STYLE} It is a memory aid picture that makes this idea unforgettable${p.hook ? `: "${cut(p.hook, 300)}"` : ''}. The idea: ${cut(p.q, 200)} Answer: ${cut(p.a, 250)}.${p.scene ? ` The student sketched the scene they want, so follow this layout and these objects exactly and add nothing else: ${cut(p.scene, 500)}` : ''}${p.withCoco ? COCO : ''}`,
     1450,
   );
 }
@@ -62,7 +62,7 @@ function findUrl(x: unknown, depth = 0): string | undefined {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Makes one picture and returns a link to it (temporary: save it with savePicture). */
-export async function makeHookPicture(p: { hook: string; q: string; a: string; withCoco: boolean }): Promise<string> {
+export async function makeHookPicture(p: { hook: string; q: string; a: string; withCoco: boolean; scene?: string }): Promise<string> {
   if (!KEY) throw new Error('No YouCam key');
   const headers = { 'content-type': 'application/json', authorization: `Bearer ${KEY}` };
   const start = await fetch(BASE, {

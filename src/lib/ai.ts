@@ -581,3 +581,28 @@ Return ONLY JSON: {"saw": "...", "caption": "..."}`,
   const r = parseJSON<{ saw: string; caption: string }>(raw);
   return { saw: r.saw ?? '', caption: r.caption ?? '' };
 }
+
+/**
+ * The student's sketch becomes a scene description for the picture maker, so the sketch controls what the
+ * final picture shows. Describes only what is drawn: nothing is added, nothing is improved.
+ */
+export async function sketchToScene(c: Context, card: { q: string; a: string }, hook: string, sketch: string): Promise<string> {
+  if (!aiEnabled) {
+    await wait(700);
+    return 'A small bus on the left side of the picture, a round passenger sitting in the last seat at the back, and a road going to the right.';
+  }
+  const raw = await call(
+    'You turn a student’s rough sketch into a precise scene description for an illustrator. Describe ONLY what is drawn. Never add objects, never improve the idea.',
+    [
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: sketch } },
+      {
+        type: 'text',
+        text: `The student drew this to help remember: "${card.q}" → "${card.a}".${hook ? ` Their hook in words: "${hook}".` : ''}
+Describe the scene for an illustrator in at most 60 words, in English: the objects, where each one is placed (left, right, top, bottom, centre), their relative sizes, any colours the student used, and the meaning of any word or arrow. If part of the sketch is unclear, say it simply instead of guessing.
+Return ONLY the description, no title, no quotes.`,
+      },
+    ],
+    300,
+  );
+  return raw.trim().replace(/^["“]|["”]$/g, '').slice(0, 500);
+}

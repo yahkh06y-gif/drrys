@@ -8,7 +8,7 @@ import { ActivityIndicator, KeyboardAvoidingView, Modal, Pressable, ScrollView, 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { SketchPad, type SketchHandle } from '@/components/SketchPad';
-import { describeSketch, suggestHooks } from '@/lib/ai';
+import { describeSketch, sketchToScene, suggestHooks } from '@/lib/ai';
 import { haptic, play, tap } from '@/lib/feedback';
 import { cardContext } from '@/lib/session';
 import { saveSketch } from '@/lib/sketch';
@@ -30,10 +30,11 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
   // a clay-style picture made from the hook (YouCam). One picture costs 1 credit, so a hook gets 3 tries at most.
   const [pic, setPic] = useState<string>();
   const [making, setMaking] = useState(false);
-  const [picErr, setPicErr] = useState(false);
+  const [picErr, setPicErr] = useState<string>();
   const [withCoco, setWithCoco] = useState(false);
   const [tries, setTries] = useState(0);
   const pad = useRef<SketchHandle>(null);
+  const scroll = useRef<ScrollView>(null);
   const tried = text.trim().split(/\s+/).filter(Boolean).length >= 3; // your own first try comes before Coco's ideas
   useEffect(() => {
     setText(card?.mnemonic ?? '');
@@ -44,7 +45,7 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
     setLook(undefined);
     setPic(undefined);
     setMaking(false);
-    setPicErr(false);
+    setPicErr(undefined);
     setWithCoco(false);
     setTries(0);
   }, [card?.id]);
@@ -68,22 +69,35 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
     }
     setLooking(false);
   };
+  // The picture. With a sketch, the sketch controls the result: it is described (what is drawn, where) and that
+  // description steers the picture; with only words, the hook alone does.
+  const canPic = text.trim().length >= 3 || ink;
   const makePic = async () => {
-    if (making || text.trim().length < 3) return;
+    if (making || !canPic || tries >= 3) return;
     setMaking(true);
-    setPicErr(false);
+    setPicErr(undefined);
     setTries((n) => n + 1);
     try {
-      setPic(await makeHookPicture({ hook: text.trim(), q: card.q, a: card.a, withCoco }));
+      let scene: string | undefined;
+      if (ink) {
+        try {
+          const img = await pad.current?.capture();
+          if (img) scene = await sketchToScene(cardContext(card.subjectId), card, text.trim(), img);
+        } catch {
+          scene = look?.saw; // the sketch could not be read this time: use what Coco saw, if he did
+        }
+      }
+      setPic(await makeHookPicture({ hook: text.trim(), q: card.q, a: card.a, withCoco, scene }));
+      setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 250); // bring the new picture into view
       play('success');
       haptic('success');
-    } catch {
-      setPicErr(true);
+    } catch (e) {
+      setPicErr(String((e as Error)?.message ?? e).replace(/Bearer\s+\S+/g, '').slice(0, 140));
     }
     setMaking(false);
   };
   const plant = async () => {
-    if (!text.trim() && !ink) return;
+    if (!text.trim() && !ink && !pic) return;
     setBusy(true);
     const img = ink && !pic ? await pad.current?.capture() : undefined;
     const st = useApp.getState();
@@ -97,113 +111,146 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
     haptic('success');
     onClose();
   };
+  const canSave = !!text.trim() || ink || !!pic;
+  const chip = (on: boolean) => ({ flexDirection: 'row' as const, gap: 6, alignItems: 'center' as const, backgroundColor: on ? C.teal : C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 8 });
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <GestureHandlerRootView style={{ flex: 1 }}>
-      <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,36,28,0.35)' }}>
-        <View style={{ backgroundColor: C.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 18, gap: 10, maxHeight: '90%' }}>
-          <ScrollView contentContainerStyle={{ gap: 10 }} keyboardShouldPersistTaps="handled" scrollEnabled={!drawing}>
-            <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.teal }}>{slipping ? 'This one keeps slipping' : card.mnemonic ? 'Your memory hook' : 'Make a memory hook'}</Text>
-            <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.body }}>
-              A picture, a rhyme, a silly sentence: whatever helps you remember. It’s saved with this branch and comes back as a hint on the card.
-            </Text>
-            <View style={{ backgroundColor: '#F0F8E6', borderRadius: 14, borderWidth: 1, borderColor: C.mintBorder, padding: 12 }}>
-              <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.ink }}>{card.q}</Text>
-              <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.teal, marginTop: 4 }}>{card.a}</Text>
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,36,28,0.35)' }}>
+          <View style={{ backgroundColor: C.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 18, gap: 12, maxHeight: '92%' }}>
+            {/* title */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontFamily: F.bold, fontSize: 19, color: C.teal }}>{slipping ? 'This one keeps slipping' : card.mnemonic ? 'Your memory hook' : 'Make a memory hook'}</Text>
+              <Pressable hitSlop={12} onPress={onClose}>
+                <Ionicons name="close" size={22} color={C.muted} />
+              </Pressable>
             </View>
-            <TextInput
-              value={text}
-              onChangeText={setText}
-              multiline
-              placeholder="My hook is…"
-              placeholderTextColor="#A69A8A"
-              style={{ minHeight: 70, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, fontFamily: F.medium, fontSize: 15, color: C.ink, textAlignVertical: 'top' }}
-            />
-            {youcamEnabled && (
+
+            <ScrollView ref={scroll} contentContainerStyle={{ gap: 16, paddingBottom: 6 }} keyboardShouldPersistTaps="handled" scrollEnabled={!drawing} showsVerticalScrollIndicator={false}>
+              {/* what it is for */}
+              <View style={{ backgroundColor: '#F0F8E6', borderRadius: 14, borderWidth: 1, borderColor: C.mintBorder, padding: 12, gap: 4 }}>
+                <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.ink }}>{card.q}</Text>
+                <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.teal }}>{card.a}</Text>
+              </View>
+
+              {/* 1 · the hook, in words */}
               <View style={{ gap: 8 }}>
-                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <Pressable
-                    onPress={makePic}
-                    disabled={making || text.trim().length < 3 || tries >= 3}
-                    style={{ flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.teal, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 8, opacity: text.trim().length < 3 || tries >= 3 ? 0.5 : 1 }}>
-                    {making ? <ActivityIndicator size="small" color={C.white} /> : <Ionicons name="image-outline" size={15} color={C.white} />}
-                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.white }}>{making ? 'Shaping it in clay…' : pic ? 'Try another picture' : 'Make a picture'}</Text>
-                  </Pressable>
-                  <Pressable onPress={() => (tap('select'), setWithCoco((v) => !v))} style={{ flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: withCoco ? C.leaf : C.sand, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 8 }}>
-                    <Ionicons name={withCoco ? 'checkmark-circle' : 'ellipse-outline'} size={14} color={withCoco ? C.white : C.body} />
-                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: withCoco ? C.white : C.body }}>Coco in it</Text>
-                  </Pressable>
-                </View>
-                {text.trim().length < 3 && !pic && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Write your hook first, then Drrys can turn it into a picture.</Text>}
-                {making && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>This takes about half a minute.</Text>}
-                {picErr && <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.orange }}>Couldn’t make the picture right now. Your hook is still fine: you can save it as it is.</Text>}
-                {tries >= 3 && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>That’s the most pictures for one hook.</Text>}
-                {!!pic && (
-                  <View style={{ backgroundColor: C.white, borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 6, gap: 6 }}>
-                    <Image source={{ uri: pic }} style={{ width: '100%', aspectRatio: 1664 / 928, borderRadius: 10 }} contentFit="cover" />
-                    <Pressable onPress={() => (tap('select'), setPic(undefined))} style={{ alignSelf: 'flex-end', paddingHorizontal: 8, paddingVertical: 4 }}>
-                      <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.muted }}>Remove picture</Text>
-                    </Pressable>
+                <Step n={1} title="Your hook" note="A rhyme, a silly sentence, a little story." />
+                <TextInput
+                  value={text}
+                  onChangeText={setText}
+                  multiline
+                  placeholder="My hook is…"
+                  placeholderTextColor="#A69A8A"
+                  style={{ minHeight: 76, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, fontFamily: F.medium, fontSize: 15, color: C.ink, textAlignVertical: 'top' }}
+                />
+                {ideas.length > 0 ? (
+                  <View style={{ gap: 6 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.muted }}>COCO’S IDEAS: TAP ONE, THEN MAKE IT YOURS</Text>
+                    {ideas.map((h, k) => (
+                      <Pressable key={k} onPress={() => (tap('select'), setText(h))} style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 10 }}>
+                        <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.ink }}>{h}</Text>
+                      </Pressable>
+                    ))}
                   </View>
+                ) : (
+                  <Pressable onPress={getIdeas} disabled={busy || !tried} style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', opacity: tried ? 1 : 0.55 }}>
+                    {busy ? <ActivityIndicator size="small" color={C.teal} /> : <Ionicons name="bulb-outline" size={14} color={C.goldInk} />}
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.goldInk }}>{tried ? 'Need ideas? Ask Coco' : 'Try one yourself first, then Coco can add ideas'}</Text>
+                  </Pressable>
                 )}
               </View>
-            )}
-            <Pressable onPress={() => (tap('select'), setDraw((v) => !v))} style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: draw ? C.teal : C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
-              <Ionicons name="brush-outline" size={14} color={draw ? C.white : C.body} />
-              <Text style={{ fontFamily: F.bold, fontSize: 12, color: draw ? C.white : C.body }}>{draw ? 'Hide the drawing pad' : 'Draw it instead (or as well)'}</Text>
-            </Pressable>
-            {draw && (
+
+              {/* 2 · a picture: drawn by the student, or made from the hook / the sketch */}
               <View style={{ gap: 8 }}>
-                <SketchPad ref={pad} height={220} onInk={setInk} onDrawing={setDrawing} />
-                <Pressable
-                  onPress={askLook}
-                  disabled={!ink || looking}
-                  style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7, opacity: ink ? 1 : 0.6 }}>
-                  {looking ? <ActivityIndicator size="small" color={C.teal} /> : <Ionicons name="eye-outline" size={14} color={C.body} />}
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.body }}>Ask Coco what he sees</Text>
+                <Step n={2} title="A picture" note={youcamEnabled ? 'Optional. Draw what you imagine: your sketch decides what the clay picture shows.' : 'Optional. Draw what you imagine.'} />
+                <Pressable onPress={() => (tap('select'), setDraw((v) => !v))} style={{ ...chip(draw), alignSelf: 'flex-start' }}>
+                  <Ionicons name="brush-outline" size={14} color={draw ? C.white : C.body} />
+                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: draw ? C.white : C.body }}>{draw ? 'Hide the drawing pad' : 'Draw a sketch'}</Text>
                 </Pressable>
-                {look && (
-                  <View style={{ backgroundColor: C.white, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 10, gap: 6 }}>
-                    <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.ink }}>{look.saw}</Text>
-                    {!!look.caption && (
-                      <Pressable onPress={() => (tap('select'), setText((t) => t || look.caption))}>
-                        <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.leaf }}>Use as caption: “{look.caption}”</Text>
+                {draw && (
+                  <View style={{ gap: 8 }}>
+                    <SketchPad ref={pad} height={220} onInk={setInk} onDrawing={setDrawing} />
+                    <Pressable
+                      onPress={askLook}
+                      disabled={!ink || looking}
+                      style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', opacity: ink ? 1 : 0.5 }}>
+                      {looking ? <ActivityIndicator size="small" color={C.teal} /> : <Ionicons name="eye-outline" size={14} color={C.teal} />}
+                      <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.teal }}>Ask Coco what he sees</Text>
+                    </Pressable>
+                    {look && (
+                      <View style={{ backgroundColor: C.white, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 10, gap: 6 }}>
+                        <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.ink }}>{look.saw}</Text>
+                        {!!look.caption && (
+                          <Pressable onPress={() => (tap('select'), setText((t) => t || look.caption))}>
+                            <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.leaf }}>Use as caption: “{look.caption}”</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {youcamEnabled && (
+                  <View style={{ backgroundColor: C.white, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 12, gap: 10 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.ink }}>Turn it into a clay picture</Text>
+                    <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <Pressable onPress={makePic} disabled={making || !canPic || tries >= 3} style={{ ...chip(true), opacity: !canPic || tries >= 3 ? 0.5 : 1 }}>
+                        {making ? <ActivityIndicator size="small" color={C.white} /> : <Ionicons name="image-outline" size={15} color={C.white} />}
+                        <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.white }}>{making ? 'Shaping it in clay…' : pic ? 'Try another' : ink ? 'Make it from my sketch' : 'Make it from my hook'}</Text>
                       </Pressable>
+                      <Pressable onPress={() => (tap('select'), setWithCoco((v) => !v))} style={{ ...chip(false), backgroundColor: withCoco ? C.leaf : C.sand }}>
+                        <Ionicons name={withCoco ? 'checkmark-circle' : 'ellipse-outline'} size={14} color={withCoco ? C.white : C.body} />
+                        <Text style={{ fontFamily: F.bold, fontSize: 12, color: withCoco ? C.white : C.body }}>Coco in it</Text>
+                      </Pressable>
+                    </View>
+                    {!canPic && !pic && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Write your hook or draw a sketch first.</Text>}
+                    {making && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>This takes about half a minute.</Text>}
+                    {tries >= 3 && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>That’s the most pictures for one hook.</Text>}
+                    {!!picErr && (
+                      <View style={{ gap: 2 }}>
+                        <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.orange }}>Couldn’t make the picture right now. Your hook is still fine: you can save it as it is.</Text>
+                        <Text selectable style={{ fontFamily: F.medium, fontSize: 10, color: C.muted }}>{picErr}</Text>
+                      </View>
+                    )}
+                    {!!pic && (
+                      <View style={{ gap: 6 }}>
+                        <Image source={{ uri: pic }} style={{ width: '100%', aspectRatio: 1664 / 928, borderRadius: 12, backgroundColor: C.sand }} contentFit="cover" />
+                        <Pressable onPress={() => (tap('select'), setPic(undefined))} style={{ alignSelf: 'flex-end', paddingHorizontal: 4, paddingVertical: 2 }}>
+                          <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.muted }}>Remove picture</Text>
+                        </Pressable>
+                      </View>
                     )}
                   </View>
                 )}
               </View>
-            )}
-            {ideas.length > 0 && (
-              <View style={{ gap: 6 }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.muted }}>COCO’S IDEAS — TAP ONE, THEN MAKE IT YOURS</Text>
-                {ideas.map((h, k) => (
-                  <Pressable key={k} onPress={() => (tap('select'), setText(h))} style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 10 }}>
-                    <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.ink }}>{h}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-            {!ideas.length && (
-              <Pressable onPress={getIdeas} disabled={busy || !tried} style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7, opacity: tried ? 1 : 0.6 }}>
-                {busy ? <ActivityIndicator size="small" color={C.teal} /> : <Ionicons name="bulb-outline" size={14} color={C.body} />}
-                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.body }}>{tried ? 'Give me ideas' : 'Try one yourself first, then Coco can add ideas'}</Text>
+            </ScrollView>
+
+            <View style={{ gap: 8 }}>
+              <Pressable onPress={plant} disabled={!canSave || busy} style={{ height: 52, borderRadius: 26, backgroundColor: canSave ? C.teal : C.lineStrong, alignItems: 'center', justifyContent: 'center' }}>
+                {busy ? <ActivityIndicator color={C.white} /> : <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.white }}>{card.mnemonic ? 'Update my hook' : 'Save my hook'}</Text>}
               </Pressable>
-            )}
-          </ScrollView>
-          <Pressable
-            onPress={plant}
-            disabled={(!text.trim() && !ink) || busy}
-            style={{ height: 52, borderRadius: 26, backgroundColor: text.trim() || ink ? C.teal : C.lineStrong, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.white }}>Save my hook</Text>
-          </Pressable>
-          <Pressable onPress={onClose} hitSlop={10} style={{ alignSelf: 'center' }}>
-            <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>Not now</Text>
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
+              <Pressable onPress={onClose} hitSlop={10} style={{ alignSelf: 'center' }}>
+                <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>Not now</Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </GestureHandlerRootView>
     </Modal>
   );
 }
 
+function Step({ n, title, note }: { n: number; title: string; note?: string }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: C.teal, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.white }}>{n}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.teal }}>{title}</Text>
+        {!!note && <Text style={{ fontFamily: F.medium, fontSize: 11, lineHeight: 15, color: C.muted }}>{note}</Text>}
+      </View>
+    </View>
+  );
+}
