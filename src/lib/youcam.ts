@@ -150,20 +150,23 @@ export async function makeHookPicture(p: PictureRequest): Promise<string> {
   }
   const id: string | undefined = started?.data?.task_id;
   if (!start.ok || !id) throw new Error(`YouCam could not start (${start.status}): ${JSON.stringify(started ?? {}).slice(0, 160)}`);
-  for (let i = 0; i < 75; i++) {
-    await sleep(2000);
+  // YouCam normally needs about 20 seconds: wait up to ~100 seconds, and say what the last answer was
+  let last = 'none';
+  for (let i = 0; i < 36; i++) {
+    await sleep(i < 10 ? 2000 : 3000);
     const res = await fetch(`${base}/${id}`, { headers });
     const body = await res.json().catch(() => undefined);
     if (!res.ok) throw new Error(`YouCam status ${res.status}: ${JSON.stringify(body ?? {}).slice(0, 160)}`);
-    const st = body?.data?.task_status;
-    if (st === 'success') {
+    const st = String(body?.data?.task_status ?? '');
+    last = JSON.stringify(body?.data ?? body ?? {}).slice(0, 220);
+    if (/^(success|succeeded|completed|done)$/i.test(st)) {
       const url = findUrl(body?.data);
-      if (!url) throw new Error('YouCam finished but no picture link was found');
+      if (!url) throw new Error(`YouCam finished but no picture link was found: ${JSON.stringify(body?.data ?? {}).slice(0, 120)}`);
       return url;
     }
-    if (st === 'error') throw new Error(`YouCam task failed: ${JSON.stringify(body?.data ?? {}).slice(0, 160)}`);
+    if (/^(error|failed|fail)$/i.test(st)) throw new Error(`YouCam task failed: ${JSON.stringify(body?.data ?? {}).slice(0, 160)}`);
   }
-  throw new Error('YouCam took too long');
+  throw new Error(`YouCam took too long. Last answer: ${last} (task ${id})`);
 }
 
 const toBase64 = (buf: ArrayBuffer) => {

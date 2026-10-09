@@ -215,7 +215,7 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
                       </Pressable>
                     </View>
                     {!canPic && !pic && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Write your hook or draw a sketch first.</Text>}
-                    {making && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>This takes about half a minute.</Text>}
+                    {making && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>This takes about 20 seconds.</Text>}
                     {tries >= 3 && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>That’s the most pictures for one hook.</Text>}
                     {!!picErr && (
                       <View style={{ gap: 2 }}>
