@@ -2,6 +2,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { PDFDocument } from 'pdf-lib';
 import { Platform } from 'react-native';
 
+import { readFileBase64 } from '@/lib/readfile';
 import type { Analysis, Context } from '@/lib/ai';
 import { useApp } from '@/store';
 
@@ -13,7 +14,11 @@ export async function keepFile(uri: string): Promise<string> {
     const dir = new Directory(Paths.document, 'materials');
     dir.create({ intermediates: true, idempotent: true });
     const dest = new File(dir, `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.pdf`);
-    await new File(uri).copy(dest);
+    try {
+      await new File(uri).copy(dest);
+    } catch {
+      dest.write(await readFileBase64(uri), { encoding: 'base64' }); // the copy was refused: write it from the content
+    }
     return dest.uri;
   } catch {
     return uri;
@@ -26,18 +31,7 @@ export const PDF_LIMITS = { maxMB: 15, freePages: 40, proPages: 150 };
 
 async function pdfPages(uri: string): Promise<number | undefined> {
   try {
-    const b64 =
-      Platform.OS === 'web'
-        ? await (async () => {
-            const blob = await (await fetch(uri)).blob();
-            return new Promise<string>((res, rej) => {
-              const r = new FileReader();
-              r.onload = () => res(String(r.result).split(',')[1] ?? '');
-              r.onerror = () => rej(r.error);
-              r.readAsDataURL(blob);
-            });
-          })()
-        : await new File(uri).base64();
+    const b64 = await readFileBase64(uri);
     return (await PDFDocument.load(b64, { ignoreEncryption: true, updateMetadata: false })).getPageCount();
   } catch {
     return undefined; // unreadable: let the size check decide
@@ -74,16 +68,7 @@ async function slicePages(base64: string, from?: number, to?: number): Promise<{
 const cache = new Map<string, string>();
 const pageCounts = new Map<string, number>();
 
-async function readBase64(uri: string): Promise<string> {
-  if (Platform.OS !== 'web') return new File(uri).base64();
-  const blob = await (await fetch(uri)).blob();
-  return new Promise<string>((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res(String(r.result).split(',')[1] ?? '');
-    r.onerror = () => rej(r.error);
-    r.readAsDataURL(blob);
-  });
-}
+const readBase64 = readFileBase64;
 
 /** Syllabus + up to 2 past papers (first 20 pages each), so Coco can aim at what's examinable.
  *  Kept small: the whole request must stay under the AI's ~20 MB limit. */
@@ -119,16 +104,7 @@ export async function sessionContext(withPdf = true): Promise<Context> {
     pdfBase64 = cache.get(key);
     if (!pdfBase64) {
       try {
-        if (Platform.OS === 'web') {
-          const blob = await (await fetch(mat.uri)).blob();
-          pdfBase64 = await new Promise<string>((res) => {
-            const r = new FileReader();
-            r.onload = () => res(String(r.result).split(',')[1]);
-            r.readAsDataURL(blob);
-          });
-        } else {
-          pdfBase64 = await new File(mat.uri).base64();
-        }
+        pdfBase64 = await readFileBase64(mat.uri);
         // send only the pages this session covers: a much smaller upload and far fewer tokens → faster
         const cut = await slicePages(pdfBase64, d.fromPage, d.toPage);
         pdfBase64 = cut.data;

@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 
+import { readFileBase64 } from '@/lib/readfile';
 import { transcribe, voiceEnabled } from '@/lib/ai';
 import { liveEnabled, startDictation, type DictationHandle } from '@/lib/live';
 import { haptic } from '@/lib/feedback';
@@ -39,16 +40,7 @@ const notify = (title: string, msg?: string) => (Platform.OS === 'web' ? (global
 
 export type VoiceState = 'idle' | 'recording' | 'writing';
 
-async function readBase64(uri: string): Promise<string> {
-  if (Platform.OS !== 'web') return new File(uri).base64();
-  const blob = await (await fetch(uri)).blob();
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(',')[1] ?? '');
-    r.onerror = () => reject(r.error);
-    r.readAsDataURL(blob);
-  });
-}
+const readBase64 = readFileBase64;
 
 /** Record → transcribe. `onText` gets what was said (never called for silence). */
 export function useVoice(onText: (text: string) => void, onFallback?: () => void) {
