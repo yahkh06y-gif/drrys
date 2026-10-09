@@ -49,7 +49,9 @@ export function useVoice(onText: (text: string) => void, onFallback?: () => void
   const [state, setState] = useState<VoiceState>('idle');
   const alive = useRef(true);
   // live writing (web): the words being spoken right now, the microphone level and the time
-  const streaming = Platform.OS === 'web' && liveEnabled;
+  // word-by-word writing is switched OFF (it did not work well yet): the normal record → transcribe path is used.
+  // It can be tried again with EXPO_PUBLIC_LIVE_WRITING=1 in .env, but it is not part of the app for now.
+  const streaming = process.env.EXPO_PUBLIC_LIVE_WRITING === '1' && Platform.OS === 'web' && liveEnabled;
   const [live, setLive] = useState('');
   const [streamLevel, setStreamLevel] = useState(0);
   const [streamSecs, setStreamSecs] = useState(0);
