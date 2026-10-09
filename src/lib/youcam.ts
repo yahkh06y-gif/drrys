@@ -14,6 +14,7 @@
 import { Asset } from 'expo-asset';
 import { Platform } from 'react-native';
 
+import { shrinkImage } from '@/lib/shrink';
 import { saveSketch } from '@/lib/sketch';
 
 const KEY = process.env.EXPO_PUBLIC_YOUCAM_API_KEY ?? '';
@@ -181,8 +182,9 @@ export async function savePicture(cardId: string, url: string): Promise<string> 
   try {
     const res = await fetch(url);
     if (!res.ok) return url;
+    // web: the picture is kept inside the saved state (localStorage, ~5 MB), so it is saved small
+    if (Platform.OS === 'web') return await shrinkImage(URL.createObjectURL(await res.blob()));
     const b64 = toBase64(await res.arrayBuffer());
-    if (Platform.OS === 'web') return `data:${res.headers.get('content-type') || 'image/png'};base64,${b64}`;
     return (await saveSketch(cardId, b64)) ?? url;
   } catch {
     return url;

@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { shrinkBigPictures } from '@/lib/shrink';
+
 import type { Analysis, ActiveQuestion } from '@/lib/ai';
 
 export type Material = { id: string; name: string; uri: string; size?: number; mime?: string };
@@ -357,9 +359,24 @@ export const useApp = create<State>()(
     }),
     {
       name: 'drrys-v1',
-      storage: createJSONStorage(() => AsyncStorage),
+      // if the device storage is full, saving fails quietly (a warning) instead of crashing the screen
+      storage: createJSONStorage(() => ({
+        getItem: (k: string) => AsyncStorage.getItem(k),
+        removeItem: (k: string) => AsyncStorage.removeItem(k),
+        setItem: async (k: string, v: string) => {
+          try {
+            await AsyncStorage.setItem(k, v);
+          } catch (e) {
+            console.warn('Drrys: could not save (storage is full?)', e);
+          }
+        },
+      })),
       partialize: ({ hydrated, set: _s, ...rest }) => rest as never,
-      onRehydrateStorage: () => () => useApp.setState({ hydrated: true }),
+      onRehydrateStorage: () => () => {
+        useApp.setState({ hydrated: true });
+        // web only: shrink pictures saved before the size fix
+        shrinkBigPictures(useApp.getState().cards).then((cards) => cards && useApp.setState({ cards }));
+      },
     },
   ),
 );
