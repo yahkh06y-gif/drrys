@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COCO } from '@/art';
 import { Btn, Coco, Enter, Pill, SessionHeader, T } from '@/components/ui';
-import { MicButton, useVoice } from '@/components/Voice';
+import { MicButton, useVoice, withLive } from '@/components/Voice';
 import { discussAnswer, gradeAnswer, type Grade, type QFormat, type QKind } from '@/lib/ai';
 import { HookSheet, type HookTarget } from '@/components/HookSheet';
 import { SketchPad, type SketchHandle } from '@/components/SketchPad';
@@ -240,8 +240,8 @@ export default function Active() {
               <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-end' }}>
                 <TextInput
                   ref={answerInput}
-                  value={answer}
-                  onChangeText={setAnswer}
+                  value={withLive(answer, voice.live)}
+                  onChangeText={(t) => voice.state !== 'recording' && setAnswer(t)}
                   multiline
                   placeholder={fmt === 'work' ? 'Write your working, line by line…' : KIND[q.kind ?? 'conceptual'].placeholder}
                   placeholderTextColor="#A69A8A"

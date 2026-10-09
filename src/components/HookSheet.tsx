@@ -102,7 +102,7 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
       play('success');
       haptic('success');
     } catch (e) {
-      setPicErr(String((e as Error)?.message ?? e).replace(/Bearer\s+\S+/g, '').slice(0, 140));
+      setPicErr(String((e as Error)?.message ?? e).replace(/Bearer\s+\S+/g, '').slice(0, 400));
     }
     setMaking(false);
   };

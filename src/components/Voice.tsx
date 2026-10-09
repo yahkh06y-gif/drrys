@@ -1,4 +1,5 @@
-// Voice input: tap the mic, talk, tap again → Coco writes down what you said (Gemini transcription).
+// Voice input: tap the mic, talk, tap again. On the web the words appear on the screen while you talk (Gemini Live
+// transcription); in the app Coco writes everything down after you stop (Gemini transcription).
 // Works in Arabic, English or a mix. Without a Gemini key the mic falls back to the keyboard's own dictation.
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -16,6 +17,7 @@ import { ActivityIndicator, Alert, Platform, Pressable, Text, View, type StylePr
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 
 import { transcribe, voiceEnabled } from '@/lib/ai';
+import { liveEnabled, startDictation, type DictationHandle } from '@/lib/live';
 import { haptic } from '@/lib/feedback';
 import { C, F } from '@/theme';
 
@@ -51,6 +53,14 @@ export function useVoice(onText: (text: string) => void, onFallback?: () => void
   const rec = useAudioRecorderState(recorder, 150);
   const [state, setState] = useState<VoiceState>('idle');
   const alive = useRef(true);
+  // live writing (web): the words being spoken right now, the microphone level and the time
+  const streaming = Platform.OS === 'web' && liveEnabled;
+  const [live, setLive] = useState('');
+  const [streamLevel, setStreamLevel] = useState(0);
+  const [streamSecs, setStreamSecs] = useState(0);
+  const dict = useRef<DictationHandle | undefined>(undefined);
+  const onTextRef = useRef(onText);
+  onTextRef.current = onText;
   useEffect(
     () => () => {
       alive.current = false;
@@ -60,6 +70,34 @@ export function useVoice(onText: (text: string) => void, onFallback?: () => void
 
   const start = useCallback(async () => {
     if (!voiceEnabled) return onFallback?.(); // no Gemini key: use the keyboard's mic instead
+    if (streaming) {
+      try {
+        setLive('');
+        setStreamSecs(0);
+        setState('recording');
+        dict.current = await startDictation({
+          interim: setLive,
+          final: (t) => {
+            setLive('');
+            onTextRef.current(t.trim());
+          },
+          level: setStreamLevel,
+          error: (m) => {
+            dict.current = undefined;
+            if (alive.current) {
+              setState('idle');
+              setLive('');
+              Alert.alert('Live writing stopped', m);
+            }
+          },
+        });
+      } catch (e) {
+        dict.current = undefined;
+        setState('idle');
+        Alert.alert('Can’t listen right now', String((e as Error)?.message ?? e));
+      }
+      return;
+    }
     const perm = await requestRecordingPermissionsAsync();
     if (!perm.granted) {
       Alert.alert('Microphone is off', 'Allow the microphone for Drrys in your phone settings to talk to Coco.');
@@ -75,12 +113,24 @@ export function useVoice(onText: (text: string) => void, onFallback?: () => void
       setState('idle');
       Alert.alert('Can’t record right now', 'Another app may be using the microphone.');
     }
-  }, [recorder, onFallback]);
+  }, [recorder, onFallback, streaming]);
 
   const stop = useCallback(async () => {
     if (state !== 'recording') return;
     setState('writing');
     haptic('medium');
+    if (streaming) {
+      try {
+        await dict.current?.finish();
+      } catch {}
+      dict.current = undefined;
+      if (alive.current) {
+        setLive('');
+        setStreamLevel(0);
+        setState('idle');
+      }
+      return;
+    }
     try {
       await recorder.stop();
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
@@ -95,12 +145,29 @@ export function useVoice(onText: (text: string) => void, onFallback?: () => void
       if (alive.current) Alert.alert('Coco couldn’t hear that', 'Check your connection and try again — or type it instead.');
     }
     if (alive.current) setState('idle');
-  }, [state, recorder, onText]);
+  }, [state, recorder, onText, streaming]);
 
+  // time while writing live, and a stop before the 10-minute limit of a live connection
+  useEffect(() => {
+    if (!streaming || state !== 'recording') return;
+    const t0 = Date.now();
+    const id = setInterval(() => setStreamSecs(Math.floor((Date.now() - t0) / 1000)), 500);
+    return () => clearInterval(id);
+  }, [streaming, state]);
+  useEffect(() => {
+    if (streaming && state === 'recording' && streamSecs >= 9 * 60 + 30) stop();
+  }, [streaming, state, streamSecs, stop]);
   // safety stop for very long recordings
   useEffect(() => {
-    if (state === 'recording' && rec.durationMillis >= MAX_MS) stop();
-  }, [state, rec.durationMillis, stop]);
+    if (!streaming && state === 'recording' && rec.durationMillis >= MAX_MS) stop();
+  }, [streaming, state, rec.durationMillis, stop]);
+  // leaving the screen while writing live: close the connection
+  useEffect(
+    () => () => {
+      dict.current?.cancel();
+    },
+    [],
+  );
 
   // leaving the screen mid-recording: just stop, don't transcribe. Only touch the recorder if we started
   // it — by the time this runs the hook may already have released the native recorder, and reading a
@@ -121,9 +188,14 @@ export function useVoice(onText: (text: string) => void, onFallback?: () => void
 
   const toggle = () => (state === 'idle' ? start() : state === 'recording' ? stop() : undefined);
   // metering is in dB (about -60 quiet … 0 loud) → 0…1
-  const level = state === 'recording' && rec.metering != null ? Math.max(0, Math.min(1, (rec.metering + 55) / 50)) : 0;
-  return { state, seconds: Math.floor((state === 'recording' ? rec.durationMillis : 0) / 1000), level, toggle };
+  const level = streaming ? (state === 'recording' ? streamLevel : 0) : state === 'recording' && rec.metering != null ? Math.max(0, Math.min(1, (rec.metering + 55) / 50)) : 0;
+  const seconds = streaming ? (state === 'recording' ? streamSecs : 0) : Math.floor((state === 'recording' ? rec.durationMillis : 0) / 1000);
+  // `live`: the words being spoken right now (web). Show them after the text, e.g. with `withLive(text, voice.live)`.
+  return { state, seconds, level, toggle, live };
 }
+
+/** The text with the words being spoken right now added at the end. */
+export const withLive = (text: string, live: string) => (live ? `${text}${text && !/\s$/.test(text) ? ' ' : ''}${live}` : text);
 
 /** The mic button: pulses with your voice while recording, spins while Coco writes. */
 export function MicButton({ voice, size = 50, style }: { voice: ReturnType<typeof useVoice>; size?: number; style?: StyleProp<ViewStyle> }) {

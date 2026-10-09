@@ -6,7 +6,7 @@ import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Btn, Enter, SessionHeader, T } from '@/components/ui';
-import { MicButton, useVoice, VoiceHint } from '@/components/Voice';
+import { MicButton, useVoice, VoiceHint, withLive } from '@/components/Voice';
 import { aiEnabled } from '@/lib/ai';
 import { DEMO } from '@/lib/demo';
 import { tap } from '@/lib/feedback';
@@ -81,8 +81,8 @@ export default function Recall() {
 
             <TextInput
               ref={input}
-              value={recall}
-              onChangeText={(t) => patchSession({ recall: t })}
+              value={withLive(recall, voice.live)}
+              onChangeText={(t) => voice.state !== 'recording' && patchSession({ recall: t })}
               onFocus={() => setActive(true)}
               onBlur={() => setActive(false)}
               multiline

@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COCO } from '@/art';
 import { Coco, Enter, T } from '@/components/ui';
-import { MicButton, useVoice } from '@/components/Voice';
+import { MicButton, useVoice, withLive } from '@/components/Voice';
 import { chatCoco } from '@/lib/ai';
 import { play, tap } from '@/lib/feedback';
 import { activeSubject, useApp } from '@/store';
@@ -127,8 +127,8 @@ export default function CocoTab() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <TextInput
                 ref={input}
-                value={text}
-                onChangeText={setText}
+                value={withLive(text, voice.live)}
+                onChangeText={(t) => voice.state !== 'recording' && setText(t)}
                 onSubmitEditing={send}
                 returnKeyType="send"
                 placeholder={voice.state === 'recording' ? 'Listening… tap ■ when done' : voice.state === 'writing' ? 'Writing it down…' : 'Ask Coco anything…'}
