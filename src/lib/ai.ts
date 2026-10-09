@@ -608,3 +608,25 @@ Return ONLY the description, no title, no quotes.`,
   );
   return raw.trim().replace(/^["“]|["”]$/g, '').slice(0, 500);
 }
+
+/**
+ * The student's written hook becomes a scene description for the picture maker, so the picture shows what the
+ * hook says (every object, who does what, where). Nothing is added and the lesson is not explained.
+ */
+export async function hookToScene(c: Context, card: { q: string; a: string }, hook: string): Promise<string> {
+  if (!aiEnabled) return hook.slice(0, 400);
+  const raw = await call(
+    'You turn a student’s memory hook into a precise scene description for an illustrator. Show exactly what the hook says. Never add new objects or ideas, never explain the lesson.',
+    [
+      {
+        type: 'text',
+        text: `The student wrote this memory hook for: "${card.q}" → "${card.a}".
+Hook: "${hook}"
+Describe ONE single picture for an illustrator in at most 70 words, in English: every object the hook mentions, who is doing what, and where things are. Words in brackets are the ideas the objects stand for: draw the objects, never write the bracketed words. No text or letters in the picture.
+Return ONLY the description, no title, no quotes.`,
+      },
+    ],
+    350,
+  );
+  return raw.trim().replace(/^["“]|["”]$/g, '').slice(0, 550);
+}

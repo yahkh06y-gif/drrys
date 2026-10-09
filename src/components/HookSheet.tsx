@@ -8,11 +8,11 @@ import { ActivityIndicator, KeyboardAvoidingView, Modal, Pressable, ScrollView, 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { SketchPad, type SketchHandle } from '@/components/SketchPad';
-import { describeSketch, sketchToScene, suggestHooks } from '@/lib/ai';
+import { describeSketch, hookToScene, sketchToScene, suggestHooks } from '@/lib/ai';
 import { haptic, play, tap } from '@/lib/feedback';
 import { cardContext } from '@/lib/session';
 import { saveSketch } from '@/lib/sketch';
-import { makeHookPicture, savePicture, youcamEnabled } from '@/lib/youcam';
+import { makeHookPicture, savePicture, UploadError, youcamEnabled } from '@/lib/youcam';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
 
@@ -78,16 +78,26 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
     setPicErr(undefined);
     setTries((n) => n + 1);
     try {
-      let scene: string | undefined;
-      if (ink) {
+      const ctx = cardContext(card.subjectId);
+      const req = { hook: text.trim(), q: card.q, a: card.a, withCoco };
+      // the student's sketch is the reference picture: it keeps their layout
+      const img = ink ? await pad.current?.capture() : undefined;
+      let url: string | undefined;
+      if (img) {
         try {
-          const img = await pad.current?.capture();
-          if (img) scene = await sketchToScene(cardContext(card.subjectId), card, text.trim(), img);
-        } catch {
-          scene = look?.saw; // the sketch could not be read this time: use what Coco saw, if he did
+          url = await makeHookPicture({ ...req, sketch: img });
+        } catch (e) {
+          if (!(e instanceof UploadError)) throw e;
+          // the sketch could not be uploaded: describe it in words instead
+          const scene = await sketchToScene(ctx, card, req.hook, img).catch(() => look?.saw);
+          url = await makeHookPicture({ ...req, scene });
         }
+      } else {
+        // words only: the AI turns the hook into a clear scene first, so the picture shows what the hook says
+        const scene = req.hook ? await hookToScene(ctx, card, req.hook).catch(() => undefined) : undefined;
+        url = await makeHookPicture({ ...req, scene });
       }
-      setPic(await makeHookPicture({ hook: text.trim(), q: card.q, a: card.a, withCoco, scene }));
+      setPic(url);
       setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 250); // bring the new picture into view
       play('success');
       haptic('success');

@@ -61,7 +61,7 @@ export const SketchPad = forwardRef<SketchHandle, { height?: number; onInk?: (ha
     capture: async () => {
       if (!strokes.length) return undefined;
       try {
-        return await captureRef(view, { format: 'png', result: 'base64', quality: 0.8, width: 480 });
+        return await captureRef(view, { format: 'png', result: 'base64', quality: 0.8, width: 800 });
       } catch {
         return undefined;
       }
