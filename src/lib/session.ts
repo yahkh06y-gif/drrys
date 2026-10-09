@@ -113,6 +113,7 @@ export async function sessionContext(withPdf = true): Promise<Context> {
   const chapter = subject?.chapters.find((c) => c.id === d.chapterId);
   const mat = chapter?.materials.find((m) => m.id === d.materialId);
   let pdfBase64: string | undefined;
+  let why = '';
   if (withPdf && mat) {
     const key = `${mat.uri}#${d.fromPage}-${d.toPage}`;
     pdfBase64 = cache.get(key);
@@ -133,13 +134,14 @@ export async function sessionContext(withPdf = true): Promise<Context> {
         pdfBase64 = cut.data;
         cache.set(key, pdfBase64);
         pageCounts.set(key, cut.pages);
-      } catch {
+      } catch (e) {
         pdfBase64 = undefined;
+        why = String((e as Error)?.message ?? e).slice(0, 90);
       }
     }
     // the student chose a file, but its pages could not be prepared: stop here. Never carry on from general
     // knowledge or from the wrong pages: everything in a session must come from the chosen pages.
-    if (!pdfBase64) throw new Error('Drrys could not read the pages you chose from your file, so it did not start the session (it never guesses without your pages). Go back and try again; if it keeps happening, re-add the file.');
+    if (!pdfBase64) throw new Error(`File problem${why ? ` (${why})` : ''}: Drrys could not read your pages, so it did not start. Re-add the file and try again.`);
   }
   let course: { label: string; data: string }[] = [];
   if (withPdf && subject) {

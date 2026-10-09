@@ -100,7 +100,7 @@ export default function Analyze() {
         </View>
         {err ? (
           <View style={{ marginTop: 14, gap: 8 }}>
-            <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.red, textAlign: 'center' }}>Coco couldn’t reach the cloud: {err.slice(0, 120)}</Text>
+            <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.red, textAlign: 'center' }}>{err.startsWith('File problem') ? err.slice(0, 240) : `Coco couldn’t reach the cloud: ${err.slice(0, 120)}`}</Text>
             <Btn title="Try again" kind="teal" pill onPress={() => setAttempt((a) => a + 1)} />
           </View>
         ) : (
