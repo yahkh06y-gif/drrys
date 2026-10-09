@@ -57,24 +57,22 @@ export async function checkPdf(f: { uri: string; size?: number | null }, opts: {
   return undefined;
 }
 
-/** Keep pages from..to (1-based) of a PDF. Falls back to the whole file if anything goes wrong. */
-async function slicePages(base64: string, from?: number, to?: number): Promise<string> {
-  try {
-    const src = await PDFDocument.load(base64, { ignoreEncryption: true });
-    const n = src.getPageCount();
-    const a = Math.max(1, Math.min(n, from ?? 1));
-    const b = Math.max(a, Math.min(n, to ?? n));
-    if (a === 1 && b === n) return base64;
-    const out = await PDFDocument.create();
-    const pages = await out.copyPages(src, Array.from({ length: b - a + 1 }, (_, i) => a - 1 + i));
-    pages.forEach((p) => out.addPage(p));
-    return await out.saveAsBase64();
-  } catch {
-    return base64;
-  }
+/** Keep pages from..to (1-based) of a PDF. If the pages cannot be cut out it throws: the whole file must never
+ *  be sent instead (the session would then use pages the student did not choose). */
+async function slicePages(base64: string, from?: number, to?: number): Promise<{ data: string; pages: number }> {
+  const src = await PDFDocument.load(base64, { ignoreEncryption: true });
+  const n = src.getPageCount();
+  const a = Math.max(1, Math.min(n, from ?? 1));
+  const b = Math.max(a, Math.min(n, to ?? n));
+  if (a === 1 && b === n) return { data: base64, pages: n };
+  const out = await PDFDocument.create();
+  const pages = await out.copyPages(src, Array.from({ length: b - a + 1 }, (_, i) => a - 1 + i));
+  pages.forEach((p) => out.addPage(p));
+  return { data: await out.saveAsBase64(), pages: b - a + 1 };
 }
 
 const cache = new Map<string, string>();
+const pageCounts = new Map<string, number>();
 
 async function readBase64(uri: string): Promise<string> {
   if (Platform.OS !== 'web') return new File(uri).base64();
@@ -96,7 +94,7 @@ async function courseFiles(files: { name: string; uri: string }[]): Promise<{ la
     let data = cache.get(key);
     if (!data) {
       try {
-        data = await slicePages(await readBase64(f.uri), 1, 20);
+        data = (await slicePages(await readBase64(f.uri), 1, 20)).data;
         cache.set(key, data);
       } catch {
         continue;
@@ -131,12 +129,17 @@ export async function sessionContext(withPdf = true): Promise<Context> {
           pdfBase64 = await new File(mat.uri).base64();
         }
         // send only the pages this session covers: a much smaller upload and far fewer tokens → faster
-        pdfBase64 = await slicePages(pdfBase64, d.fromPage, d.toPage);
+        const cut = await slicePages(pdfBase64, d.fromPage, d.toPage);
+        pdfBase64 = cut.data;
         cache.set(key, pdfBase64);
+        pageCounts.set(key, cut.pages);
       } catch {
         pdfBase64 = undefined;
       }
     }
+    // the student chose a file, but its pages could not be prepared: stop here. Never carry on from general
+    // knowledge or from the wrong pages: everything in a session must come from the chosen pages.
+    if (!pdfBase64) throw new Error('Drrys could not read the pages you chose from your file, so it did not start the session (it never guesses without your pages). Go back and try again; if it keeps happening, re-add the file.');
   }
   let course: { label: string; data: string }[] = [];
   if (withPdf && subject) {
@@ -150,6 +153,7 @@ export async function sessionContext(withPdf = true): Promise<Context> {
     subject: subject?.name ?? 'General',
     chapter: chapter?.title ?? 'Chapter',
     pdfBase64,
+    pageCount: pdfBase64 ? pageCounts.get(`${mat?.uri}#${d.fromPage}-${d.toPage}`) : undefined,
     course,
     fromPage: d.fromPage,
     toPage: d.toPage,

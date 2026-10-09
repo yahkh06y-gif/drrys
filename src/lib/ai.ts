@@ -59,6 +59,7 @@ export type Context = {
   course?: { label: string; data: string }[]; // syllabus / past papers: guide what to ask, never new content
   fromPage?: number;
   toPage?: number;
+  pageCount?: number; // pages in the document sent (page 1 = the first page of the chosen range)
   interests: string[];
   style: string;
   depth: string;
@@ -203,7 +204,7 @@ Drrys teaches with evidence-based methods (active recall, elaboration, spaced re
 Style: ${c.style}. Depth: ${c.depth}.
 ${c.interests.length ? `The student enjoys: ${c.interests.join(', ')}. You MAY use one of these for an analogy, but only now and then — when an idea is genuinely hard to picture. Most explanations need no hobby analogy; never force one into every answer.` : 'Do not assume any hobbies.'}
 Subject: ${c.subject}. Chapter: ${c.chapter}.
-STAY INSIDE THE STUDENT'S MATERIAL: when lecture files are provided (or the session is built on them), every fact, definition, number, example and question must come from those files. Do not bring in outside information, extra topics or details the lecture doesn't contain. If something isn't covered in the material, say so instead of filling it in.
+STAY INSIDE THE STUDENT'S MATERIAL: when lecture files are provided (or the session is built on them), every fact, definition, number, example and question must come from those files. Never add anything from your own general knowledge: no outside facts, examples, numbers, extra topics or details the lecture pages don't contain, even if they are true and related. If something isn't covered in the material, say so instead of filling it in.
 Keep language simple, encouraging, and concise.`;
 
 function material(c: Context): Block[] {
@@ -211,13 +212,13 @@ function material(c: Context): Block[] {
   if (c.pdfBase64) {
     blocks.push(
       { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: c.pdfBase64 } },
-      { type: 'text', text: `The document above is TODAY'S LECTURE (pages ${c.fromPage ?? 1}–${c.toPage ?? 'end'}). It is the only source of content for this session.` },
+      { type: 'text', text: `The document above is TODAY'S LECTURE: ONLY the pages ${c.fromPage ?? 1}–${c.toPage ?? 'end'} of the student's file${c.pageCount ? `, ${c.pageCount} page${c.pageCount > 1 ? 's' : ''}; in this document they are numbered 1 to ${c.pageCount}` : ''}. It is the ONLY source of content for this session: every fact, definition, number, example and question must be found on these pages. Nothing else exists for this session.` },
     );
   }
   for (const f of c.course ?? []) {
     blocks.push(
       { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.data } },
-      { type: 'text', text: `The document above is the ${f.label}. Use it ONLY to judge which of today's lecture ideas are most examinable and how exam questions are phrased — do not quiz on anything that isn't in today's lecture.` },
+      { type: 'text', text: `The document above is the ${f.label}. This is NOT lecture content. Use it ONLY to judge which of today's lecture ideas are most examinable and how exam questions are phrased. NEVER take a fact, term, example, number or topic from it: anything that appears only in this document must NOT appear in your answer.` },
     );
   }
   return blocks;
@@ -272,18 +273,19 @@ Return ONLY JSON with this shape:
  "analysis": {
    "summary": "1 short encouraging sentence",
    "nailed": [{"title": "concept", "detail": "what they got right (1 sentence)", "tag": "Strong Recall|Exact Match|Firmly Grasped"}],
-   "forgotten": [{"title": "important idea from the lecture they did not mention", "detail": "teach it clearly in 2-3 simple sentences, as if explaining it for the first time", "why": "ONE short sentence: why it matters, i.e. where it shows up (a typical exam question, or what it is needed for); use the syllabus / past papers when attached", "tag": "Missed", "page": "page ref if known"}],
+   "forgotten": [{"title": "important idea from the lecture they did not mention", "detail": "teach it clearly in 2-3 simple sentences, as if explaining it for the first time", "why": "ONE short sentence: why it matters, i.e. where it shows up (a typical exam question, or what it is needed for); say which kind of exam question it appears in or what it is needed for, but never add content from the syllabus or past papers", "tag": "Missed", "page": "page ref if known", "src": 1}],
    "corrections": [{"concept": "name", "youSaid": "their wrong statement (quote/paraphrase)", "truth": "the correct idea in 1-2 sentences", "formula": "optional short formula"}],
    "keywords": ["exact short phrases copied from the student's text that are correct"]
  },
- "questions": [{"kind": "conceptual|procedural|analogous|evidence", "format": "explain|order|sort|match|work", "q": "...", "hint": "a nudge, not the answer", "ideal": "model answer in 1-2 sentences"}],
- "cards": [{"q": "short question", "a": "short, accurate answer"}]
+ "questions": [{"kind": "conceptual|procedural|analogous|evidence", "format": "explain|order|sort|match|work", "q": "...", "hint": "a nudge, not the answer", "ideal": "model answer in 1-2 sentences", "src": 1}],
+ "cards": [{"q": "short question", "a": "short, accurate answer", "src": 1}]
 }
 Rules:
+- GROUNDING (the most important rule): everything comes from the lecture pages above and nothing else. Never use your own knowledge, the syllabus or the past papers as a source of facts. "src" (in forgotten, questions and cards) is the page number of the lecture document (1 to ${c.pageCount ?? 'the last page'}) where the answer or fact is actually written. If you cannot point to a page, leave that item out.
 - map (do this FIRST, it is your working list): walk through the lecture pages in order and list EVERY distinct idea, definition, formula, number or example worth knowing, whether or not the student mentioned it. weight: 3 = core and likely examined, 2 = important support, 1 = detail. status compares it with the brain dump: nailed (stated correctly), missed (not mentioned), wrong (stated incorrectly). Names only, no explanations here. The LECTURE decides what matters, never the student's text. Everything below is built from this map, so nothing in the pages gets forgotten.
 - analysis.forgotten: every "missed" idea of weight 3 and 2 (weight 1 only if the page stresses it), most important first; max 12. Each detail must actually teach the idea, because the student reads these before being questioned.
 - analysis.corrections: every wrong statement, max 6. nailed: max 6. Empty lists are fine.
-- questions: no fixed number — as many as it takes to cover every missed and corrected idea that matters (a light lecture may need 3, a dense one 8 or more). They make the student EXPLAIN (why/how), one idea each: mostly the missed and corrected ideas (only ones taught in analysis above), plus one that deepens something they already got right. Ask them the way an exam would: prioritise ideas the syllabus/past papers emphasise and mirror the past papers' question style when those files are attached. ${c.interests.length ? 'At most ONE question may invite an analogy from their interests, and only if an idea is abstract enough to need it; the rest are plain exam-style questions.' : ''} Never ask about something that is not in today's lecture pages or the analysis.
+- questions: no fixed number — as many as it takes to cover every missed and corrected idea that matters (a light lecture may need 3, a dense one 8 or more). They make the student EXPLAIN (why/how), one idea each: mostly the missed and corrected ideas (only ones taught in analysis above), plus one that deepens something they already got right. Ask them the way an exam would: when a syllabus or past papers are attached, use them ONLY to choose which of the lecture's ideas to ask and how to phrase the question, never as a source of content. ${c.interests.length ? 'At most ONE question may invite an analogy from their interests, and only if an idea is abstract enough to need it; the rest are plain exam-style questions.' : ''} Never ask about something that is not in today's lecture pages or the analysis.
   At least a quarter of the questions must NOT be about the student's mistakes: take ideas from the map that the student got right or never needed to state, and ask them to apply it to a new short scenario, compare two ideas, or explain why it works that way. The session must not feel like only correcting errors.
   Give each question a "kind" that fits the idea (this is how Drrys picks the right way to practise it):
     conceptual — how two or more ideas relate ("how does X change Y?", "why does X lead to Y?");
@@ -314,8 +316,34 @@ Rules:
   const analysis = { ...a, nailed: a.nailed ?? [], forgotten: a.forgotten ?? [], corrections: a.corrections ?? [], keywords: a.keywords ?? [] };
   const KINDS: QKind[] = ['conceptual', 'procedural', 'analogous', 'evidence'];
   const questions = (plan.questions ?? []).filter((q) => q?.q).map((q) => cleanQuestion({ ...q, kind: KINDS.includes(q.kind as QKind) ? q.kind : 'conceptual' } as ActiveQuestion));
-  const cards = (plan.cards ?? []).filter((c) => c?.q && c?.a);
-  return { analysis, questions, cards };
+  const cards = (plan.cards ?? []).filter((x) => x?.q && x?.a);
+  return enforceGrounding(c, { analysis, questions, cards });
+}
+
+/**
+ * Safety net: every question, card and "forgotten" idea must name a page (1..N) of the lecture the student chose.
+ * Anything that doesn't was not found in the pages, so it is dropped (and the internal "src" is removed).
+ */
+function enforceGrounding(c: Context, plan: SessionPlan): SessionPlan {
+  const n = c.pageCount;
+  if (!c.pdfBase64 || !n) return plan; // no lecture file: nothing to check against
+  const ok = (x: unknown) => {
+    const v = Number((x as { src?: unknown })?.src);
+    return Number.isInteger(v) && v >= 1 && v <= n;
+  };
+  const strip = <T extends object>(x: T): T => {
+    const { src: _src, ...rest } = x as T & { src?: unknown };
+    return rest as T;
+  };
+  const keep = <T extends object>(list: T[]) => {
+    const good = list.filter(ok);
+    return (good.length ? good : list).map(strip); // if the model left every "src" out, do not empty the session
+  };
+  return {
+    analysis: { ...plan.analysis, forgotten: keep(plan.analysis.forgotten) },
+    questions: keep(plan.questions),
+    cards: keep(plan.cards),
+  };
 }
 
 /** Active learning is a conversation: after the grade, the student can push back or ask, and Coco replies. */
@@ -333,7 +361,7 @@ export async function discussAnswer(
   const convo = thread.map((m) => `${m.role === 'user' ? 'Student' : 'Coco'}: ${m.text}`).join('\n');
   return call(
     persona(c) +
-      '\nYou are in the middle of an active-learning exchange. Reply in 1-3 short sentences. If the student is partly right, say which part. Prefer a guiding question over just giving the answer, unless they are clearly stuck. Match the language the student writes in.',
+      '\nYou are in the middle of an active-learning exchange. Reply in 1-3 short sentences. Answer only from the model answer and the lecture; if the student asks about something the lecture pages don’t cover, say it is outside today’s pages instead of explaining it from your own knowledge. If the student is partly right, say which part. Prefer a guiding question over just giving the answer, unless they are clearly stuck. Match the language the student writes in.',
     [
       {
         type: 'text',
