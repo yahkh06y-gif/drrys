@@ -12,6 +12,8 @@
  * Key: EXPO_PUBLIC_YOUCAM_API_KEY in .env. Without a key the "Make a picture" option is hidden.
  */
 import { Asset } from 'expo-asset';
+import { File, Paths } from 'expo-file-system';
+import * as Legacy from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 
 import { shrinkImage } from '@/lib/shrink';
@@ -106,8 +108,23 @@ async function uploadImage(bytes: Uint8Array, contentType: string, fileName: str
       if (!/^content-length$/i.test(k)) h[k] = String(v); // the device sets the length itself
     }
     if (!Object.keys(h).some((k) => /^content-type$/i.test(k))) h['content-type'] = contentType;
-    const put = await fetch(req.url, { method: req.method || 'PUT', headers: h, body: bytes as unknown as BodyInit });
-    if (!put.ok) throw new Error(`${put.status}`);
+    if (Platform.OS === 'web') {
+      const put = await fetch(req.url, { method: req.method || 'PUT', headers: h, body: bytes as unknown as BodyInit });
+      if (!put.ok) throw new Error(`${put.status}`);
+    } else {
+      // on a phone a raw byte array is not sent reliably by fetch (YouCam then says "Cannot determine file type"):
+      // the bytes are written to a small file and sent as a real binary upload
+      const tmp = new File(Paths.cache, `yc-${Date.now().toString(36)}-${fileName}`);
+      tmp.write(toBase64(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer), { encoding: 'base64' });
+      try {
+        const r = await Legacy.uploadAsync(req.url, tmp.uri, { httpMethod: (req.method || 'PUT') as 'PUT', uploadType: Legacy.FileSystemUploadType.BINARY_CONTENT, headers: h });
+        if (r.status < 200 || r.status >= 300) throw new Error(`${r.status}`);
+      } finally {
+        try {
+          tmp.delete();
+        } catch {}
+      }
+    }
   } catch (e) {
     throw new UploadError(`YouCam upload failed: ${String((e as Error)?.message ?? e).slice(0, 100)}`);
   }
@@ -134,8 +151,15 @@ export async function makeHookPicture(p: PictureRequest): Promise<string> {
   // reference pictures: the sketch first (Image 1), then Coco
   const ids: string[] = [];
   if (p.sketch) ids.push(await uploadImage(fromBase64(p.sketch), 'image/png', 'sketch.png'));
-  if (p.withCoco) ids.push(await cocoFileId());
-  const refs = { sketch: !!p.sketch, coco: p.withCoco };
+  let coco = p.withCoco;
+  if (coco) {
+    try {
+      ids.push(await cocoFileId());
+    } catch {
+      coco = false; // Coco's picture could not be sent: the picture is made without him rather than not at all
+    }
+  }
+  const refs = { sketch: !!p.sketch, coco };
   const base = ids.length ? IMAGE_TO_IMAGE : TEXT_TO_IMAGE;
   const begin = (minimal: boolean) =>
     fetch(base, {

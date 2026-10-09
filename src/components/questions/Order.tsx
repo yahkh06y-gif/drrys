@@ -1,6 +1,6 @@
 // Drag the steps into the right order. The handle on the left starts the drag; the others make room.
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
@@ -24,28 +24,30 @@ function shuffled(steps: string[]) {
 export function OrderQ({ steps, locked, marks, onChange }: { steps: string[]; locked: boolean; marks?: boolean[]; onChange: (order: string[]) => void }) {
   const items = useMemo(() => shuffled(steps), [steps]);
   const start0 = items.map((_, id) => items.findIndex((it) => it.id === id)); // pos[id] = the slot item `id` starts in (the shuffled order)
-  const pos = useSharedValue(start0); // pos[id] = the slot the item is in now
+  const pos = useSharedValue(start0); // pos[id] = the slot the item is in now (read on the UI thread only)
+  const [slots, setSlots] = useState(start0); // the same, for drawing the marks (React must not read the shared value while rendering)
   const labelsBySlot = (p: number[]) => {
     const out: string[] = [];
     items.forEach((it) => (out[p[it.id]] = it.label));
     return out;
   };
-  const report = (p: number[]) => onChange(labelsBySlot(p));
+  const report = (p: number[]) => (setSlots(p), onChange(labelsBySlot(p)));
   useEffect(() => {
+    setSlots(start0);
     onChange(labelsBySlot(start0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
   return (
     <View style={{ height: items.length * H }}>
       {items.map((it) => (
-        <Row key={it.id} id={it.id} label={it.label} pos={pos} n={items.length} locked={locked} mark={locked ? marks?.[pos.value[it.id]] : undefined} onEnd={report} />
+        <Row key={it.id} id={it.id} label={it.label} pos={pos} slot0={start0[it.id]} n={items.length} locked={locked} mark={locked ? marks?.[slots[it.id]] : undefined} onEnd={report} />
       ))}
     </View>
   );
 }
 
-function Row({ id, label, pos, n, locked, mark, onEnd }: { id: number; label: string; pos: SharedValue<number[]>; n: number; locked: boolean; mark?: boolean; onEnd: (p: number[]) => void }) {
-  const top = useSharedValue(pos.value[id] * H);
+function Row({ id, label, pos, slot0, n, locked, mark, onEnd }: { id: number; label: string; pos: SharedValue<number[]>; slot0: number; n: number; locked: boolean; mark?: boolean; onEnd: (p: number[]) => void }) {
+  const top = useSharedValue(slot0 * H);
   const start = useSharedValue(0);
   const dragging = useSharedValue(false);
   useAnimatedReaction(
