@@ -16,13 +16,17 @@ const BASE = 'https://yce-api-01.makeupar.com/s2s/v2.0/task/image-to-image/youca
 // Default: the file in this repo's forgehacks branch on GitHub. Override with EXPO_PUBLIC_YOUCAM_COCO_URL.
 const COCO_URL = process.env.EXPO_PUBLIC_YOUCAM_COCO_URL || 'https://raw.githubusercontent.com/yahkh06y-gif/drrys/forgehacks/assets/art/coco/reference.png';
 
+// The image maker works from reference pictures (it needs at least one). The style reference is the app's own
+// empty clay world (on the repo's main branch), so every picture comes out in the same look as the app.
+const STYLE_URL = process.env.EXPO_PUBLIC_YOUCAM_STYLE_URL || 'https://raw.githubusercontent.com/yahkh06y-gif/drrys/main/assets/art/tree/no-tree.jpg';
+
 export const youcamEnabled = !!KEY;
 
 const STYLE =
-  'A 3D claymation illustration, handmade clay animation look: rounded soft plasticine shapes, soft pastel colours (teal, leaf green, warm orange, cream), gentle studio lighting, a simple clean uncluttered background, friendly and playful. No text, no letters, no numbers in the picture.';
+  'Make a NEW 3D claymation illustration, handmade clay animation look: rounded soft plasticine shapes, soft pastel colours (teal, leaf green, warm orange, cream), gentle studio lighting, a simple clean uncluttered background, friendly and playful. No text, no letters, no numbers in the picture. The reference image only shows the clay art style, colours and soft light to match: do not copy its landscape, create the new scene described below.';
 
 const COCO =
-  ' Include Coco as the helper in the scene: the small beige clay character from the reference image (a rounded block-shaped creature with two small round eyes and thin black stick legs). Keep the character looking exactly like the reference.';
+  ' Include Coco as the helper in the scene: the small beige clay character from the FIRST reference image (a rounded block-shaped creature with two small round eyes and thin black stick legs). Keep the character looking exactly like that reference. The SECOND reference image is the style reference.';
 
 function buildPrompt(p: { hook: string; q: string; a: string; withCoco: boolean; scene?: string }) {
   const cut = (s: string, n: number) => (s.length > n ? s.slice(0, n) : s);
@@ -68,7 +72,7 @@ export async function makeHookPicture(p: { hook: string; q: string; a: string; w
   const start = await fetch(BASE, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ src_file_urls: p.withCoco ? [COCO_URL] : [], model: 'youcam-image-v2', prompt: buildPrompt(p), size: '1664*928' }),
+    body: JSON.stringify({ src_file_urls: p.withCoco ? [COCO_URL, STYLE_URL] : [STYLE_URL], model: 'youcam-image-v2', prompt: buildPrompt(p), size: '1664*928' }),
   });
   const started = await start.json().catch(() => undefined);
   const id: string | undefined = started?.data?.task_id;
