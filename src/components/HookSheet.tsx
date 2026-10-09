@@ -215,7 +215,7 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
                     )}
                     {!!pic && (
                       <View style={{ gap: 6 }}>
-                        <Image source={{ uri: pic }} style={{ width: '100%', aspectRatio: 1664 / 928, borderRadius: 12, backgroundColor: C.sand }} contentFit="cover" />
+                        <Image source={{ uri: pic }} style={{ width: '100%', aspectRatio: 1472 / 1104, borderRadius: 12, backgroundColor: C.sand }} contentFit="cover" />
                         <Pressable onPress={() => (tap('select'), setPic(undefined))} style={{ alignSelf: 'flex-end', paddingHorizontal: 4, paddingVertical: 2 }}>
                           <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.muted }}>Remove picture</Text>
                         </Pressable>

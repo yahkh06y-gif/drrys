@@ -49,7 +49,7 @@ export type ActiveQuestion = {
 };
 export type GroupCheck = { groups: { name: string; ok: boolean; note: string }[]; overall: string };
 /** `card`: when the answer shows a gap, one flashcard aimed at exactly what the student didn't get. */
-export type Grade = { correct: boolean; feedback: string; card?: FlashCard | null };
+export type Grade = { correct: boolean; close?: boolean; feedback: string; card?: FlashCard | null };
 export type FlashCard = { q: string; a: string };
 
 export type Context = {
@@ -391,22 +391,24 @@ Return ONLY JSON: [{"q": "...", "hint": "a nudge, not the answer", "ideal": "mod
 export async function gradeAnswer(c: Context, q: ActiveQuestion, answer: string, sketch?: string): Promise<Grade> {
   if (!aiEnabled) {
     await wait(900);
-    const ok = answer.trim().split(/\s+/).length >= 5;
-    return { correct: ok, feedback: ok ? DEMO.goodFeedback : DEMO.tryFeedback };
+    const words = answer.trim().split(/\s+/).filter(Boolean).length;
+    return { correct: words >= 5, close: words >= 3 && words < 5, feedback: words >= 5 ? DEMO.goodFeedback : DEMO.tryFeedback };
   }
   const raw = await call(persona(c), [
     ...(sketch ? ([{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: sketch } }] as Block[]) : []),
     {
       type: 'text',
       text: `${sketch ? 'The image above is what the student sketched or wrote by hand for this question.\n' : ''}Question (${q.kind ?? 'conceptual'}): ${q.q}\nModel answer: ${q.ideal}\nStudent answer: """${answer}"""
-${q.format === 'work' ? 'This is a worked problem: judge the method, each step and the final answer (from the typed working and/or the sketch). If only the final answer is wrong, say which step to recheck.\n' : ''}${q.kind === 'analogous' ? 'This is a comparison question: the answer must say where the comparison fits AND where it stops working.\n' : ''}${q.kind === 'procedural' ? 'This is a procedure question: the steps must be right and in the right order.\n' : ''}Judge if the student's explanation captures the key idea (be fair, not pedantic). The model answer comes from the lecture: judge against it and add nothing from outside it.
+${q.format === 'work' ? 'This is a worked problem: judge the method, each step and the final answer (from the typed working and/or the sketch). If only the final answer is wrong, say which step to recheck.\n' : ''}${q.kind === 'analogous' ? 'This is a comparison question: the answer must say where the comparison fits AND where it stops working.\n' : ''}${q.kind === 'procedural' ? 'This is a procedure question: the steps must be right and in the right order.\n' : ''}Judge if the student's explanation captures the key idea (be fair, not pedantic). Give a "verdict": "right" (the key idea is there), "close" (the student is on the right track and says part of it correctly, but it is incomplete or imprecise: not yet the answer wanted), or "wrong" (the key idea is missing or mixed up). The model answer comes from the lecture: judge against it and add nothing from outside it.
 Also spot the gap: if the answer is wrong, incomplete or mixes something up, write ONE flashcard aimed at exactly that
 missing or confused point (not the whole question again), answered from the lecture. If the answer is fully right, "card" is null.
-Return ONLY JSON: {"correct": true|false, "feedback": "1-2 sentences in Coco's voice; if wrong, give the missing piece",
+Return ONLY JSON: {"verdict": "right|close|wrong", "feedback": "1-2 sentences in Coco's voice; if close, first say what is already right, then the missing piece; if wrong, give the missing piece",
 "card": {"q": "short question on the exact gap", "a": "short, accurate answer"} | null}`,
     },
   ], 700);
-  return parseJSON<Grade>(raw);
+  const g = parseJSON<Grade & { verdict?: string }>(raw);
+  const verdict = g.verdict ?? (g.correct ? 'right' : 'wrong');
+  return { ...g, correct: verdict === 'right', close: verdict === 'close' };
 }
 
 export async function makeCards(c: Context, a: Analysis): Promise<FlashCard[]> {

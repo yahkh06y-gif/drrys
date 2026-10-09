@@ -317,8 +317,8 @@ export const useApp = create<State>()(
         const minutes = Math.max(1, Math.round((Date.now() - s.startedAt) / 60_000));
         const total = s.questions?.length ?? 0;
         const accuracy = total ? Math.round((s.correct / total) * 100) : 100;
-        const xp = 10 + s.correct * 5 + (s.analysis?.nailed.length ?? 0) * 2;
-        const delta = { xp, minutes, correct: s.correct, total };
+        const xp = Math.round(10 + s.correct * 5 + (s.analysis?.nailed.length ?? 0) * 2);
+        const delta = { xp, minutes, correct: Math.round(s.correct), total };
         // grow the chapter branch
         const subjects = get().subjects.map((sub) =>
           sub.id !== s.subjectId

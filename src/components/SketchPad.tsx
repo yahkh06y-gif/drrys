@@ -1,7 +1,7 @@
 // A small drawing pad: finger or pencil strokes, three colours, undo, clear. `capture()` returns the
 // drawing as a base64 PNG so Coco can look at it (working on a problem, or a picture for a memory hook).
 import { Ionicons } from '@expo/vector-icons';
-import { forwardRef, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
@@ -42,12 +42,13 @@ export const SketchPad = forwardRef<SketchHandle, { height?: number; onInk?: (ha
     const s = { d: live.current, color };
     live.current = '';
     setLiveD('');
-    setStrokes((a) => {
-      const next = [...a, s];
-      onInk?.(true);
-      return next;
-    });
+    setStrokes((a) => [...a, s]);
   };
+  // tell the page whether anything is drawn (done here, never inside a state updater: that updates the parent while rendering)
+  useEffect(() => {
+    onInk?.(strokes.length > 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [strokes.length]);
 
   const pan = Gesture.Pan()
     .minDistance(0)
@@ -56,10 +57,7 @@ export const SketchPad = forwardRef<SketchHandle, { height?: number; onInk?: (ha
     .onFinalize(() => runOnJS(end)());
 
   useImperativeHandle(ref, () => ({
-    clear: () => {
-      setStrokes([]);
-      onInk?.(false);
-    },
+    clear: () => setStrokes([]),
     capture: async () => {
       if (!strokes.length) return undefined;
       try {
@@ -91,11 +89,7 @@ export const SketchPad = forwardRef<SketchHandle, { height?: number; onInk?: (ha
           hitSlop={8}
           onPress={() => {
             tap('select');
-            setStrokes((a) => {
-              const next = a.slice(0, -1);
-              onInk?.(next.length > 0);
-              return next;
-            });
+            setStrokes((a) => a.slice(0, -1));
           }}
           style={{ padding: 6 }}>
           <Ionicons name="arrow-undo" size={22} color={C.body} />
@@ -105,7 +99,6 @@ export const SketchPad = forwardRef<SketchHandle, { height?: number; onInk?: (ha
           onPress={() => {
             tap('select');
             setStrokes([]);
-            onInk?.(false);
           }}
           style={{ padding: 6 }}>
           <Ionicons name="trash-outline" size={22} color={C.body} />

@@ -78,6 +78,14 @@ export default function Active() {
   if (!q) return null;
 
   const fmt: QFormat = q.format ?? 'explain';
+  // right = green, almost (on the right track) = orange, not yet = red
+  const tone = !grade
+    ? { bg: '', border: '', icon: 'checkmark-circle' as const, color: '', text: '', title: '' }
+    : grade.correct
+      ? { bg: '#F0F8E6', border: C.mintBorder, icon: 'checkmark-circle' as const, color: C.leaf, text: C.moss, title: 'Nailed it!' }
+      : grade.close
+        ? { bg: '#FFF3DC', border: '#F0A63A', icon: 'alert-circle' as const, color: '#E08A00', text: '#B86A00', title: 'Almost there' }
+        : { bg: '#FDECEA', border: '#E8998B', icon: 'close-circle' as const, color: '#D9573B', text: '#C2452B', title: 'Not yet' };
   const marked = fmt === 'order' || fmt === 'sort' || fmt === 'match'; // the app marks these itself
 
   const existing = cards.find((c) => c.subjectId === sess?.subjectId && c.chapterId === sess?.chapterId && c.q === q?.q);
@@ -94,12 +102,15 @@ export default function Active() {
     const gap = g.card?.q && g.card?.a ? g.card : !g.correct ? { q: q.q, a: q.ideal } : undefined;
     patchSession({
       answers: [...st.answers, summary],
-      correct: st.correct + (g.correct ? 1 : 0),
+      correct: st.correct + (g.correct ? 1 : g.close ? 0.5 : 0), // "almost" counts as half
       ...(gap ? { gapCards: [...(st.gapCards ?? []), { q: gap.q, a: gap.a }] } : {}),
     });
     if (g.correct) {
       play('success');
       haptic('success');
+    } else if (g.close) {
+      play('select'); // on the right track: no wrong-answer sound
+      haptic('light');
     } else {
       play('wrong');
       haptic('error');
@@ -250,10 +261,10 @@ export default function Active() {
             </View>
           ) : !grade ? null : (
             <Enter>
-              <View style={{ backgroundColor: grade.correct ? '#F0F8E6' : '#FFF1EC', borderRadius: 20, borderWidth: 2, borderColor: grade.correct ? C.mintBorder : '#F2A58A', padding: 16, gap: 10 }}>
+              <View style={{ backgroundColor: tone.bg, borderRadius: 20, borderWidth: 2, borderColor: tone.border, padding: 16, gap: 10 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Ionicons name={grade.correct ? 'checkmark-circle' : 'refresh-circle'} size={24} color={grade.correct ? C.leaf : C.orange} />
-                  <Text style={{ fontFamily: F.bold, fontSize: 16, color: grade.correct ? C.moss : C.orange }}>{grade.correct ? 'Nailed it!' : 'Almost there'}</Text>
+                  <Ionicons name={tone.icon} size={24} color={tone.color} />
+                  <Text style={{ fontFamily: F.bold, fontSize: 16, color: tone.text }}>{tone.title}</Text>
                 </View>
                 <Text style={{ fontFamily: F.medium, fontSize: 14, lineHeight: 21, color: C.ink }}>{grade.feedback}</Text>
                 <View style={{ borderTopWidth: 1, borderColor: C.line, paddingTop: 8 }}>

@@ -2,6 +2,8 @@
 import type { ActiveQuestion, Grade } from '@/lib/ai';
 
 const pct = (right: number, total: number) => `${right} of ${total}`;
+// most of it right (60% or more) but not all: "almost" (orange), not "wrong"
+const almost = (right: number, total: number) => right < total && total > 0 && right / total >= 0.6;
 
 export function gradeOrder(q: ActiveQuestion, order: string[]): Grade & { marks: boolean[] } {
   const want = q.steps ?? [];
@@ -10,6 +12,7 @@ export function gradeOrder(q: ActiveQuestion, order: string[]): Grade & { marks:
   const correct = right === want.length;
   return {
     correct,
+    close: almost(right, want.length),
     marks,
     feedback: correct
       ? 'Every step is in the right place.'
@@ -30,6 +33,7 @@ export function gradeSort(q: ActiveQuestion, assigned: Record<string, string>): 
   const correct = right === total;
   return {
     correct,
+    close: almost(right, total),
     marks,
     feedback: correct ? 'Everything is in the right group.' : `${pct(right, total)} are in the right group. The model answer shows how they split, and why.`,
   };
@@ -44,6 +48,7 @@ export function gradeMatch(q: ActiveQuestion, matched: Record<string, string>): 
   const correct = right === total;
   return {
     correct,
+    close: almost(right, total),
     marks,
     feedback: correct ? 'All the pairs are right.' : `${pct(right, total)} pairs are right. The correct pairs are below.`,
   };
