@@ -22,18 +22,18 @@ const STYLE_URL = process.env.EXPO_PUBLIC_YOUCAM_STYLE_URL || 'https://raw.githu
 
 export const youcamEnabled = !!KEY;
 
+// The maker refuses long prompts (the limit is not published), so the prompt is kept short: a fixed style line,
+// then the hook, the idea, the sketch description. If it is still refused, one retry with a minimal prompt.
 const STYLE =
-  'Make a NEW 3D claymation illustration, handmade clay animation look: rounded soft plasticine shapes, soft pastel colours (teal, leaf green, warm orange, cream), gentle studio lighting, a simple clean uncluttered background, friendly and playful. No text, no letters, no numbers in the picture. The reference image only shows the clay art style, colours and soft light to match: do not copy its landscape, create the new scene described below.';
+  'New 3D clay-animation illustration: soft rounded plasticine shapes, pastel teal, green, orange and cream, soft studio light, clean simple background, no text or letters. Use the reference image only for the clay style and colours; do not copy its landscape.';
+const COCO = ' Include Coco, the small beige clay creature from the first reference image, unchanged. The second image is the style reference.';
+const cut = (s: string, n: number) => (s.length > n ? s.slice(0, n).trimEnd() : s);
 
-const COCO =
-  ' Include Coco as the helper in the scene: the small beige clay character from the FIRST reference image (a rounded block-shaped creature with two small round eyes and thin black stick legs). Keep the character looking exactly like that reference. The SECOND reference image is the style reference.';
-
-function buildPrompt(p: { hook: string; q: string; a: string; withCoco: boolean; scene?: string }) {
-  const cut = (s: string, n: number) => (s.length > n ? s.slice(0, n) : s);
-  return cut(
-    `${STYLE} It is a memory aid picture that makes this idea unforgettable${p.hook ? `: "${cut(p.hook, 300)}"` : ''}. The idea: ${cut(p.q, 200)} Answer: ${cut(p.a, 250)}.${p.scene ? ` The student sketched the scene they want, so follow this layout and these objects exactly and add nothing else: ${cut(p.scene, 500)}` : ''}${p.withCoco ? COCO : ''}`,
-    1450,
-  );
+function buildPrompt(p: { hook: string; q: string; a: string; withCoco: boolean; scene?: string }, minimal = false) {
+  if (minimal) return cut(`${STYLE} Scene: ${cut(p.hook || p.a, 150)}.${p.withCoco ? COCO : ''}`, 600);
+  const idea = `${cut(p.q, 90)} → ${cut(p.a, 110)}`;
+  const text = `${STYLE} A memory aid picture${p.hook ? ` for "${cut(p.hook, 160)}"` : ''} (${idea}).${p.scene ? ` Follow this sketch layout exactly and add nothing else: ${cut(p.scene, 220)}` : ''}${p.withCoco ? COCO : ''}`;
+  return cut(text, 800);
 }
 
 /** First image link found in a task result (the exact field name is not relied on). */
@@ -69,12 +69,18 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export async function makeHookPicture(p: { hook: string; q: string; a: string; withCoco: boolean; scene?: string }): Promise<string> {
   if (!KEY) throw new Error('No YouCam key');
   const headers = { 'content-type': 'application/json', authorization: `Bearer ${KEY}` };
-  const start = await fetch(BASE, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ src_file_urls: p.withCoco ? [COCO_URL, STYLE_URL] : [STYLE_URL], model: 'youcam-image-v2', prompt: buildPrompt(p), size: '1664*928' }),
-  });
-  const started = await start.json().catch(() => undefined);
+  const begin = (minimal: boolean) =>
+    fetch(BASE, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ src_file_urls: p.withCoco ? [COCO_URL, STYLE_URL] : [STYLE_URL], model: 'youcam-image-v2', prompt: buildPrompt(p, minimal), size: '1664*928' }),
+    });
+  let start = await begin(false);
+  let started = await start.json().catch(() => undefined);
+  if (start.status === 400 && /prompt is longer/i.test(String(started?.error))) {
+    start = await begin(true); // still too long for the maker: try again with a minimal prompt
+    started = await start.json().catch(() => undefined);
+  }
   const id: string | undefined = started?.data?.task_id;
   if (!start.ok || !id) throw new Error(`YouCam could not start (${start.status}): ${JSON.stringify(started ?? {}).slice(0, 160)}`);
   for (let i = 0; i < 75; i++) {
