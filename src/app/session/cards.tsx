@@ -45,7 +45,6 @@ export default function Cards() {
   const [ask, setAsk] = useState(false);
   // a card that slipped 3 times in a row offers a memory hook (the student's choice); `go` carries on afterwards
   const [hook, setHook] = useState<{ card: Card; go: () => void; auto?: boolean }>();
-  const [hookShown, setHookShown] = useState(false); // the card's saved hook is showing as a hint
   const [toast, setToast] = useState<string>();
   const [askBack, setAskBack] = useState(false); // "go back to the questions?" (they start again)
 
@@ -122,7 +121,6 @@ export default function Cards() {
       flip.value = 0;
       setRevealed(false);
       setOnBack(false);
-      setHookShown(false);
       setI(i + 1);
     };
     if (res && res.wrong >= 3 && res.wrong % 3 === 0 && !card.mnemonic) return setHook({ card, go: advance, auto: true });
@@ -181,16 +179,6 @@ export default function Cards() {
                 <Pill text={card.reps ? 'REVIEW' : 'NEW'} bg="#FDE7C8" border={C.amber} fg="#8A4B0F" />
                 <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.muted, marginTop: 14 }}>QUESTION</Text>
                 <Text style={{ fontFamily: F.bold, fontSize: 21, lineHeight: 28, color: C.ink, marginTop: 4 }}>{card.q}</Text>
-                {!!card.mnemonic && (
-                  <Pressable
-                    onPress={() => (tap('select'), setHookShown((v) => !v))}
-                    style={{ marginTop: 14, alignSelf: 'flex-start', backgroundColor: '#FFF6E3', borderWidth: 1, borderColor: C.amber, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, maxWidth: '100%' }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 18, color: C.goldInk }}>
-                      {hookShown ? `${card.mnemonic}` : 'Show my memory hook'}
-                    </Text>
-                    {hookShown && !!card.mnemonicImg && <Image source={{ uri: card.mnemonicImg }} style={{ width: 160, height: 100, marginTop: 6, borderRadius: 8, backgroundColor: C.white }} contentFit="contain" />}
-                  </Pressable>
-                )}
                 <View style={{ flex: 1 }} />
                 <View style={{ alignItems: 'center', gap: 4 }}>
                   <Ionicons name="hand-left-outline" size={20} color={C.leaf} />
@@ -207,14 +195,16 @@ export default function Cards() {
               </Animated.View>
             </Pressable>
 
-            {revealed && (
+            {(revealed || !!card.mnemonic) && (
               <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {revealed && (
                 <Pressable
                   onPress={() => (tap('select'), setAsk(true))}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
                   <Ionicons name="chatbubble-ellipses-outline" size={15} color={C.teal} />
                   <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.teal }}>Ask Coco</Text>
                 </Pressable>
+                )}
                 <Pressable
                   onPress={() => (tap('select'), setHook({ card, go: () => {} }))}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.white, borderWidth: 1, borderColor: C.amber, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
