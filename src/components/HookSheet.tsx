@@ -7,12 +7,10 @@ import { Image } from 'expo-image';
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import { colorName, SketchPad, type SketchHandle } from '@/components/SketchPad';
-import { describeSketch, hookToScene, sketchToScene, suggestHooks } from '@/lib/ai';
+import { hookToScene, suggestHooks } from '@/lib/ai';
 import { haptic, play, tap } from '@/lib/feedback';
 import { cardContext } from '@/lib/session';
-import { saveSketch } from '@/lib/sketch';
-import { makeHookPicture, savePicture, UploadError, youcamEnabled } from '@/lib/youcam';
+import { makeHookPicture, savePicture, youcamEnabled } from '@/lib/youcam';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
 
@@ -30,23 +28,14 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
   const [text, setText] = useState('');
   const [ideas, setIdeas] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  // two parts: "write" (the hook in words, and a sketch if the student wants one) and "picture" (the clay picture)
+  // two parts: "write" (the hook, in the student's words) and "picture" (a clay picture made from it, if they want one)
   const [phase, setPhase] = useState<'write' | 'picture'>('write');
-  const [draw, setDraw] = useState(false); // the drawing pad is open
-  const [ink, setInk] = useState(false); // something is drawn
-  const [drawing, setDrawing] = useState(false); // a stroke is in progress (the sheet must not scroll)
-  const [used, setUsed] = useState<string[]>([]); // the colours on the board, in the order they were first used
-  const [legend, setLegend] = useState<Record<string, string>>({}); // colour → what it is (the student's words)
-  const [sketchImg, setSketchImg] = useState<string>(); // the board as a picture, taken when the student moves on
-  const [look, setLook] = useState<{ saw: string; caption: string }>();
-  const [looking, setLooking] = useState(false);
   // a clay-style picture made from the hook (YouCam). One picture costs 1 credit, so a hook gets 3 tries at most.
   const [pic, setPic] = useState<string>();
   const [making, setMaking] = useState(false);
   const [picErr, setPicErr] = useState<string>();
   const [withCoco, setWithCoco] = useState(false);
   const [tries, setTries] = useState(0);
-  const pad = useRef<SketchHandle>(null);
   const scroll = useRef<ScrollView>(null);
   const tried = text.trim().split(/\s+/).filter(Boolean).length >= 3; // your own first try comes before Coco's ideas
   useEffect(() => {
@@ -54,12 +43,6 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
     setIdeas([]);
     setBusy(false);
     setPhase('write');
-    setDraw(false);
-    setInk(false);
-    setUsed([]);
-    setLegend({});
-    setSketchImg(undefined);
-    setLook(undefined);
     setPic(undefined);
     setMaking(false);
     setPicErr(undefined);
@@ -67,8 +50,6 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
     setTries(0);
   }, [card?.id]);
   if (!card) return null;
-  // what each colour of the sketch is, said by the student (colours left without words are not sent)
-  const legendList = used.map((hex) => ({ color: colorName(hex), text: (legend[hex] ?? '').trim() })).filter((l) => l.text);
   const getIdeas = async () => {
     setBusy(true);
     try {
@@ -78,50 +59,24 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
     }
     setBusy(false);
   };
-  const askLook = async () => {
-    setLooking(true);
-    try {
-      const img = await pad.current?.capture();
-      setLook(img ? await describeSketch(cardContext(card.subjectId), card, img) : { saw: 'I couldn’t read the drawing this time, but you can still save it.', caption: '' });
-    } catch {
-      setLook({ saw: 'I couldn’t look just now — you can still save your drawing.', caption: '' });
-    }
-    setLooking(false);
-  };
-  const canPic = text.trim().length >= 3 || ink;
-  // on to the picture: the board is photographed now (it is hidden while the picture is made, and kept for coming back)
-  const goPicture = async () => {
+  const canPic = text.trim().length >= 3;
+  // on to the picture
+  const goPicture = () => {
     tap('select');
-    setSketchImg(ink ? ((await pad.current?.capture()) ?? sketchImg) : undefined);
     setPicErr(undefined);
     setPhase('picture');
     scroll.current?.scrollTo({ y: 0, animated: false });
   };
-  // The picture. With a sketch, the sketch is the reference and the colour words say what each colour is; with only
-  // words, the hook alone does.
+  // The picture: the AI turns the hook into a clear scene first, so the picture shows what the hook says.
   const makePic = async () => {
     if (making || !canPic || tries >= 3) return;
     setMaking(true);
     setPicErr(undefined);
     setTries((n) => n + 1);
     try {
-      const ctx = cardContext(card.subjectId);
-      const req = { hook: text.trim(), q: card.q, a: card.a, withCoco, legend: legendList };
-      let url: string | undefined;
-      if (sketchImg) {
-        try {
-          url = await makeHookPicture({ ...req, sketch: sketchImg });
-        } catch (e) {
-          if (!(e instanceof UploadError)) throw e;
-          // the sketch could not be uploaded: describe it in words instead
-          const scene = await sketchToScene(ctx, card, req.hook, sketchImg, legendList).catch(() => look?.saw);
-          url = await makeHookPicture({ ...req, scene });
-        }
-      } else {
-        // words only: the AI turns the hook into a clear scene first, so the picture shows what the hook says
-        const scene = req.hook ? await hookToScene(ctx, card, req.hook).catch(() => undefined) : undefined;
-        url = await makeHookPicture({ ...req, scene });
-      }
+      const hook = text.trim();
+      const scene = await hookToScene(cardContext(card.subjectId), card, hook).catch(() => undefined);
+      const url = await makeHookPicture({ hook, q: card.q, a: card.a, withCoco, scene });
       setPic(url);
       setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 250); // bring the new picture into view
       play('success');
@@ -132,21 +87,19 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
     setMaking(false);
   };
   const plant = async () => {
-    if (!text.trim() && !ink && !pic) return;
+    if (!text.trim() && !pic) return;
     setBusy(true);
-    // the drawing is only kept when there is no clay picture; in the picture part the board is hidden, so the photo taken then is used
-    const img = ink && !pic ? (phase === 'write' ? ((await pad.current?.capture()) ?? sketchImg) : sketchImg) : undefined;
     const st = useApp.getState();
     // a question that has no flashcard yet becomes one (so the hook has somewhere to live and is reviewed later)
     const id = card.id ?? st.addCards([{ subjectId: card.subjectId, chapterId: card.chapterId, q: card.q, a: card.a }])[0];
-    const uri = pic ? await savePicture(id, pic) : img ? await saveSketch(id, img) : undefined;
-    st.saveHook(id, text.trim() || look?.caption || 'My drawing', uri);
+    const uri = pic ? await savePicture(id, pic) : undefined;
+    st.saveHook(id, text.trim() || 'My memory hook', uri);
     setBusy(false);
     play('grow');
     haptic('success');
     onClose();
   };
-  const canSave = !!text.trim() || ink || !!pic;
+  const canSave = !!text.trim() || !!pic;
   const chip = (on: boolean) => ({ flexDirection: 'row' as const, gap: 6, alignItems: 'center' as const, backgroundColor: on ? C.teal : C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 8 });
   const inPic = phase === 'picture';
   return (
@@ -167,14 +120,14 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
               </Pressable>
             </View>
 
-            <ScrollView ref={scroll} contentContainerStyle={{ gap: 16, paddingBottom: 6 }} keyboardShouldPersistTaps="handled" scrollEnabled={!drawing} showsVerticalScrollIndicator={false}>
+            <ScrollView ref={scroll} contentContainerStyle={{ gap: 16, paddingBottom: 6 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               {/* what it is for */}
               <View style={{ backgroundColor: '#F0F8E6', borderRadius: 14, borderWidth: 1, borderColor: C.mintBorder, padding: 12, gap: 4 }}>
                 <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.ink }}>{card.q}</Text>
                 <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.teal }}>{card.a}</Text>
               </View>
 
-              {/* PART 1 · the hook in words, and a sketch if the student wants one. It stays mounted (only hidden) so the drawing is never lost. */}
+              {/* PART 1 · the hook, in the student's own words (kept mounted, only hidden, so nothing typed is lost) */}
               <View style={{ gap: 16, display: inPic ? 'none' : 'flex' }}>
                 <View style={{ gap: 8 }}>
                   <Step n={1} title="Your hook" note="A rhyme, a silly sentence, a little story." />
@@ -203,81 +156,28 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
                   )}
                 </View>
 
-                <View style={{ gap: 8 }}>
-                  <Step n={2} title="Sketch it" note="Optional. Pick a colour for each thing, draw it (a stick figure, a circle…) and say what the colour is." />
-                  {!!card.mnemonicImg && !pic && !ink && (
-                    <View style={{ gap: 4 }}>
-                      <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.muted }}>YOUR SAVED PICTURE</Text>
-                      <Image source={{ uri: card.mnemonicImg }} style={{ width: '100%', aspectRatio: 1472 / 1104, borderRadius: 12, backgroundColor: C.sand }} contentFit="contain" />
-                    </View>
-                  )}
-                  <Pressable onPress={async () => {
-                      tap('select');
-                      if (draw && ink) setSketchImg((await pad.current?.capture()) ?? sketchImg); // photographed before it is hidden
-                      setDraw((v) => !v);
-                    }}
-                    style={{ ...chip(draw), alignSelf: 'flex-start' }}>
-                    <Ionicons name="brush-outline" size={14} color={draw ? C.white : C.body} />
-                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: draw ? C.white : C.body }}>{draw ? 'Hide the drawing pad' : ink ? 'Show my sketch' : 'Draw a sketch'}</Text>
-                  </Pressable>
-                  {/* the pad stays mounted when hidden: the drawing is not lost */}
-                  <View style={{ gap: 8, display: draw ? 'flex' : 'none' }}>
-                    <SketchPad ref={pad} height={260} onInk={setInk} onDrawing={setDrawing} onColors={setUsed} />
-                    {used.length > 0 && (
-                      <View style={{ gap: 6 }}>
-                        <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.muted }}>WHAT IS EACH COLOUR?</Text>
-                        {used.map((hex) => (
-                          <View key={hex} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                            <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: hex, borderWidth: 1, borderColor: 'rgba(0,0,0,0.15)' }} />
-                            <TextInput
-                              value={legend[hex] ?? ''}
-                              onChangeText={(t) => setLegend((l) => ({ ...l, [hex]: t }))}
-                              placeholder={`The ${colorName(hex)} one is… (e.g. a fat man in a hat)`}
-                              placeholderTextColor="#A69A8A"
-                              style={{ flex: 1, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 7, fontFamily: F.medium, fontSize: 13, color: C.ink }}
-                            />
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                    <Pressable onPress={askLook} disabled={!ink || looking} style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', opacity: ink ? 1 : 0.5 }}>
-                      {looking ? <ActivityIndicator size="small" color={C.teal} /> : <Ionicons name="eye-outline" size={14} color={C.teal} />}
-                      <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.teal }}>Ask Coco what he sees</Text>
-                    </Pressable>
-                    {look && (
-                      <View style={{ backgroundColor: C.white, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 10, gap: 6 }}>
-                        <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.ink }}>{look.saw}</Text>
-                        {!!look.caption && (
-                          <Pressable onPress={() => (tap('select'), setText((t) => t || look.caption))}>
-                            <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.leaf }}>Use as caption: “{look.caption}”</Text>
-                          </Pressable>
-                        )}
-                      </View>
-                    )}
+                {!!card.mnemonicImg && !pic && (
+                  <View style={{ gap: 4 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.muted }}>YOUR SAVED PICTURE</Text>
+                    <Image source={{ uri: card.mnemonicImg }} style={{ width: '100%', aspectRatio: 1472 / 1104, borderRadius: 12, backgroundColor: C.sand }} contentFit="contain" />
                   </View>
-                </View>
+                )}
               </View>
 
-              {/* PART 2 · the clay picture, made from the sketch (if there is one) or from the hook */}
+              {/* PART 2 · the clay picture, only if the student wants one: it is made from the hook */}
               {inPic && (
                 <View style={{ gap: 12 }}>
                   <View style={{ backgroundColor: C.white, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 12, gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.muted }}>{sketchImg ? 'MADE FROM YOUR SKETCH' : 'MADE FROM YOUR HOOK'}</Text>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.muted }}>THE PICTURE IS MADE FROM YOUR HOOK</Text>
                     {!!text.trim() && <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.ink }}>{text.trim()}</Text>}
-                    {!!sketchImg && <Image source={{ uri: `data:image/png;base64,${sketchImg}` }} style={{ width: '100%', height: 150, borderRadius: 10, backgroundColor: C.white, borderWidth: 1, borderColor: C.line }} contentFit="contain" />}
-                    {legendList.map((l, k) => (
-                      <Text key={k} style={{ fontFamily: F.medium, fontSize: 12, color: C.body }}>
-                        {l.color} = {l.text}
-                      </Text>
-                    ))}
-                    {!sketchImg && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Want to control the layout? Go back and draw a sketch.</Text>}
+                    <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Not what you meant? Go back and change your words.</Text>
                   </View>
                   {youcamEnabled ? (
                     <View style={{ backgroundColor: C.white, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 12, gap: 10 }}>
                       <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                         <Pressable onPress={makePic} disabled={making || !canPic || tries >= 3} style={{ ...chip(true), opacity: !canPic || tries >= 3 ? 0.5 : 1 }}>
                           {making ? <ActivityIndicator size="small" color={C.white} /> : <Ionicons name="image-outline" size={15} color={C.white} />}
-                          <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.white }}>{making ? 'Shaping it in clay…' : pic ? 'Try another' : sketchImg ? 'Make it from my sketch' : 'Make it from my hook'}</Text>
+                          <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.white }}>{making ? 'Shaping it in clay…' : pic ? 'Try another' : 'Make my picture'}</Text>
                         </Pressable>
                         <Pressable onPress={() => (tap('select'), setWithCoco((v) => !v))} style={{ ...chip(false), backgroundColor: withCoco ? C.leaf : C.sand }}>
                           <Ionicons name={withCoco ? 'checkmark-circle' : 'ellipse-outline'} size={14} color={withCoco ? C.white : C.body} />
@@ -313,7 +213,7 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
             <View style={{ gap: 8 }}>
               {!inPic && youcamEnabled && canPic && (
                 <Pressable onPress={goPicture} style={{ height: 46, borderRadius: 23, borderWidth: 2, borderColor: C.teal, backgroundColor: C.white, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.teal }}>Continue: make a clay picture</Text>
+                  <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.teal }}>Want a picture of it? Continue</Text>
                   <Ionicons name="arrow-forward" size={18} color={C.teal} />
                 </Pressable>
               )}

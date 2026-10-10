@@ -587,56 +587,6 @@ Return ONLY JSON: {"q": "...", "a": "..."}`,
   return r;
 }
 
-/** Coco looks at a memory-hook drawing and says what he sees, then suggests a short caption. He never redraws it. */
-export async function describeSketch(c: Context, card: { q: string; a: string }, sketch: string): Promise<{ saw: string; caption: string }> {
-  if (!aiEnabled) {
-    await wait(900);
-    return DEMO.sketchLook;
-  }
-  const raw = await call(
-    persona(c) + '\nMatch the language the student writes in.',
-    [
-      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: sketch } },
-      {
-        type: 'text',
-        text: `The student drew a memory hook for this flashcard:
-Q: ${card.q}
-A: ${card.a}
-Say in ONE short sentence what you see in the drawing, and whether it would help them remember the ANSWER (if not, one tip, such as adding the key word). Then write a caption of at most 8 words, in their drawing's own idea, to put under it.
-Return ONLY JSON: {"saw": "...", "caption": "..."}`,
-      },
-    ],
-    400,
-  );
-  const r = parseJSON<{ saw: string; caption: string }>(raw);
-  return { saw: r.saw ?? '', caption: r.caption ?? '' };
-}
-
-/**
- * The student's sketch becomes a scene description for the picture maker, so the sketch controls what the
- * final picture shows. Describes only what is drawn: nothing is added, nothing is improved.
- */
-export async function sketchToScene(c: Context, card: { q: string; a: string }, hook: string, sketch: string, legend: { color: string; text: string }[] = []): Promise<string> {
-  if (!aiEnabled) {
-    await wait(700);
-    return 'A small bus on the left side of the picture, a round passenger sitting in the last seat at the back, and a road going to the right.';
-  }
-  const raw = await call(
-    'You turn a student’s rough sketch into a precise scene description for an illustrator. Describe ONLY what is drawn. Never add objects, never improve the idea.',
-    [
-      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: sketch } },
-      {
-        type: 'text',
-        text: `The student drew this to help remember: "${card.q}" → "${card.a}".${hook ? ` Their hook in words: "${hook}".` : ''}${legend.some((l) => l.text.trim()) ? `\nThe student says what each colour of the sketch is: ${legend.filter((l) => l.text.trim()).map((l) => `${l.color} = ${l.text.trim().slice(0, 120)}`).join('; ')}. A stick figure or a circle in that colour stands for that thing.` : ''}
-Describe the scene for an illustrator in at most 60 words, in English: the objects, where each one is placed (left, right, top, bottom, centre), their relative sizes, any colours the student used, and the meaning of any word or arrow. If part of the sketch is unclear, say it simply instead of guessing.
-Return ONLY the description, no title, no quotes.`,
-      },
-    ],
-    300,
-  );
-  return raw.trim().replace(/^["“]|["”]$/g, '').slice(0, 500);
-}
-
 /**
  * The student's written hook becomes a scene description for the picture maker, so the picture shows what the
  * hook says (every object, who does what, where). Nothing is added and the lesson is not explained.

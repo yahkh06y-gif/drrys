@@ -3,11 +3,9 @@
  * has written a hook and taps "Make a picture", the hook becomes a clay-style picture that matches the app.
  * One picture costs 1 credit, whatever the number of reference images.
  *
- * Three ways to make a picture:
+ * Two ways to make a picture:
  *  - words only: text-to-image (the hook, turned into a scene by the AI);
- *  - with the student's sketch: the sketch is uploaded and used as the reference (image-to-image), so the
- *    picture keeps the student's layout; Coco can be a second reference;
- *  - with Coco only: Coco's picture (bundled in the app) is uploaded as the reference.
+ *  - with Coco: Coco's picture (bundled in the app) is uploaded as the reference (image-to-image).
  * The API is asynchronous: start a task, then poll it until it is "success" (or "error").
  * Key: EXPO_PUBLIC_YOUCAM_API_KEY in .env. Without a key the "Make a picture" option is hidden.
  */
@@ -22,7 +20,7 @@ import { saveSketch } from '@/lib/sketch';
 const KEY = process.env.EXPO_PUBLIC_YOUCAM_API_KEY ?? '';
 const API = 'https://yce-api-01.makeupar.com/s2s/v2.0';
 const TEXT_TO_IMAGE = `${API}/task/text-to-image/youcam`; // words only (no reference picture needed)
-const IMAGE_TO_IMAGE = `${API}/task/image-to-image/youcam`; // with reference pictures (sketch, Coco)
+const IMAGE_TO_IMAGE = `${API}/task/image-to-image/youcam`; // with a reference picture (Coco)
 const FILE_API = `${API}/file`; // asks for a place to upload a picture
 const SIZE = '1472*1104'; // 4:3; the allowed sizes are 1664*928, 1472*1104, 1328*1328, 1104*1472, 928*1664
 
@@ -39,30 +37,13 @@ export type PictureRequest = {
   q: string;
   a: string;
   withCoco: boolean;
-  /** what the picture shows, in words (from the hook, or from the sketch when the sketch cannot be uploaded) */
+  /** what the picture shows, in words (the hook, turned into a scene by the AI) */
   scene?: string;
-  /** the student's drawing as base64 PNG: it becomes the reference picture */
-  sketch?: string;
-  /** what each colour of the sketch means, in the student's words (e.g. red = "a fat man in a red shirt") */
-  legend?: { color: string; text: string }[];
 };
 
 // The prompt may be 800 characters at most, so it is kept short (and cut). If it is still refused: one minimal retry.
-function buildPrompt(p: PictureRequest, refs: { sketch: boolean; coco: boolean }, minimal = false) {
-  const coco = refs.coco ? ` Add Coco, the small beige clay creature from Image ${refs.sketch ? 2 : 1}, looking exactly like in that image.` : '';
-  const max = minimal ? 600 : 790;
-  if (refs.sketch) {
-    const keep = `Turn the hand-drawn sketch in Image 1 into a clay picture. Keep the same layout and positions as the sketch; add nothing else.`;
-    const base = `${keep} ${STYLE}${coco}`;
-    // the student says what each colour of the sketch is: that is how the picture knows what to show
-    const legend = (p.legend ?? []).filter((l) => l.text.trim());
-    const key = legend.length ? ` In the sketch each colour marks one thing: ${legend.map((l) => `${l.color} = ${cut(l.text.trim(), minimal ? 40 : 70)}`).join('; ')}.` : '';
-    const room = Math.max(0, max - base.length);
-    const keyCut = cut(key, Math.min(room, minimal ? 260 : 420));
-    const left = room - keyCut.length;
-    const what = p.hook && left > 40 ? ` The sketch shows: ${cut(p.hook, Math.min(left - 22, minimal ? 80 : 200))}` : '';
-    return cut(`${base}${keyCut}${what}`, max);
-  }
+function buildPrompt(p: PictureRequest, withCoco: boolean, minimal = false) {
+  const coco = withCoco ? ' Add Coco, the small beige clay creature from Image 1, looking exactly like in that image.' : '';
   const scene = p.scene || p.hook || p.a;
   if (minimal) return cut(`${STYLE} Scene: ${cut(scene, 150)}.${coco}`, 600);
   return cut(`${STYLE} Show exactly this scene: ${cut(scene, 330)} (a memory picture for: ${cut(p.a, 90)}).${coco}`, 790);
@@ -158,9 +139,8 @@ async function cocoFileId(): Promise<string> {
 export async function makeHookPicture(p: PictureRequest): Promise<string> {
   if (!KEY) throw new Error('No YouCam key');
   const headers = { 'content-type': 'application/json', authorization: `Bearer ${KEY}` };
-  // reference pictures: the sketch first (Image 1), then Coco
+  // reference picture: Coco's (when "Coco in it" is on)
   const ids: string[] = [];
-  if (p.sketch) ids.push(await uploadImage(fromBase64(p.sketch), 'image/png', 'sketch.png'));
   let coco = p.withCoco;
   if (coco) {
     try {
@@ -169,13 +149,12 @@ export async function makeHookPicture(p: PictureRequest): Promise<string> {
       coco = false; // Coco's picture could not be sent: the picture is made without him rather than not at all
     }
   }
-  const refs = { sketch: !!p.sketch, coco };
   const base = ids.length ? IMAGE_TO_IMAGE : TEXT_TO_IMAGE;
   const begin = (minimal: boolean) =>
     fetch(base, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ ...(ids.length ? { src_file_ids: ids } : {}), model: 'youcam-image-v2', prompt: buildPrompt(p, refs, minimal), size: SIZE }),
+      body: JSON.stringify({ ...(ids.length ? { src_file_ids: ids } : {}), model: 'youcam-image-v2', prompt: buildPrompt(p, coco, minimal), size: SIZE }),
     });
   let start = await begin(false);
   let started = await start.json().catch(() => undefined);

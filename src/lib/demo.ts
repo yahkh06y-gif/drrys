@@ -101,7 +101,6 @@ export const DEMO = {
   analysis,
   questions,
   cards,
-  sketchLook: { saw: 'I see a bus with a passenger labelled O₂. The last seat is the one that lets the bus keep moving, which fits the answer well.', caption: 'O₂ takes the last seat' },
   hooks: [
     'O₂ is the “last seat on the bus”: if nobody takes it, the bus can’t move.',
     'Oxygen = Operation Clean-up: it takes the leftover electrons away so the line keeps moving.',
