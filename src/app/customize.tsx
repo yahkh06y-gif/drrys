@@ -6,7 +6,7 @@ import { Alert, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COCO } from '@/art';
-import { Btn, Coco, IconBtn, T } from '@/components/ui';
+import { Btn, Coco, IconBtn, T, XpStars } from '@/components/ui';
 import { haptic, play, tap } from '@/lib/feedback';
 import { useApp, type CocoStyle, type Depth, type Outfit } from '@/store';
 import { C, F } from '@/theme';
@@ -49,7 +49,10 @@ export default function Customize() {
         <T v="h3" style={{ color: C.teal, flex: 1 }}>
           Customize Coco
         </T>
-        <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.ink }}>✨ {xp} XP</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <XpStars size={18} />
+          <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.ink }}>{xp} XP</Text>
+        </View>
       </View>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 18, paddingBottom: 40 }}>
         <View style={{ backgroundColor: '#EFE7D6', borderRadius: 24, paddingVertical: 10 }}>

@@ -401,3 +401,8 @@ export function Enter({ children, delay = 0, style }: { children: React.ReactNod
   const a = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateY: (1 - o.value) * 16 }] }));
   return <Animated.View style={[a, style]}>{children}</Animated.View>;
 }
+
+/** The XP picture: three yellow stars. Used wherever XP is shown (width = height × 1.43). */
+export function XpStars({ size = 20 }: { size?: number }) {
+  return <Image source={require('../../assets/art/xp-stars.png')} style={{ width: size * 1.43, height: size }} contentFit="contain" accessibilityLabel="XP" />;
+}

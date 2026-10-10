@@ -7,7 +7,7 @@ import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COCO } from '@/art';
-import { Coco, Enter, T } from '@/components/ui';
+import { Coco, Enter, T, XpStars } from '@/components/ui';
 import { MicButton, useVoice, withLive } from '@/components/Voice';
 import { chatCoco } from '@/lib/ai';
 import { play, tap } from '@/lib/feedback';
@@ -76,8 +76,9 @@ export default function CocoTab() {
                 Your learning companion
               </T>
             </View>
-            <View style={{ backgroundColor: C.white, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4, marginRight: 10, marginTop: 6, borderWidth: 1, borderColor: C.line }}>
-              <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.ink }}>✨ {xp} XP</Text>
+            <View style={{ backgroundColor: C.white, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 3, marginRight: 10, marginTop: 6, borderWidth: 1, borderColor: C.line, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <XpStars size={16} />
+              <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.ink }}>{xp} XP</Text>
             </View>
             <Pressable onPress={() => (tap(), router.push('/customize'))} style={{ alignItems: 'center' }}>
               <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.white, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.line }}>

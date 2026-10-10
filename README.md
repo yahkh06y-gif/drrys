@@ -4,16 +4,21 @@ Drrys turns studying into a small daily mission. Every subject is a tree, every 
 
 <sub>About the name: in spoken Arabic, *drrys* (درّيس) is someone who studies a lot.</sub>
 
-Made by Yahya Al-Khayyat and Abdelhafeez Shaarawy for the RevenueCat Shipaton 2026 (Next Gen).
+Made by Yahya Al-Khayyat and Abdelhafeez Shaarawy. This branch (`forgehacks`) is our entry to **ForgeHacks Online 2026**, track **AI + Education**.
 
 ![Drrys screens](docs/screens.jpg)
 
-## Try it (for judges)
+## ForgeHacks: what existed before, and what we built during it
 
-1. Download the APK from [Releases](https://github.com/yahkh06y-gif/drrys/releases/latest) and install it on an Android phone.
-2. Create an account (email + password, no confirmation email) or tap "Not now".
-3. **All purchases are test purchases.** This build runs on RevenueCat's Test Store, so buying Pro is free and no real money is charged. Pro: Profile → View plans → buy.
-4. Study Squad and invites: Profile → Study together (needs an account; a squad unlocks at 4 accounts).
+**Before ForgeHacks (existing project):** the idea and visual identity, Coco, the trees and the whole Blender and Figma design work, the screens and the game around the tree (home, onboarding, the forest, profile), accounts and cloud backup, a first version of the study session, flashcards with spaced repetition (SM-2), streaks and reminders.
+
+**Built during ForgeHacks (this branch):** the AI learning engine.
+
+- A full session flow: choose the exact lecture pages, recall, AI analysis of what you remembered, missed and got wrong, a grouping step when many ideas were missed, active-learning questions, flashcards made from the gaps. You can go back a step safely.
+- **Grounding:** every question and flashcard must come from the chosen lecture pages. The model must point to the page where the answer is written, and anything it cannot point to is dropped. The syllabus and past exams are used only to choose which ideas to ask and how to phrase them, never as a source of facts.
+- **Question formats:** explain (graded by the AI), order, sort, match, work-it-out, and fill-in-the-blanks (in the app). The order, sort, match and blank formats are graded by plain code, not the model, with an "almost right" state. Gaps become flashcards.
+- **Memory hooks:** on any flashcard or question the student writes their own hook (a story or picture), with ideas from Coco, and can ask for an AI picture of it (image model through the YouCam API). Hooks live on the tree: hold a branch to see them.
+- Reading PDFs reliably on Android, sounds for right / wrong / half-right answers, XP shown as stars, and a simpler finish page that returns the student to the forest.
 
 ## Why we built it
 
@@ -41,43 +46,26 @@ The cards come back on a spaced repetition schedule (SM-2): forgotten cards come
 
 Around that: a week view per subject, streaks, stats per tree, and daily reminders that know if you have a lecture session or cards waiting (and stay quiet on days you already studied).
 
-## Pricing and RevenueCat
-
-| | Free | Pro ($9.99/month or $79.99/year) |
-| --- | --- | --- |
-| Trees (subjects) | 1 | 5 |
-| Branches (chapters) per tree | 1, or 2 after inviting a friend | 5 |
-| Lecture files | up to 40 pages | up to 150 pages |
-
-- **Entitlement:** `drrys_pro`. **Offerings:** `default`, `streak25`, `streak30`, `bonus50`.
-- **Streak reward.** Study 30 days in a row and Pro is 25% off (`streak25`), 60 days and it's 30% off (`streak30`). Miss a day and the regular price comes back.
-- **Study Squad.** You and 3 friends join with one code. When the squad is full, each of you gets 25% off while the squad stays together. A squad and a streak stack, up to 50% off (`bonus50`).
-- **Invite a friend.** On the free plan, when a friend joins with your code and finishes their first session, your trees get a second branch.
-- The discounted prices are real products in RevenueCat. The app only decides which offering to show (`currentDiscount()` in `src/lib/purchases.ts`).
-- Pro is linked to the student's account with `Purchases.logIn`, so it follows them to a new phone. You have to sign in before buying. Restore purchases is on the paywall and in Profile.
-- If Pro ends, nothing is deleted. Extra trees and branches "rest": their flashcards still work, and new full sessions ask to renew.
-- Squad and invite codes are checked on the server (Supabase functions): you can't use your own code, each student can be invited once, two friends can't swap codes, one squad per student, 4 people per squad.
-
 ## Built with
 
 - Expo SDK 57, React Native, TypeScript, Expo Router
-- RevenueCat (`react-native-purchases`)
-- Gemini API for reading lecture PDFs, questions, grading, flashcards, chat and voice transcription. Only the pages you studied are sent (`pdf-lib`).
+- A language model (Claude, or Gemini as a fallback) for reading the lecture pages, the analysis, questions, grading of explanations, flashcards and chat. Only the pages you studied are sent (`pdf-lib`). The model returns structured data that the app validates before showing it.
+- YouCam API (text-to-image and image-to-image) for memory-hook pictures.
 - Supabase for accounts, cloud backup and the squad/invite functions
 - Zustand + AsyncStorage (works offline), Reanimated, expo-video, expo-audio, expo-notifications
 - Coco, the trees, the world and the icons were modelled in Blender. Some animations were made with Flow from those renders, to save rendering time.
-- Screens were designed in Figma with help from Stitch, and turned into the real app with Claude Opus 5.5.
+- Screens were designed in Figma with help from Stitch, and turned into the real app with Claude.
 
 ## Run it
 
 ```bash
 npm install
-cp .env.example .env   # add a Gemini key and the RevenueCat Test Store key
+cp .env.example .env   # add an AI key (Claude or Gemini), and optionally a YouCam key
 npx expo start
 ```
 
 - Without an AI key, Coco runs a built-in demo session so every screen can still be tried.
-- Android APK: `npx eas-cli build -p android --profile preview`. This build uses RevenueCat's Test Store, so purchases are free (`plugins/withTestStoreRelease.js` allows the test key in this build only).
+- Android APK: `npx eas-cli build -p android --profile preview`.
 
 ## Project layout
 
@@ -88,13 +76,12 @@ src/
     (tabs)/         Coco, the forest, profile
     session/        choose file, recall, analyze, review, explain, flashcards, done
     subject.tsx     plant or edit a tree (chapters, files, syllabus, past exams)
-    paywall.tsx     plans and rewards
-    together.tsx    Study Squad and invites
   components/       UI kit, tree, video, voice
   lib/
-    ai.ts           Coco (Gemini, with fallback models)
-    purchases.ts    RevenueCat, limits and discounts
-    together.ts     squads and invites
+    ai.ts           the AI client: prompts, grounding, question and card checks
+    grade.ts        code-based grading (order, sort, match, blanks)
+    youcam.ts       memory-hook pictures
+    session.ts      page ranges, PDF reading
     cloud.ts        accounts and backup
     notify.ts       daily reminders
   store.ts          app state and the flashcard scheduler
@@ -102,14 +89,15 @@ src/
 
 ## Known limits
 
-- The Gemini key ships inside this competition build. For a real release the AI calls will move behind a server (a Supabase Edge Function).
+- The AI key ships inside the build. For a real release the AI calls will move behind a server (a Supabase Edge Function).
 - The app's screens are in English for now. Voice recall and Coco's chat already understand many languages, including Arabic.
 - Android only so far.
-- Payments use RevenueCat's Test Store for the competition (no real charges). The products and offerings are ready to connect to Google Play and the App Store for launch.
+- The AI memory-hook picture and some drag interactions were tested mainly in the browser; we are still testing them on more phones.
+- Some features from the earlier version of the project (Pro plans, study squads, invites) exist in the code but are not part of this entry.
 
 ## What's next
 
-Mnemonics, AI-made videos and audio podcasts from your lectures, live AI chat with Coco, and a lot more.
+Better memory hooks, AI-made videos and audio podcasts from your lectures, live AI chat with Coco, and a lot more.
 
 ## License
 
