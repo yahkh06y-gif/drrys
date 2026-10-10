@@ -70,6 +70,7 @@ export type SessionDraft = {
   toPage: number;
   recall: string;
   analysis?: Analysis;
+  analyzedFor?: string; // what the analysis was made from (recall + pages): going back and forward again without a change does not ask the AI again
   questions?: ActiveQuestion[];
   answers: string[];
   newCardIds: string[];

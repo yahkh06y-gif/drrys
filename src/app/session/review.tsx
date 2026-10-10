@@ -42,7 +42,7 @@ export default function Review() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
-      <SessionHeader step={3} title="Analyze" />
+      <SessionHeader step={3} title="Analyze" onBack={() => (router.canGoBack() ? router.back() : router.replace('/session/recall'))} />
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, paddingTop: 10 }}>
         {pages.map((_, k) => (
           <View key={k} style={{ width: k === i ? 22 : 12, height: 5, borderRadius: 3, backgroundColor: k === i ? C.leaf : C.track }} />

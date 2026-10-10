@@ -43,15 +43,25 @@ export type PictureRequest = {
   scene?: string;
   /** the student's drawing as base64 PNG: it becomes the reference picture */
   sketch?: string;
+  /** what each colour of the sketch means, in the student's words (e.g. red = "a fat man in a red shirt") */
+  legend?: { color: string; text: string }[];
 };
 
 // The prompt may be 800 characters at most, so it is kept short (and cut). If it is still refused: one minimal retry.
 function buildPrompt(p: PictureRequest, refs: { sketch: boolean; coco: boolean }, minimal = false) {
   const coco = refs.coco ? ` Add Coco, the small beige clay creature from Image ${refs.sketch ? 2 : 1}, looking exactly like in that image.` : '';
+  const max = minimal ? 600 : 790;
   if (refs.sketch) {
-    const keep = `Turn the hand-drawn sketch in Image 1 into a clay picture. Keep the same objects and the same layout and positions as the sketch; add nothing else.`;
-    const what = p.hook ? ` The sketch shows: ${cut(p.hook, minimal ? 100 : 230)}` : '';
-    return cut(`${keep} ${STYLE}${what}${coco}`, minimal ? 600 : 790);
+    const keep = `Turn the hand-drawn sketch in Image 1 into a clay picture. Keep the same layout and positions as the sketch; add nothing else.`;
+    const base = `${keep} ${STYLE}${coco}`;
+    // the student says what each colour of the sketch is: that is how the picture knows what to show
+    const legend = (p.legend ?? []).filter((l) => l.text.trim());
+    const key = legend.length ? ` In the sketch each colour marks one thing: ${legend.map((l) => `${l.color} = ${cut(l.text.trim(), minimal ? 40 : 70)}`).join('; ')}.` : '';
+    const room = Math.max(0, max - base.length);
+    const keyCut = cut(key, Math.min(room, minimal ? 260 : 420));
+    const left = room - keyCut.length;
+    const what = p.hook && left > 40 ? ` The sketch shows: ${cut(p.hook, Math.min(left - 22, minimal ? 80 : 200))}` : '';
+    return cut(`${base}${keyCut}${what}`, max);
   }
   const scene = p.scene || p.hook || p.a;
   if (minimal) return cut(`${STYLE} Scene: ${cut(scene, 150)}.${coco}`, 600);

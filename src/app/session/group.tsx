@@ -109,7 +109,7 @@ export default function Group() {
     const got = used.reduce((n, g, gi) => n + g.items.filter((id) => remembered(typed[gi] ?? '', byId(id).title)).length, 0);
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
-        <SessionHeader step={4} title="Organize" />
+        <SessionHeader step={4} title="Organize" onBack={() => router.replace('/session/review')} />
         <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
           <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
             <Enter>
@@ -166,7 +166,7 @@ export default function Group() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
-      <SessionHeader step={4} title="Organize" />
+      <SessionHeader step={4} title="Organize" onBack={() => router.replace('/session/review')} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled" scrollEnabled={!dragging}>
           <Enter>

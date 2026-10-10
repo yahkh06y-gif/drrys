@@ -33,6 +33,15 @@ export default function Analyze() {
 
   useEffect(() => {
     let alive = true;
+    // came back to this step without changing anything: the analysis is already made, so show it
+    const st0 = useApp.getState().session;
+    const key0 = st0 ? `${st0.recall}|${st0.materialId ?? ''}|${st0.fromPage}-${st0.toPage}` : '';
+    if (attempt === 0 && st0?.analysis && st0.analyzedFor === key0) {
+      router.replace('/session/review');
+      return () => {
+        alive = false;
+      };
+    }
     setErr(undefined);
     setDone(0);
     // one request does all of this, so the checklist moves on a timer that slows down as it goes
@@ -55,7 +64,8 @@ export default function Analyze() {
         tick.stop();
         setDone(steps.length);
         // a fresh set of questions: forget any answers / cards from an earlier attempt
-        patchSession({ analysis, questions, draftCards: cards, answers: [], correct: 0, newCardIds: [] });
+        const st1 = useApp.getState().session!;
+        patchSession({ analysis, analyzedFor: `${st1.recall}|${st1.materialId ?? ''}|${st1.fromPage}-${st1.toPage}`, questions, draftCards: cards, answers: [], correct: 0, newCardIds: [], gapCards: [] });
         play('success');
         haptic('success');
         timers.push(setTimeout(() => alive && router.replace('/session/review'), 450));
@@ -73,7 +83,7 @@ export default function Analyze() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
-      <SessionHeader step={3} title="Analyze" />
+      <SessionHeader step={3} title="Analyze" onBack={() => (router.canGoBack() ? router.back() : router.replace('/session/recall'))} />
       <View style={{ flex: 1, padding: 20 }}>
         <Enter>
           <T v="h2" style={{ textAlign: 'center' }}>

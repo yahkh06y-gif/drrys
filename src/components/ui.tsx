@@ -241,15 +241,16 @@ export function Screen({
 /* ---------- Session header ("session setup • 2 of 5") ---------- */
 export const SESSION_STEPS = 6; // setup · recall · analyze · organize (only with 4+ missed ideas) · explain · cards
 
-export function SessionHeader({ step, title, onClose }: { step: number; title: string; onClose?: () => void }) {
+export function SessionHeader({ step, title, onClose, onBack }: { step: number; title: string; onClose?: () => void; onBack?: () => void }) {
   // a stray tap on ✕ shouldn't throw a session away: ask first
   const [asking, setAsking] = useState(false);
-  useBack(useCallback(() => (setAsking(true), true), [])); // Android back asks too
+  // Android back goes one step back (when there is a step to go back to); on the first step it asks about leaving
+  useBack(useCallback(() => (onBack ? onBack() : setAsking(true), true), [onBack]));
   return (
     <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10, borderBottomWidth: 1, borderColor: 'rgba(90,66,37,0.1)', gap: 10 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <IconBtn name="close" onPress={() => setAsking(true)} />
-        <View style={{ flex: 1, alignItems: 'center', marginRight: 40 }}>
+        {onBack ? <IconBtn name="arrow-back" onPress={onBack} /> : <IconBtn name="close" onPress={() => setAsking(true)} />}
+        <View style={{ flex: 1, alignItems: 'center', marginRight: onBack ? 0 : 40 }}>
           <T v="small" style={{ fontFamily: F.semi, fontSize: 11, color: C.goldInk, letterSpacing: 0.5 }}>
             step {step} of {SESSION_STEPS}
           </T>
@@ -257,6 +258,7 @@ export function SessionHeader({ step, title, onClose }: { step: number; title: s
             {title}
           </T>
         </View>
+        {onBack && <IconBtn name="close" onPress={() => setAsking(true)} />}
       </View>
       <Progress value={step / SESSION_STEPS} height={8} track={C.track} />
       <Confirm

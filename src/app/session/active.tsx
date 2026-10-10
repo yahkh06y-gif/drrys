@@ -6,7 +6,7 @@ import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COCO } from '@/art';
-import { Btn, Coco, Enter, Pill, SessionHeader, T } from '@/components/ui';
+import { Btn, Coco, Confirm, Enter, Pill, SessionHeader, T } from '@/components/ui';
 import { MicButton, useVoice, withLive } from '@/components/Voice';
 import { discussAnswer, gradeAnswer, type Grade, type QFormat, type QKind } from '@/lib/ai';
 import { HookSheet, type HookTarget } from '@/components/HookSheet';
@@ -16,7 +16,7 @@ import { OrderQ } from '@/components/questions/Order';
 import { SortQ } from '@/components/questions/Sort';
 import { gradeMatch, gradeOrder, gradeSort } from '@/lib/grade';
 import { haptic, play, tap } from '@/lib/feedback';
-import { sessionContext } from '@/lib/session';
+import { missedIdeas, ORGANIZE_MIN, sessionContext } from '@/lib/session';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
 
@@ -44,6 +44,7 @@ export default function Active() {
   const cards = useApp((s) => s.cards);
   const sess = useApp((s) => s.session);
   const [i, setI] = useState(0);
+  const [askBack, setAskBack] = useState(false); // "go back a step?": the answers so far would be cleared
   const [answer, setAnswer] = useState('');
   const [hint, setHint] = useState(false);
   const [grade, setGrade] = useState<Grade>();
@@ -67,6 +68,14 @@ export default function Active() {
     useCallback((t: string) => setAnswer((a) => (a.trim() ? `${a.trim()} ${t}` : t)), []),
     () => answerInput.current?.focus(),
   );
+  // one step back: the organize step (when there were enough missed ideas) or the review. The questions start again,
+  // so the answers given so far are cleared (they would be counted twice otherwise).
+  const goBack = () => {
+    const st = useApp.getState().session;
+    patchSession({ answers: [], correct: 0, gapCards: [] });
+    router.replace(missedIdeas(st?.analysis).length >= ORGANIZE_MIN ? '/session/group' : '/session/review');
+  };
+  const onBack = () => ((useApp.getState().session?.answers.length ?? 0) > 0 ? setAskBack(true) : goBack());
   const q = qs[i];
   // no questions this time: go straight on to the flashcards instead of a blank screen
   useEffect(() => {
@@ -181,7 +190,8 @@ export default function Active() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
-      <SessionHeader step={5} title="Active learning" />
+      <SessionHeader step={5} title="Active learning" onBack={onBack} />
+      <Confirm visible={askBack} title="Go back a step?" body="Your answers to the questions so far will be cleared, and the questions start again." yes="Go back" no="Stay" onNo={() => setAskBack(false)} onYes={() => (setAskBack(false), goBack())} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView key={i} scrollEnabled={!drawing} contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
           <Enter>
