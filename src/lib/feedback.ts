@@ -16,6 +16,10 @@ const SOURCES = {
   flip: require('../../assets/sounds/flip.wav'),
   celebrate: require('../../assets/sounds/celebrate.wav'),
   water: require('../../assets/sounds/water.m4a'), // from the Blender watering render
+  // the answer sounds (recorded for Drrys): right · wrong · half right
+  right: require('../../assets/sounds/right.mp3'),
+  miss: require('../../assets/sounds/miss.mp3'),
+  half: require('../../assets/sounds/half.mp3'),
 } as const;
 
 export type Sfx = keyof typeof SOURCES;

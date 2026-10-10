@@ -118,13 +118,13 @@ export default function Active() {
       ...(gap ? { gapCards: [...(st.gapCards ?? []), { q: gap.q, a: gap.a }] } : {}),
     });
     if (g.correct) {
-      play('success');
+      play('right');
       haptic('success');
     } else if (g.close) {
-      play('select'); // on the right track: no wrong-answer sound
+      play('half'); // on the right track
       haptic('light');
     } else {
-      play('wrong');
+      play('miss');
       haptic('error');
     }
   };
