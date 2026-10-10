@@ -35,8 +35,9 @@ export type Analysis = {
  *  analogous = a comparison and where it breaks · evidence = using a fact or example on a new case. */
 export type QKind = 'conceptual' | 'procedural' | 'analogous' | 'evidence';
 /** How the student answers: explain (type / say it) · order (drag steps into sequence) · sort (drag items into groups) ·
- *  match (connect pairs) · work (solve on paper: type or sketch). order / sort / match are marked by the app itself. */
-export type QFormat = 'explain' | 'order' | 'sort' | 'match' | 'work';
+ *  match (connect pairs) · blank (fill the gaps of a sentence from a word bank) · work (solve on paper: type or sketch).
+ *  order / sort / match / blank are marked by the app itself. */
+export type QFormat = 'explain' | 'order' | 'sort' | 'match' | 'work' | 'blank';
 export type ActiveQuestion = {
   q: string;
   hint: string;
@@ -46,6 +47,8 @@ export type ActiveQuestion = {
   steps?: string[]; // order: the right sequence
   buckets?: { name: string; items: string[] }[]; // sort
   pairs?: { left: string; right: string }[]; // match
+  text?: string; // blank: a sentence from the lecture; the words to fill in are written [[like this]]
+  extras?: string[]; // blank: extra (wrong) words in the word bank
 };
 export type GroupCheck = { groups: { name: string; ok: boolean; note: string }[]; overall: string };
 /** `card`: when the answer shows a gap, one flashcard aimed at exactly what the student didn't get. */
@@ -234,10 +237,13 @@ export function cleanQuestion(q: ActiveQuestion): ActiveQuestion {
     .filter((b) => b.name && b.items.length)
     .slice(0, 3);
   const pairs = (q.pairs ?? []).map((p) => ({ left: s(p?.left), right: s(p?.right) })).filter((p) => p.left && p.right).slice(0, 5);
-  const base = { ...q, steps: undefined, buckets: undefined, pairs: undefined };
+  const blankText = s(q.text);
+  const gaps = [...blankText.matchAll(/\[\[(.+?)\]\]/g)].length;
+  const base = { ...q, steps: undefined, buckets: undefined, pairs: undefined, text: undefined, extras: undefined };
   if (q.format === 'order' && steps.length >= 3) return { ...base, steps, ideal: q.ideal || steps.join(' → ') };
   if (q.format === 'sort' && buckets.length >= 2 && buckets.reduce((n, b) => n + b.items.length, 0) >= 4) return { ...base, buckets };
   if (q.format === 'match' && pairs.length >= 3) return { ...base, pairs };
+  if (q.format === 'blank' && gaps >= 2 && gaps <= 5) return { ...base, text: blankText, extras: (q.extras ?? []).map(s).filter(Boolean).slice(0, 2) };
   return { ...base, format: q.format === 'work' ? 'work' : 'explain' };
 }
 

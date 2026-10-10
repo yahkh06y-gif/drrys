@@ -53,3 +53,18 @@ export function gradeMatch(q: ActiveQuestion, matched: Record<string, string>): 
     feedback: correct ? 'All the pairs are right.' : `${pct(right, total)} pairs are right. The correct pairs are below.`,
   };
 }
+
+/** filled: the word the student put in each gap ('' = empty), in the order of the gaps */
+export function gradeBlank(q: ActiveQuestion, filled: string[]): Grade & { marks: boolean[] } {
+  const answers = [...(q.text ?? '').matchAll(/\[\[(.+?)\]\]/g)].map((m) => m[1].trim());
+  const norm = (x: string) => x.trim().toLowerCase();
+  const marks = answers.map((a, i) => norm(filled[i] ?? '') === norm(a));
+  const right = marks.filter(Boolean).length;
+  const correct = right === answers.length;
+  return {
+    correct,
+    close: almost(right, answers.length),
+    marks,
+    feedback: correct ? 'Every gap is filled with the right word.' : `${pct(right, answers.length)} gaps are right. The full sentence is below.`,
+  };
+}

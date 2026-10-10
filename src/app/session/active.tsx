@@ -11,10 +11,11 @@ import { MicButton, useVoice, withLive } from '@/components/Voice';
 import { discussAnswer, gradeAnswer, type Grade, type QFormat, type QKind } from '@/lib/ai';
 import { HookSheet, type HookTarget } from '@/components/HookSheet';
 import { SketchPad, type SketchHandle } from '@/components/SketchPad';
+import { BlankQ } from '@/components/questions/Blank';
 import { MatchQ } from '@/components/questions/Match';
 import { OrderQ } from '@/components/questions/Order';
 import { SortQ } from '@/components/questions/Sort';
-import { gradeMatch, gradeOrder, gradeSort } from '@/lib/grade';
+import { gradeBlank, gradeMatch, gradeOrder, gradeSort } from '@/lib/grade';
 import { haptic, play, tap } from '@/lib/feedback';
 import { missedIdeas, ORGANIZE_MIN, sessionContext } from '@/lib/session';
 import { useApp } from '@/store';
@@ -32,6 +33,7 @@ const KIND: Record<QKind, { pill: string; line: string; placeholder: string }> =
 const FORMAT_LINE: Partial<Record<QFormat, { pill: string; line: string }>> = {
   order: { pill: 'PUT IN ORDER', line: 'Hold the handle and drag the steps into the right order.' },
   sort: { pill: 'SORT IT', line: 'Drag each item into the group it belongs to.' },
+  blank: { pill: 'FILL THE GAPS', line: 'Tap the words that belong in the gaps.' },
   match: { pill: 'CONNECT THE PAIRS', line: 'Drag from a card on the left to its partner on the right.' },
   work: { pill: 'WORK IT OUT', line: 'Solve it below. Type your working.' },
 };
@@ -57,8 +59,9 @@ export default function Active() {
   const [order, setOrder] = useState<string[]>([]);
   const [assigned, setAssigned] = useState<Record<string, string>>({});
   const [matched, setMatched] = useState<Record<string, string>>({});
+  const [gapWords, setGapWords] = useState<string[]>([]);
   const [ready, setReady] = useState(false); // the sort / match is filled in
-  const [marks, setMarks] = useState<{ order?: boolean[]; map?: Record<string, boolean> }>({});
+  const [marks, setMarks] = useState<{ order?: boolean[]; map?: Record<string, boolean>; gaps?: boolean[] }>({});
   const [sketching, setSketching] = useState(false); // the sketch pad is open (work questions)
   const [ink, setInk] = useState(false);
   const [drawing, setDrawing] = useState(false);
@@ -95,7 +98,7 @@ export default function Active() {
       : grade.close
         ? { bg: '#FFF3DC', border: '#F0A63A', icon: 'alert-circle' as const, color: '#E08A00', text: '#B86A00', title: 'Almost there' }
         : { bg: '#FDECEA', border: '#E8998B', icon: 'close-circle' as const, color: '#D9573B', text: '#C2452B', title: 'Not yet' };
-  const marked = fmt === 'order' || fmt === 'sort' || fmt === 'match'; // the app marks these itself
+  const marked = fmt === 'order' || fmt === 'sort' || fmt === 'match' || fmt === 'blank'; // the app marks these itself
 
   const existing = cards.find((c) => c.subjectId === sess?.subjectId && c.chapterId === sess?.chapterId && c.q === q?.q);
   const openHook = () => {
@@ -137,6 +140,10 @@ export default function Active() {
         const r = gradeSort(q, assigned);
         setMarks({ map: r.marks });
         record(r, JSON.stringify(assigned));
+      } else if (fmt === 'blank') {
+        const r = gradeBlank(q, gapWords);
+        setMarks({ gaps: r.marks });
+        record(r, gapWords.join(' | '));
       } else if (fmt === 'match') {
         const r = gradeMatch(q, matched);
         setMarks({ map: r.marks });
@@ -181,6 +188,7 @@ export default function Active() {
       setOrder([]);
       setAssigned({});
       setMatched({});
+      setGapWords([]);
       setReady(false);
       setMarks({});
       setSketching(false);
@@ -230,6 +238,7 @@ export default function Active() {
               onChange={(a, done) => (setAssigned(a), setReady(done))}
             />
           )}
+          {fmt === 'blank' && !!q.text && <BlankQ text={q.text} extras={q.extras} locked={!!grade} marks={marks.gaps} onChange={(w, done) => (setGapWords(w), setReady(done))} />}
           {fmt === 'match' && !!q.pairs && (
             <MatchQ
               pairs={q.pairs}
@@ -282,6 +291,9 @@ export default function Active() {
                   <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.body, marginTop: 2 }}>{q.ideal}</Text>
                   {fmt === 'order' && !!q.steps && (
                     <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.steps.map((x, k) => `${k + 1}. ${x}`).join('\n')}</Text>
+                  )}
+                  {fmt === 'blank' && !!q.text && (
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.text.replace(/\[\[(.+?)\]\]/g, '$1')}</Text>
                   )}
                   {fmt === 'match' && !!q.pairs && (
                     <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.pairs.map((p) => `${p.left}  =  ${p.right}`).join('\n')}</Text>

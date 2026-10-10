@@ -75,6 +75,15 @@ const questions: ActiveQuestion[] = [
     ],
   },
   {
+    kind: 'evidence',
+    format: 'blank',
+    q: 'Fill in the gaps.',
+    hint: 'Think about where each stage happens.',
+    ideal: 'Glycolysis happens in the cytoplasm; the Krebs cycle runs in the matrix and the electron transport chain sits on the inner membrane, where ATP synthase makes most of the ATP.',
+    text: 'Glycolysis happens in the [[cytoplasm]], the Krebs cycle runs in the [[matrix]], and [[ATP synthase]] makes most of the ATP.',
+    extras: ['nucleus'],
+  },
+  {
     kind: 'procedural',
     format: 'work',
     q: 'One glucose gives 2 ATP in glycolysis, 2 in the Krebs cycle and about 26 from the chain. How much ATP is that for 3 glucose molecules? Show your working.',
