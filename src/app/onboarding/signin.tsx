@@ -1,16 +1,16 @@
 // Accounts: sign up / sign in with email + password (Supabase). The forest is backed up to the cloud and
-// comes back on a new phone. During onboarding it can be skipped ("Not now"); from Profile it opens as
-// "Your account" (edit name, sign out) or as the sign-in form if the student hasn't made an account yet.
+// comes back on a new phone. Onboarding asks for nothing (value before asking): it opens here only from
+// "I already have an account". After the first session it comes as "Save your tree" (?save=1, with "Later").
+// From Profile it opens as "Your account" (edit name, sign out) or as the sign-in form.
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 
 import { Btn, Confirm, Enter, IconBtn, OnbBar, Screen, T } from '@/components/ui';
 import { useBack } from '@/lib/back';
 import { cloudEnabled, signIn, signOut, signUp } from '@/lib/cloud';
 import { haptic, play, tap } from '@/lib/feedback';
-import { MAIN_QUESTIONS, progressOf } from '@/lib/onboarding';
 import { refreshTogether } from '@/lib/together';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
@@ -18,7 +18,8 @@ import { C, F } from '@/theme';
 type Mode = 'signup' | 'signin';
 
 export default function SignIn() {
-  const params = useLocalSearchParams<{ mode?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; save?: string }>();
+  const saving = params.save === '1'; // after the first session: "Save your tree"
   const setProfile = useApp((s) => s.setProfile);
   const set = useApp((s) => s.set);
   const profile = useApp((s) => s.profile);
@@ -40,6 +41,7 @@ export default function SignIn() {
   useBack(onBack);
 
   const next = (restoredOnboarded: boolean) => {
+    if (saving) return router.dismissTo('/(tabs)/tree');
     if (editing) return router.back();
     if (restoredOnboarded) {
       // an existing account on a new phone: their forest is back, skip the rest of onboarding
@@ -50,16 +52,10 @@ export default function SignIn() {
     goOn();
   };
 
-  // already signed in earlier in onboarding (via "I already have an account"): nothing to ask here
-  useEffect(() => {
-    if (!editing && useApp.getState().profile.uid && useApp.getState().profile.field) router.replace(`/onboarding/q/${MAIN_QUESTIONS}`);
-  }, [editing]);
-
-  // skipping or signing up here must never skip the questions: if they haven't been answered yet
-  // (e.g. came via "I already have an account"), go back to Coco's hello; otherwise to the last question
+  // "Later" after the first session → back to the forest; during onboarding → on to Coco's hello
   const goOn = () => {
-    if (!useApp.getState().profile.field) router.push('/onboarding/hello');
-    else router.push(`/onboarding/q/${MAIN_QUESTIONS}`);
+    if (saving) router.dismissTo('/(tabs)/tree');
+    else router.push('/onboarding/hello');
   };
 
   const submit = async () => {
@@ -79,7 +75,7 @@ export default function SignIn() {
   };
 
   const valid = /\S+@\S+\.\S+/.test(email.trim()) && password.length >= 6 && (mode !== 'signup' || !!name.trim());
-  const title = account ? 'Your account' : mode === 'signin' ? 'Welcome back' : 'Create your account to save your forest';
+  const title = account ? 'Your account' : mode === 'signin' ? 'Welcome back' : saving ? 'Save your tree. Create an account' : 'Create your account to save your forest';
 
   return (
     <View style={{ flex: 1 }}>
@@ -87,10 +83,10 @@ export default function SignIn() {
       <Screen scroll>
         {editing ? (
           <View style={{ marginBottom: 20 }}>
-            <IconBtn name="arrow-back" onPress={() => router.back()} />
+            <IconBtn name="arrow-back" onPress={() => (saving ? goOn() : router.back())} />
           </View>
         ) : (
-          <OnbBar value={progressOf('signin')} onBack={planted ? false : undefined} style={{ marginBottom: 28 }} />
+          <OnbBar value={0} onBack={planted ? false : undefined} style={{ marginBottom: 28 }} />
         )}
         <Enter key={account ? 'acct' : mode}>
           <T v="h1" style={{ fontSize: 34, lineHeight: 40, marginBottom: 10 }}>
@@ -118,7 +114,7 @@ export default function SignIn() {
         ) : !cloudEnabled ? (
           <Enter style={{ gap: 12 }}>
             <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.body }}>Accounts aren’t switched on in this build yet — your forest is saved on this phone.</Text>
-            <Btn title={editing ? 'Back' : 'Continue'} kind="teal" onPress={() => (editing ? router.back() : goOn())} />
+            <Btn title={editing && !saving ? 'Back' : 'Continue'} kind="teal" onPress={() => (editing && !saving ? router.back() : goOn())} />
           </Enter>
         ) : (
           <Enter style={{ gap: 12 }}>
@@ -139,8 +135,8 @@ export default function SignIn() {
                 {mode === 'signup' ? 'Already have an account? Sign in' : 'New here? Create an account'}
               </Text>
             </Pressable>
-            {!editing && (
-              <Btn title="Not now" kind="light" height={46} onPress={() => (setProfile({ name: name.trim() || profile.name }), goOn())} />
+            {(!editing || saving) && (
+              <Btn title={saving ? 'Later' : 'Not now'} kind="light" height={46} onPress={() => (setProfile({ name: name.trim() || profile.name }), goOn())} />
             )}
           </Enter>
         )}

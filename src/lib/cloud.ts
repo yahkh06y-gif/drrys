@@ -20,6 +20,26 @@ const URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://jvoqecqeldykhysaqkk
 const KEY = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable__y4DT3FHtXGy3SG-66Rp4g_X1czO-Le';
 export const cloudEnabled = /^https:\/\//.test(URL) && KEY.length > 10;
 
+/** Call one of Drrys' server functions (supabase/functions). The publishable key only says "this is the
+ *  Drrys app"; secret keys (like Qloo's) stay on the server. */
+export async function callFunction<T>(name: string, body: unknown, timeoutMs = 15000): Promise<T> {
+  if (!cloudEnabled) throw new Error('No server configured');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${URL}/functions/v1/${name}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', apikey: KEY },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) throw new Error(`${name} ${res.status}`);
+    return (await res.json()) as T;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 let sb: SupabaseClient | undefined;
 function client() {
   if (!cloudEnabled) return undefined;
@@ -51,6 +71,8 @@ function snapshot() {
       stats: s.stats,
       coco: s.coco,
       coachSeen: s.coachSeen,
+      world: s.world,
+      plan: s.plan,
       updatedAt: Date.now(),
     }),
   );
@@ -76,7 +98,7 @@ function startBackup(uid: string) {
   let last = '';
   unsubStore = useApp.subscribe((s) => {
     if (restoring || !s.hydrated) return;
-    const key = JSON.stringify([s.profile, s.subjects, s.cards, s.stats, s.coco, s.onboarded, s.coachSeen]);
+    const key = JSON.stringify([s.profile, s.subjects, s.cards, s.stats, s.coco, s.onboarded, s.coachSeen, s.world, s.plan]);
     if (key === last) return;
     last = key;
     clearTimeout(timer);
@@ -100,6 +122,8 @@ function applyRemote(remote: NonNullable<Remote>, extra: { subjects: Subject[]; 
     stats: remote.stats ?? local.stats,
     coco: remote.coco ?? local.coco,
     coachSeen: remote.coachSeen ?? local.coachSeen,
+    world: remote.world ?? local.world,
+    plan: remote.plan ?? local.plan,
     ...(keepSession ? {} : { session: undefined }),
   });
   restoring = false;

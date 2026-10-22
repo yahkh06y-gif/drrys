@@ -17,6 +17,7 @@ import { OrderQ } from '@/components/questions/Order';
 import { SortQ } from '@/components/questions/Sort';
 import { gradeBlank, gradeMatch, gradeOrder, gradeSort } from '@/lib/grade';
 import { haptic, play, tap } from '@/lib/feedback';
+import { onSample, sampleAnswer, typeOut } from '@/lib/sample';
 import { missedIdeas, ORGANIZE_MIN, sessionContext } from '@/lib/session';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
@@ -67,6 +68,9 @@ export default function Active() {
   const [drawing, setDrawing] = useState(false);
   const pad = useRef<SketchHandle>(null);
   const answerInput = useRef<TextInput>(null);
+  const sample = useApp(onSample); // the sample lecture: "Fill sample answer" types a ready-made (imperfect) answer
+  const stopTyping = useRef<() => void>(undefined);
+  useEffect(() => () => stopTyping.current?.(), []);
   const voice = useVoice(
     useCallback((t: string) => setAnswer((a) => (a.trim() ? `${a.trim()} ${t}` : t)), []),
     () => answerInput.current?.focus(),
@@ -268,6 +272,13 @@ export default function Active() {
                 />
                 <MicButton voice={voice} size={44} />
               </View>
+              {sample && !answer && voice.state === 'idle' && (
+                <Pressable
+                  onPress={() => (tap('select'), (stopTyping.current = typeOut(sampleAnswer(q, i), setAnswer)))}
+                  style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.mint, borderWidth: 1, borderColor: C.mintBorder, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
+                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.mossDark }}>✨ Fill sample answer</Text>
+                </Pressable>
+              )}
               {fmt === 'work' && (
                 <View style={{ gap: 8 }}>
                   <Pressable onPress={() => (tap('select'), setSketching((v) => !v))} style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: sketching ? C.teal : C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>

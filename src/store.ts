@@ -6,7 +6,7 @@ import { shrinkBigPictures } from '@/lib/shrink';
 
 import type { Analysis, ActiveQuestion } from '@/lib/ai';
 
-export type Material = { id: string; name: string; uri: string; size?: number; mime?: string };
+export type Material = { id: string; name: string; uri: string; size?: number; mime?: string; sample?: boolean }; // sample: Drrys' own demo lecture ("Fill sample answer" works only there)
 export type Chapter = { id: string; title: string; materials: Material[]; mastery: number; sessions: number };
 export type Subject = {
   id: string;
@@ -46,6 +46,14 @@ export type Rating = 'forgot' | 'hard' | 'good' | 'easy';
 export type Outfit = 'classic' | 'scarf' | 'birthday' | 'ninja';
 export type CocoStyle = 'friendly' | 'calm' | 'direct' | 'playful';
 export type Depth = 'quick' | 'balanced' | 'deep';
+
+/** Something the student loves, found in Qloo (id = Qloo entity id). Picks typed without Qloo have no id. */
+export type WorldType = 'tv_show' | 'movie' | 'artist' | 'brand' | 'book' | 'person' | 'podcast';
+export type WorldItem = { id?: string; name: string; type: WorldType; image?: string; tags?: string[] };
+/** The student's world: what they picked, what Qloo found that fans of it love, and its themes (tags). */
+export type World = { picks: WorldItem[]; because: { from: string; items: WorldItem[] }[]; tags: string[] };
+/** The promise made at the end of onboarding: one for the whole forest. */
+export type Plan = { minutes: 10 | 15 | 20; streakGoal: number; promised: boolean };
 
 export type Profile = {
   name: string;
@@ -115,6 +123,10 @@ type State = {
   coachSeen: boolean; // Coco has explained the daily watering once
   hookTipSeen: boolean; // Coco has told the student where to find their memory hooks (hold a branch)
   justWatered?: string; // subject whose full session just finished → Coco waters that tree once
+  world: World;
+  plan: Plan;
+  guide?: 'files' | 'days'; // the one guided step on the tree right after onboarding (add a lecture → how the days work)
+  savePrompted: boolean; // "Save your tree" (make an account) was offered after the first session
 
   set: (p: Partial<State>) => void;
   setProfile: (p: Partial<Profile>) => void;
@@ -154,6 +166,10 @@ const initial = {
   session: undefined as SessionDraft | undefined,
   coachSeen: false,
   hookTipSeen: false,
+  world: { picks: [], because: [], tags: [] } as World,
+  plan: { minutes: 15, streakGoal: 14, promised: false } as Plan,
+  guide: undefined as State['guide'],
+  savePrompted: false,
 };
 
 const DAY = 86_400_000;

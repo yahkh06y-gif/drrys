@@ -136,6 +136,8 @@ export default function SubjectForm() {
             </View>
           </Enter>
 
+          {/* first planting keeps it to a name and days: chapters and files come next, on the tree */}
+          {!onboarding && (
           <Enter delay={120}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <Label>{onboarding ? 'First chapter:' : 'Chapters:'}</Label>
@@ -165,7 +167,11 @@ export default function SubjectForm() {
                         <Text numberOfLines={1} style={{ flex: 1, fontFamily: F.medium, fontSize: 12, color: C.ink }}>
                           {m.name}
                         </Text>
-                        {!!m.size && <Text style={{ fontFamily: F.medium, fontSize: 10, color: C.muted }}>{(m.size / 1e6).toFixed(1)} MB</Text>}
+                        {m.sample ? (
+                          <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.mossDark, backgroundColor: C.mint, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1, overflow: 'hidden' }}>SAMPLE</Text>
+                        ) : (
+                          !!m.size && <Text style={{ fontFamily: F.medium, fontSize: 10, color: C.muted }}>{(m.size / 1e6).toFixed(1)} MB</Text>
+                        )}
                         <Pressable hitSlop={8} onPress={() => patch(c.id, { materials: c.materials.filter((x) => x.id !== m.id) })}>
                           <Ionicons name="close" size={14} color={C.muted} />
                         </Pressable>
@@ -198,9 +204,11 @@ export default function SubjectForm() {
             </View>
           </Enter>
 
+          )}
+
           {onboarding ? (
             <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted, textAlign: 'center', marginTop: -8 }}>
-              You can add more chapters, your syllabus and past papers anytime from Edit tree.
+              Next, you’ll add your first lecture right on your tree.
             </Text>
           ) : (
           <Enter delay={180}>
@@ -275,7 +283,7 @@ export default function SubjectForm() {
             </View>
           )}
           {onboarding && (
-            <Pressable onPress={() => router.replace('/onboarding/signin')} style={{ alignSelf: 'center' }}>
+            <Pressable onPress={() => router.replace('/onboarding/plan')} style={{ alignSelf: 'center' }}>
               <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted, textDecorationLine: 'underline' }}>Skip for now, finish later</Text>
             </Pressable>
           )}

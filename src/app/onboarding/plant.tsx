@@ -1,4 +1,4 @@
-// "Great. Now let's plant our first subject".
+// "Now let's plant your first subject, <name>".
 // One continuous scene built from three Blender clips, all preloaded so the cuts are seamless:
 //   agriculture (Coco the farmer, loop) —dissolve→ fallSeed (Coco catches a seed) —instant cut→ seedOpen (the seed glows)
 // then on to the subject form.
@@ -64,13 +64,13 @@ export default function Plant() {
         <OnbBar value={progressOf('plant')} style={{ marginBottom: 20 }} />
         <Enter>
           <T v="h1" style={{ color: C.tealSoft, fontSize: 34 }}>
-            Great{name ? `, ${name}` : ''}. Now let’s plant your first subject
+            Now let’s plant your first subject{name ? `, ${name}` : ''}.
           </T>
         </Enter>
         <View style={{ flex: 1 }} />
         <View style={{ gap: 10 }}>
           <Btn title="Plant Now" kind="leaf" mono onPress={startCatch} />
-          <Btn title="Not now" kind="green" height={46} mono onPress={() => router.push('/onboarding/signin')} />
+          <Btn title="Not now" kind="green" height={46} mono onPress={() => router.push('/onboarding/plan')} />
         </View>
       </SafeAreaView>
 

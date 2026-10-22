@@ -16,7 +16,7 @@ export default function Grow() {
   const go = useCallback(() => {
     if (done.current) return;
     done.current = true;
-    if (onboarding) router.replace('/onboarding/signin');
+    if (onboarding) router.replace('/onboarding/plan');
     else router.dismissTo('/(tabs)/tree');
   }, [onboarding]);
 

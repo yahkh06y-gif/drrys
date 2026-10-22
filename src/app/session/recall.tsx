@@ -10,6 +10,7 @@ import { MicButton, useVoice, VoiceHint, withLive } from '@/components/Voice';
 import { aiEnabled } from '@/lib/ai';
 import { DEMO } from '@/lib/demo';
 import { tap } from '@/lib/feedback';
+import { onSample, SAMPLE_RECALL, typeOut } from '@/lib/sample';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
 
@@ -19,6 +20,9 @@ export default function Recall() {
   const [mode, setMode] = useState<'speak' | 'write'>('speak');
   const [active, setActive] = useState(false);
   const [secs, setSecs] = useState(0);
+  const sample = useApp(onSample); // the sample lecture: a ready-made (imperfect) brain dump is one tap away
+  const stopTyping = useRef<() => void>(undefined);
+  useEffect(() => () => stopTyping.current?.(), []);
   const input = useRef<TextInput>(null);
   // spoken recall: each recording is written down and added to what's already there
   const addSpoken = useCallback(
@@ -79,6 +83,13 @@ export default function Recall() {
               </View>
             )}
 
+            {sample && !recall && voice.state === 'idle' && (
+              <Pressable
+                onPress={() => (tap('select'), (stopTyping.current = typeOut(SAMPLE_RECALL, (t) => patchSession({ recall: t }))))}
+                style={{ alignSelf: 'flex-start', backgroundColor: C.mint, borderWidth: 1, borderColor: C.mintBorder, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
+                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.mossDark }}>✨ Fill sample answer</Text>
+              </Pressable>
+            )}
             <TextInput
               ref={input}
               value={withLive(recall, voice.live)}
@@ -93,7 +104,7 @@ export default function Recall() {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.muted }}>{words} words</Text>
               <View style={{ flexDirection: 'row', gap: 14 }}>
-                {!aiEnabled && !recall && (
+                {!aiEnabled && !sample && !recall && (
                   <Pressable onPress={() => (tap(), patchSession({ recall: DEMO.recallExample }))}>
                     <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.leaf }}>Use example</Text>
                   </Pressable>

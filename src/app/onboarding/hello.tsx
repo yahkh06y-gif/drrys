@@ -1,4 +1,4 @@
-// "Hi, I am Coco" → "What should I call you?" → "Nice to meet you, <name>! Just 4 quick questions…" (Coco waving video).
+// "Hi, I am Coco" → "What should I call you?" → "Nice to meet you, <name>! Let's build your world…" (Coco waving video).
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -10,7 +10,6 @@ import { Motion } from '@/components/Motion';
 import { Btn, Bubble, Enter, IconBtn } from '@/components/ui';
 import { useBack } from '@/lib/back';
 import { play } from '@/lib/feedback';
-import { MAIN_QUESTIONS } from '@/lib/onboarding';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
 
@@ -24,7 +23,7 @@ export default function Hello() {
   const [step, setStep] = useState(0);
   const [name, setName] = useState(useApp.getState().profile.name);
   const first = name.trim().split(' ')[0];
-  const lines = ['Hi, I am Coco! 👋', 'What should I call you?', `Nice to meet you, ${first}! Just ${MAIN_QUESTIONS} quick questions before we start planting 🌱`];
+  const lines = ['Hi, I am Coco! 👋', 'What should I call you?', `Nice to meet you, ${first}! Let’s build your world. It takes one minute. 🌍`];
   const next = () => {
     if (step === 1) {
       if (!name.trim()) return;
@@ -33,7 +32,7 @@ export default function Hello() {
     if (step < 2) {
       setStep(step + 1);
       play('select');
-    } else router.push('/onboarding/q/0');
+    } else router.push('/onboarding/study');
   };
   const back = useCallback(() => {
     if (step > 0) return setStep(step - 1), true;

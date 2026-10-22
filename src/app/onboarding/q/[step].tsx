@@ -1,15 +1,15 @@
-// The onboarding questionnaire (Figma: onboard \ study 1–5). One component drives every question.
+// The "About you" questions (Profile → About you). Onboarding asks field + speciality on its own screen
+// (onboarding/study) and interests through Qloo (onboarding/world); here the answers can be changed later.
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { TextInput, View } from 'react-native';
 
-import { Btn, Choice, Enter, IconBtn, OnbBar, Screen, T } from '@/components/ui';
+import { Btn, Choice, Enter, IconBtn, Screen, T } from '@/components/ui';
 import { OPTION_ICONS } from '@/art';
-import { MAIN_QUESTIONS, progressOf, type OnboardingStep } from '@/lib/onboarding';
+import { FIELDS, SUBFIELDS, type Opt } from '@/lib/onboarding';
 import { useApp, type Profile } from '@/store';
 import { C, F } from '@/theme';
 
-type Opt = { label: string; sub?: string };
 type Q = {
   key: keyof Profile;
   title: string;
@@ -21,28 +21,12 @@ type Q = {
   options: (p: Profile) => Opt[];
 };
 
-const SUBFIELDS: Record<string, Opt[]> = {
-  IT: [
-    { label: 'CS', sub: 'Computer Science' },
-    { label: 'AI', sub: 'Artificial Intelligence' },
-    { label: 'SE', sub: 'Software Engineering' },
-    { label: 'CYS', sub: 'Cyber Security' },
-  ],
-  Science: [{ label: 'Biology' }, { label: 'Chemistry' }, { label: 'Physics' }, { label: 'Math' }],
-  Business: [{ label: 'Finance' }, { label: 'Marketing' }, { label: 'Accounting' }, { label: 'Management' }],
-  Medicine: [{ label: 'MD' }, { label: 'Nursing' }, { label: 'Pharmacy' }, { label: 'Dentistry' }],
-  Art: [{ label: 'Design' }, { label: 'Music' }, { label: 'Film' }, { label: 'Fine Arts' }],
-  Engineering: [{ label: 'Civil' }, { label: 'Mechanical' }, { label: 'Electrical' }, { label: 'Chemical' }],
-  Law: [{ label: 'Civil Law' }, { label: 'Criminal' }, { label: 'Business' }, { label: 'International' }],
-  Other: [{ label: 'School' }, { label: 'Languages' }, { label: 'Exams' }, { label: 'Other' }],
-};
-
 const QUESTIONS: Q[] = [
   {
     key: 'field',
     title: 'I Study .....',
     layout: 'grid',
-    options: () => ['IT', 'Science', 'Business', 'Medicine', 'Art', 'Engineering', 'Law', 'Other'].map((label) => ({ label })),
+    options: () => FIELDS.map((label) => ({ label })),
   },
   { key: 'subfield', title: 'I Study .....', layout: 'grid', options: (p) => SUBFIELDS[p.field ?? 'Other'] ?? SUBFIELDS.Other },
   {
@@ -104,9 +88,7 @@ export function QuestionView({ n, editing }: { n: number; editing: boolean }) {
       if (n === 0) return router.replace({ pathname: '/about/[step]', params: { step: '1' } });
       return router.back();
     }
-    if (n + 1 < MAIN_QUESTIONS) router.push(`/onboarding/q/${n + 1}`);
-    else if (n + 1 === MAIN_QUESTIONS) router.push('/onboarding/payoff'); // Coco shows what the answers buy you
-    else router.push('/onboarding/reminder');
+    router.back();
   };
 
   const opts = q.other ? [...q.options(profile), { label: OTHER }] : q.options(profile);
@@ -122,13 +104,9 @@ export function QuestionView({ n, editing }: { n: number; editing: boolean }) {
           </Enter>
         ) : undefined
       }>
-      {editing ? (
-        <View style={{ marginBottom: 18 }}>
-          <IconBtn name="arrow-back" onPress={() => router.back()} />
-        </View>
-      ) : (
-        <OnbBar value={progressOf(n < MAIN_QUESTIONS ? (`q${n}` as OnboardingStep) : 'source')} style={{ marginBottom: 28 }} />
-      )}
+      <View style={{ marginBottom: 18 }}>
+        <IconBtn name="arrow-back" onPress={() => router.back()} />
+      </View>
       <Enter>
         <T v="h1" style={{ marginBottom: q.subtitle ? 8 : 26 }}>
           {q.title}

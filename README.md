@@ -4,7 +4,7 @@ Drrys turns studying into a small daily mission. Every subject is a tree, every 
 
 <sub>About the name: in spoken Arabic, *drrys* (درّيس) is someone who studies a lot.</sub>
 
-Made by Yahya Al-Khayyat and Abdelhafeez Shaarawy. This branch (`forgehacks`) is our entry to **ForgeHacks Online 2026**, track **AI + Education**.
+Made by Yahya Al-Khayyat and Abdelhafeez Shaarawy. The `forgehacks` branch is our entry to **ForgeHacks Online 2026** (track **AI + Education**). This branch (`qloo`) builds on it for the **Qloo Agentic Hackathon**: see below for exactly what was added.
 
 ![Drrys screens](docs/screens.jpg)
 
@@ -19,6 +19,17 @@ Made by Yahya Al-Khayyat and Abdelhafeez Shaarawy. This branch (`forgehacks`) is
 - **Question formats:** explain (graded by the AI), order, sort, match, work-it-out, and fill-in-the-blanks (in the app). The order, sort, match and blank formats are graded by plain code, not the model, with an "almost right" state. Gaps become flashcards.
 - **Memory hooks:** on any flashcard or question the student writes their own hook (a story or picture), with ideas from Coco, and can ask for an AI picture of it (image model through the YouCam API). Hooks live on the tree: hold a branch to see them.
 - Reading PDFs reliably on Android, sounds for right / wrong / half-right answers, XP shown as stars, and a simpler finish page that returns the student to the forest.
+
+## Qloo Agentic Hackathon: what we added (after September 30)
+
+Everything above existed before. On this branch we added **Qloo** to make Coco's teaching personal from the first minute: Coco explains hard ideas through the shows, music, teams and books each student loves.
+
+- **"Show Coco your world" (new onboarding):** the student picks 3 or more things they love from a grid of real posters (Arabic and global), with Qloo search for anything missing. The grid learns as they pick: every pick brings three related things from Qloo's insights.
+- **"Coco is exploring your world":** for each pick, Qloo finds what its fans also love (shows, movies, music), and the themes (tags) of the student's whole world. The student sees the map grow, and can remove anything that isn't them.
+- **The first explanation:** a famously hard idea from the student's own field (recursion for Computer Science, compound interest for Finance…), explained through their world. The analogy is written by the language model from the Qloo themes, and the card flips to the plain textbook version to show the difference.
+- **Every session after that:** the student's world is passed to Coco, who uses it for an analogy when an idea is hard to picture.
+- **A shorter, kinder onboarding:** field and speciality on one screen, a daily plan and promise (minutes, streak goal, reminder time), no sign-up until after the first session, one guided step on the tree, and a **sample lecture** so anyone (judges included) can try a full session.
+- **Safe by design:** the Qloo key never ships in the app. Calls go through a Supabase Edge Function (`supabase/functions/qloo`) that only allows a list of entity types, drops anything adult (names, tags and age ratings are checked) and caches results in memory. No Qloo data is stored in this repository. If Qloo can't be reached, the onboarding falls back to simple interest tiles.
 
 ## Why we built it
 
@@ -64,6 +75,7 @@ cp .env.example .env   # add an AI key (Claude or Gemini), and optionally a YouC
 npx expo start
 ```
 
+- Qloo (server side): `npx supabase functions deploy qloo --no-verify-jwt`, then `npx supabase secrets set QLOO_API_KEY=your-key`.
 - Without an AI key, Coco runs a built-in demo session so every screen can still be tried.
 - Android APK: `npx eas-cli build -p android --profile preview`.
 

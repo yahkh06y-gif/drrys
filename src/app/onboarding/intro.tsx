@@ -23,22 +23,22 @@ const SLIDES: { video: VideoKey; startAt?: number; fg: string; title: string; bo
     video: 'intro1',
     startAt: 6, // the clip opens on its zoom-in; skip straight to the settled tree
     fg: '#0E6E6A',
-    title: 'Grow Your Knowledge, One Day at a Time.',
-    body: 'We turn complex study goals into small daily sessions, so you always know what to focus on next.',
+    title: 'Grow your knowledge, one day at a time.',
+    body: 'Every subject is a tree. Your mission: water it daily.',
     btn: 'light',
   },
   {
     video: 'intro2',
     fg: C.white,
-    title: 'Coco is your personal learning companion',
-    body: 'Drrys personalizes your learning; Coco understands your style and explains tough concepts using things you love.',
+    title: 'Coco learns your world.',
+    body: 'Tell him what you love. He explains every hard idea through it.',
     btn: 'teal',
   },
   {
     video: 'intro3',
     fg: C.white,
-    title: 'Learn Smarter, Not Harder.',
-    body: 'Drrys uses proven learning methods to help you understand, remember, and apply what you learn.',
+    title: 'Study the way science says works.',
+    body: 'No highlighting. No re-reading. Just methods that stick.',
     btn: 'leaf',
   },
 ];

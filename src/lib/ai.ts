@@ -614,3 +614,31 @@ Return ONLY the description, no title, no quotes.`,
   );
   return raw.trim().replace(/^["“]|["”]$/g, '').slice(0, 550);
 }
+
+/** Onboarding: Coco's first explanation. One hard idea from the student's field, explained through one
+ *  thing they love. `themes` are that thing's tags from Qloo (what it is "about"), so the analogy rests on
+ *  what the show / song / team is really like, not on guesses. Returns null when there's no AI. */
+export async function explainWithWorld(
+  concept: { name: string; usual: string; field: string },
+  world: { name: string; kind: string; themes: string[] },
+): Promise<string | null> {
+  if (!aiEnabled) return null;
+  const raw = await call(
+    `You are Coco, a warm study buddy inside the Drrys app. You explain ONE hard idea from the student's field through ONE thing the student loves.
+Rules:
+- Build a single analogy that maps the parts of the idea onto that world. The concept must stay accurate: never bend the science to fit the story.
+- Only mention characters, events or details of that world you are sure about. When unsure, use its general themes (given below) instead.
+- 3 or 4 short sentences, simple English, at most 70 words. Family-friendly. No emojis.
+Return ONLY JSON: {"analogy": "..."}`,
+    [
+      {
+        type: 'text',
+        text: `Idea: ${concept.name} (${concept.field}). Textbook definition: ${concept.usual}
+The student loves: ${world.name} (${world.kind}).${world.themes.length ? ` Its themes: ${world.themes.slice(0, 10).join(', ')}.` : ''}`,
+      },
+    ],
+    400,
+  );
+  const a = parseJSON<{ analogy?: string }>(raw).analogy?.trim();
+  return a || null;
+}

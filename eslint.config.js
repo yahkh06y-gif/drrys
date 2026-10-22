@@ -5,7 +5,7 @@ const expoConfig = require('eslint-config-expo/flat');
 module.exports = defineConfig([
   expoConfig,
   {
-    ignores: ['dist/*'],
+    ignores: ['dist/*', 'supabase/*'], // supabase/: server code (Deno), not part of the app
   },
   {
     // The React Compiler rules flag patterns this app uses on purpose: Reanimated shared values

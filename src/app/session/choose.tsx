@@ -63,7 +63,7 @@ export default function Choose() {
                   <Text numberOfLines={1} style={{ fontFamily: F.bold, fontSize: 14, color: C.teal }}>
                     {m.name}
                   </Text>
-                  {!!m.size && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>{(m.size / 1e6).toFixed(1)} MB • PDF</Text>}
+                  {!!m.size && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>{m.sample ? 'Sample lecture by Drrys' : `${(m.size / 1e6).toFixed(1)} MB`} • PDF</Text>}
                 </View>
                 <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={on ? C.teal : C.lineStrong} />
               </Pressable>

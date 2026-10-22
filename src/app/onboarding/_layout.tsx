@@ -10,6 +10,7 @@ export default function OnboardingLayout() {
       <Stack.Screen name="intro" options={{ animation: 'fade', contentStyle: { backgroundColor: '#BEE6F2' } }} />
       <Stack.Screen name="hello" options={{ animation: 'fade' }} />
       <Stack.Screen name="plant" options={{ animation: 'fade' }} />
+      <Stack.Screen name="explore" options={{ animation: 'fade', contentStyle: { backgroundColor: C.tealBg } }} />
     </Stack>
   );
 }

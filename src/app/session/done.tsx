@@ -11,6 +11,7 @@ import { Motion } from '@/components/Motion';
 import { Btn, Enter, XpStars } from '@/components/ui';
 import { useBack } from '@/lib/back';
 import { haptic, play } from '@/lib/feedback';
+import { cloudEnabled } from '@/lib/cloud';
 import { completeReferral } from '@/lib/together';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
@@ -50,8 +51,13 @@ export default function Done() {
   const done = useRef(false);
 
   const leave = useCallback(() => {
+    const st = useApp.getState();
     set({ session: undefined });
-    router.dismissTo('/(tabs)/tree');
+    // after the very first session (value given, now ask): "Save your tree" with an account, once
+    if (cloudEnabled && !st.profile.uid && !st.savePrompted) {
+      set({ savePrompted: true });
+      router.replace({ pathname: '/account', params: { save: '1' } });
+    } else router.dismissTo('/(tabs)/tree');
     return true;
   }, [set]);
   useBack(leave); // Android back = return to the forest (never back into the finished session)

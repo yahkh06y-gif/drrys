@@ -1,11 +1,12 @@
 // Home — the forest: swipe left/right between your subject trees (free: 1, Pro: up to 5), each with
 // today's session card, and the active subject's learning insights underground.
 import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Pressable, Text, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Alert, AppState, Pressable, Text, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector, ScrollView } from 'react-native-gesture-handler';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,9 +15,11 @@ import { COCO, STAT_ICONS, TREE, TREE_ASPECT } from '@/art';
 import { HookGallery } from '@/components/HookGallery';
 import { KnowledgeTree, type CocoLanding } from '@/components/Tree';
 import { Btn, Coco, Enter, Pill, T } from '@/components/ui';
-import { play, tap } from '@/lib/feedback';
+import { haptic, play, tap } from '@/lib/feedback';
 import { isResting, LIMITS } from '@/lib/purchases';
-import { activeSubject, EMPTY_STATS, isDue, streak, today, useApp, type Chapter, type Subject } from '@/store';
+import { makeSampleLecture, SAMPLE_PAGES, SAMPLE_TITLE } from '@/lib/sample';
+import { checkPdf, keepFile } from '@/lib/session';
+import { activeSubject, EMPTY_STATS, isDue, streak, today, uid, useApp, type Chapter, type Material, type Subject } from '@/store';
 import { C, F } from '@/theme';
 
 const DAY_NAMES = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -49,6 +52,8 @@ export default function TreeScreen() {
   // Coco lands on the tree you arrive at; flipping trees quickly makes it a hard landing
   const [landing, setLanding] = useState<CocoLanding>({ n: 0, hard: false });
   const coachSeen = useApp((s) => s.coachSeen);
+  const guide = useApp((s) => s.guide);
+  const streakGoal = useApp((s) => s.plan.streakGoal);
   // the clock moves on while the tab stays mounted (cards fall due, a new day starts):
   // re-check on every focus, every return from the background and once a minute
   const [clock, setClock] = useState(0);
@@ -194,7 +199,10 @@ export default function TreeScreen() {
             {page < last && <SideArrow side="right" top={treeH * 0.56} onPress={() => goTo(page + 1)} plus={plantPage && page + 1 === last} />}
 
             {/* first visit: Coco explains the daily watering, pointing at the card */}
-            {!coachSeen && !onPlant && <CoachTip width={width} height={treeH} onDone={() => set({ coachSeen: true })} />}
+            {!coachSeen && !guide && !onPlant && <CoachTip width={width} height={treeH} onDone={() => set({ coachSeen: true })} />}
+
+            {/* right after onboarding: one guided step, done by hand (add a lecture, then how the days work) */}
+            {!!guide && !onPlant && <GuideTip subject={subject} step={guide} width={width} height={treeH} />}
 
             {/* which tree you're looking at */}
             {pageCount > 1 && (
@@ -232,7 +240,7 @@ export default function TreeScreen() {
               </Text>
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-              <Stat icon={STAT_ICONS.fire} label="Daily Study Streak" value={`${st} ${st === 1 ? 'Day' : 'Days'}`} note={stats.studyDays.includes(today()) ? 'Tree watered today ✓' : 'Study today to keep it'} noteColor={C.orange}>
+              <Stat icon={STAT_ICONS.fire} label="Daily Study Streak" value={`Day ${st} of ${streakGoal}`} note={stats.studyDays.includes(today()) ? 'Tree watered today ✓' : 'Study today to keep it'} noteColor={C.orange}>
                 <WeekFlames days={stats.studyDays} />
               </Stat>
               <Stat icon={STAT_ICONS.cards} label="Cards Mastered" value={`${mastered} / ${subjectCards.length}`} note={`${subjectCards.length - mastered} remaining in pool`}>
@@ -541,6 +549,128 @@ function CoachTip({ width, height, onDone }: { width: number; height: number; on
         </View>
         {/* pointer down at the card */}
         <View style={{ width: 16, height: 16, backgroundColor: C.white, transform: [{ rotate: '45deg' }], alignSelf: 'center', marginTop: -9, borderRightWidth: 2, borderBottomWidth: 2, borderColor: C.barkSoft }} />
+      </Enter>
+    </View>
+  );
+}
+
+// Right after onboarding: the dim falls on the tree and Coco asks for ONE thing, done by hand (a tour
+// of every button is skipped and forgotten; one action is remembered). Only once a lecture is in does
+// he explain the two kinds of days, because now it means something. Then: the first session.
+function GuideTip({ subject, step, width, height }: { subject: Subject; step: 'files' | 'days'; width: number; height: number }) {
+  const set = useApp((s) => s.set);
+  const updateSubject = useApp((s) => s.updateSubject);
+  const startSession = useApp((s) => s.startSession);
+  const patchSession = useApp((s) => s.patchSession);
+  const minutes = useApp((s) => s.plan.minutes);
+  const isPro = useApp((s) => s.isPro);
+  const [shown, setShown] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [later, setLater] = useState(false);
+  // first, let Coco water the new sapling
+  useEffect(() => {
+    const t = setTimeout(() => setShown(true), step === 'files' ? 2600 : 0);
+    return () => clearTimeout(t);
+  }, [step]);
+  const chapter = subject.chapters[0];
+  if (!shown || !chapter) return null;
+
+  const addFile = (m: Material, title?: string) => {
+    updateSubject(subject.id, {
+      chapters: subject.chapters.map((c, i) => (i === 0 ? { ...c, title: title && /^Chapter \d+$/.test(c.title) ? title : c.title, materials: [...c.materials, m] } : c)),
+    });
+    haptic('success');
+    play('grow');
+    set({ guide: 'days' });
+  };
+
+  const upload = async () => {
+    const r = await DocumentPicker.getDocumentAsync({ type: ['application/pdf'], copyToCacheDirectory: true });
+    if (r.canceled) return;
+    const f = r.assets[0];
+    const bad = await checkPdf(f, { chapter: true, isPro });
+    if (bad) return Alert.alert('Can’t use this file', bad);
+    addFile({ id: uid(), name: f.name, uri: await keepFile(f.uri), size: f.size, mime: f.mimeType });
+  };
+
+  const sample = async () => {
+    setBusy(true);
+    try {
+      addFile(await makeSampleLecture(), SAMPLE_TITLE);
+    } catch {
+      Alert.alert('Couldn’t make the sample', 'Please try again, or upload your own lecture.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const close = () => set({ guide: undefined, coachSeen: true });
+
+  const start = () => {
+    const st = useApp.getState();
+    const ch = st.subjects.find((x) => x.id === subject.id)?.chapters[0];
+    if (!ch) return close();
+    close();
+    startSession(subject.id, ch.id);
+    const m = ch.materials.at(-1);
+    if (m?.sample) patchSession({ fromPage: 1, toPage: SAMPLE_PAGES });
+    router.push('/session/choose');
+  };
+
+  const dim = 'rgba(24,36,28,0.55)';
+  const box = { backgroundColor: C.white, borderRadius: 20, padding: 16, gap: 12, borderWidth: 2, borderColor: C.barkSoft } as const;
+  return (
+    <View style={{ position: 'absolute', left: 0, top: 0, width, height, zIndex: 30, backgroundColor: dim, justifyContent: 'flex-end', padding: 20, paddingBottom: 28 }}>
+      {step === 'files' && !later && (
+        <Pressable onPress={close} hitSlop={10} style={{ position: 'absolute', top: 56, right: 20, padding: 6 }}>
+          <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.white }}>Skip</Text>
+        </Pressable>
+      )}
+      <Enter key={`${step}${later}`}>
+        <View style={box}>
+          <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+            <Image source={COCO.classic} style={{ width: 44, height: 55 }} contentFit="contain" />
+            <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 16, lineHeight: 22, color: C.teal }}>
+              {later
+                ? 'After your next lecture, tap ✏️ at the top and add it to this branch.'
+                : step === 'files'
+                  ? `This is your ${subject.name} tree 🌱 Add your last lecture. I’ll quiz you only from those pages.`
+                  : 'Your lecture is in! Here’s how your days work:'}
+            </Text>
+          </View>
+          {later ? (
+            <Btn title="Got it!" kind="teal" height={48} onPress={close} />
+          ) : step === 'files' ? (
+            <View style={{ gap: 10 }}>
+              <Btn title="Upload a lecture (PDF)" iconLeft="cloud-upload-outline" kind="teal" height={50} disabled={busy} onPress={upload} />
+              <Pressable
+                onPress={sample}
+                disabled={busy}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: 16, borderWidth: 1.5, borderColor: C.teal, backgroundColor: C.sand }}>
+                {busy ? <ActivityIndicator color={C.teal} /> : <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.teal }}>✨ Try a sample lecture</Text>}
+              </Pressable>
+              <Pressable onPress={() => (tap(), setLater(true))} style={{ alignSelf: 'center', padding: 4 }}>
+                <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>Later</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ gap: 10 }}>
+              {[
+                { src: STAT_ICONS.book, label: `Lecture day: a full session, about ${minutes} minutes.` },
+                { src: STAT_ICONS.water, label: 'Other days: just a few flashcards to keep it green.' },
+              ].map((ic) => (
+                <View key={ic.label} style={{ flexDirection: 'row', gap: 10, alignItems: 'center', backgroundColor: C.paper, borderRadius: 14, borderWidth: 1, borderColor: C.line, padding: 10 }}>
+                  <Image source={ic.src} style={{ width: 30, height: 30 }} contentFit="contain" />
+                  <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 14, color: C.ink }}>{ic.label}</Text>
+                </View>
+              ))}
+              <Btn title="Start my first session" icon="arrow-forward" kind="leaf" height={50} onPress={start} />
+              <Pressable onPress={close} style={{ alignSelf: 'center', padding: 4 }}>
+                <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>Later</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
       </Enter>
     </View>
   );

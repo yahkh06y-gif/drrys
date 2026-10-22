@@ -1,0 +1,208 @@
+// "Your plan and your promise" — three quick steps (the Duolingo idea, kept honest):
+//   1. minutes per subject a day (10 / 15 / 20 → Coco's depth: quick / balanced / deep)
+//   2. streak goal (7 / 14 / 30 / 50 days)
+//   3. reminder time, then the promise written from those choices: hold to promise (it fills with water),
+//      and only then the system's notification prompt.
+// One promise for the whole forest: the streak and the reminder are shared; the minutes are each tree's default.
+import { Image } from 'expo-image';
+import { router, Stack } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
+import Animated, { cancelAnimation, Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { COCO } from '@/art';
+import { Btn, Enter, OnbBar } from '@/components/ui';
+import { useBack } from '@/lib/back';
+import { haptic, play, tap } from '@/lib/feedback';
+import { enableReminders, hourLabel } from '@/lib/notify';
+import { progressOf } from '@/lib/onboarding';
+import { useApp, type Depth, type Plan as PlanT } from '@/store';
+import { C, F } from '@/theme';
+
+const MINUTES: { v: PlanT['minutes']; label: string; depth: Depth }[] = [
+  { v: 10, label: 'Light', depth: 'quick' },
+  { v: 15, label: 'Steady', depth: 'balanced' },
+  { v: 20, label: 'Deep', depth: 'deep' },
+];
+const GOALS = [
+  { v: 7, label: 'Good' },
+  { v: 14, label: 'Great' },
+  { v: 30, label: 'Amazing' },
+  { v: 50, label: 'Unstoppable' },
+];
+const TIMES = [
+  { h: 17, label: 'Afternoon' },
+  { h: 20, label: 'Evening' },
+  { h: 22, label: 'Night' },
+];
+const HOLD_MS = 2000;
+
+export default function Plan() {
+  const set = useApp((s) => s.set);
+  const setProfile = useApp((s) => s.setProfile);
+  const [step, setStep] = useState(0);
+  const [minutes, setMinutes] = useState<PlanT['minutes']>(15);
+  const [goal, setGoal] = useState(14);
+  const [hour, setHour] = useState(20);
+  const [promised, setPromised] = useState(false);
+
+  // the tree is already planted: going back to the planting screen would plant it twice
+  const planted = useApp((s) => s.subjects.length > 0);
+  const back = useCallback(() => {
+    if (promised) return true;
+    if (step > 0) return setStep(step - 1), true;
+    return planted;
+  }, [step, promised, planted]);
+  useBack(back);
+
+  const save = (didPromise: boolean) => {
+    const st = useApp.getState();
+    set({
+      plan: { minutes, streakGoal: goal, promised: didPromise },
+      coco: { ...st.coco, depth: MINUTES.find((m) => m.v === minutes)!.depth },
+    });
+    setProfile({ reminderHour: hour });
+  };
+
+  // onto the tree: Coco waters the new sapling, then the one guided step (add a lecture)
+  const finish = () => {
+    const st = useApp.getState();
+    const tree = st.subjects.at(-1);
+    set({ onboarded: true, justWatered: tree?.id, guide: tree ? 'files' : undefined, coachSeen: !!tree || st.coachSeen });
+    play('celebrate');
+    router.replace('/(tabs)/tree');
+  };
+
+  const onPromise = async () => {
+    setPromised(true);
+    haptic('success');
+    save(true);
+    // the system prompt comes only now, after the student has said why they want it
+    setTimeout(async () => {
+      await enableReminders();
+      finish();
+    }, 1400);
+  };
+
+  const notNow = () => {
+    save(false);
+    finish();
+  };
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: C.cream, padding: 20 }}>
+      <Stack.Screen options={{ gestureEnabled: !planted }} />
+      <OnbBar value={progressOf('plan')} onBack={promised || (planted && step === 0) ? false : () => back() || (router.canGoBack() && router.back())} style={{ marginBottom: 18 }} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+        <Image source={promised ? COCO.bell : COCO.classic} style={{ width: 56, height: 70 }} contentFit="contain" />
+        <Enter key={`${step}${promised}`} style={{ flex: 1 }}>
+          <View style={{ backgroundColor: C.white, borderRadius: 14, borderWidth: 1, borderColor: C.line, paddingHorizontal: 12, paddingVertical: 10 }}>
+            <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.teal }}>
+              {promised
+                ? `I’ll ping you at ${hourLabel(hour)}. 🌱`
+                : step === 0
+                  ? 'How long can you study each subject a day?'
+                  : step === 1
+                    ? 'How many days in a row can you keep your tree green?'
+                    : 'When should I remind you?'}
+            </Text>
+          </View>
+        </Enter>
+      </View>
+
+      {step === 0 && (
+        <Enter key="m" style={{ gap: 12 }}>
+          {MINUTES.map((m) => (
+            <Option key={m.v} big={`${m.v} min`} small={m.label} on={minutes === m.v} onPress={() => setMinutes(m.v)} />
+          ))}
+        </Enter>
+      )}
+
+      {step === 1 && (
+        <Enter key="g" style={{ gap: 12 }}>
+          {GOALS.map((g) => (
+            <Option key={g.v} big={`${g.v} days`} small={g.label} on={goal === g.v} onPress={() => setGoal(g.v)} />
+          ))}
+          <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted, textAlign: 'center', marginTop: 4 }}>Short daily sessions beat long cramming sessions.</Text>
+        </Enter>
+      )}
+
+      {step === 2 && (
+        <Enter key="p" style={{ flex: 1, gap: 18 }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {TIMES.map((t) => {
+              const on = hour === t.h;
+              return (
+                <Pressable
+                  key={t.h}
+                  disabled={promised}
+                  onPress={() => (tap('select'), setHour(t.h))}
+                  style={{ flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 14, borderWidth: 2, borderBottomWidth: on ? 5 : 2, borderColor: C.brown, backgroundColor: on ? C.cardSelected : C.card }}>
+                  <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.teal }}>{t.label}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.teal }}>{hourLabel(t.h)}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={{ fontFamily: F.bold, fontSize: 22, lineHeight: 30, color: C.ink, textAlign: 'center' }}>
+            “I’ll water my trees every day at <Text style={{ color: C.teal }}>{hourLabel(hour)}</Text>, <Text style={{ color: C.teal }}>{minutes} minutes</Text> per subject, for{' '}
+            <Text style={{ color: C.teal }}>{goal} days</Text> in a row.”
+          </Text>
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <HoldToPromise done={promised} onDone={onPromise} />
+          </View>
+        </Enter>
+      )}
+
+      <View style={{ flex: step === 2 ? 0 : 1 }} />
+      {step < 2 ? (
+        <Btn title="continue" mono onPress={() => setStep(step + 1)} />
+      ) : (
+        !promised && (
+          <Pressable onPress={notNow} style={{ alignSelf: 'center', padding: 8 }}>
+            <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>Not now</Text>
+          </Pressable>
+        )
+      )}
+    </SafeAreaView>
+  );
+}
+
+function Option({ big, small, on, onPress }: { big: string; small: string; on: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={() => (tap('select'), onPress())}
+      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 16, borderRadius: 16, borderWidth: 2, borderBottomWidth: on ? 5 : 2, borderColor: C.brown, backgroundColor: on ? C.cardSelected : C.card }}>
+      <Text style={{ fontFamily: F.bold, fontSize: 22, color: C.teal }}>{big}</Text>
+      <Text style={{ fontFamily: F.bold, fontSize: 15, color: on ? C.green : C.muted }}>{small}</Text>
+    </Pressable>
+  );
+}
+
+// A big round button that fills with water while held; let go early and it drains.
+function HoldToPromise({ done, onDone }: { done: boolean; onDone: () => void }) {
+  const fill = useSharedValue(done ? 1 : 0);
+  const size = 170;
+  const start = () => {
+    if (done) return;
+    haptic('light');
+    fill.value = withTiming(1, { duration: HOLD_MS * (1 - fill.value), easing: Easing.linear }, (ok) => {
+      if (ok) runOnJS(onDone)();
+    });
+  };
+  const stop = () => {
+    if (done || fill.value >= 1) return;
+    cancelAnimation(fill);
+    fill.value = withTiming(0, { duration: 350 });
+  };
+  const water = useAnimatedStyle(() => ({ height: `${fill.value * 100}%` }));
+  return (
+    <Pressable onPressIn={start} onPressOut={stop} accessibilityRole="button" accessibilityLabel="Hold to promise">
+      <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: C.white, borderWidth: 4, borderColor: C.teal, alignItems: 'center', justifyContent: 'center' }}>
+        <Animated.View style={[{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#5FB8DA' }, water]} />
+        <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.teal, textAlign: 'center' }}>{done ? 'Promised! 🌱' : 'Hold to\npromise 🌱'}</Text>
+      </View>
+    </Pressable>
+  );
+}
