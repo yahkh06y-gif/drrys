@@ -10,6 +10,7 @@ import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } f
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COCO } from '@/art';
+import { SafePicture } from '@/components/SafePicture';
 import { Btn, Enter, OnbBar } from '@/components/ui';
 import { explainWithWorld } from '@/lib/ai';
 import { tap } from '@/lib/feedback';
@@ -83,8 +84,8 @@ export default function First() {
           <Animated.View style={[face, { backgroundColor: C.white, borderColor: C.bark, gap: 12 }, front]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               {pick && personal && (
-                <View style={{ width: 46, height: 46, borderRadius: 23, overflow: 'hidden', backgroundColor: C.sand, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 24 }}>{TYPE_EMOJI[pick.type]}</Text>
+                <View style={{ width: 46, height: 69, borderRadius: 8, overflow: 'hidden', backgroundColor: C.sand, alignItems: 'center', justifyContent: 'center' }}>
+                  <SafePicture uri={pick.image} emoji={TYPE_EMOJI[pick.type]} style={{ width: '100%', height: '100%' }} />
                 </View>
               )}
               <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 22, lineHeight: 27, color: C.teal }}>{analogy === undefined ? concept.name : title}</Text>

@@ -18,12 +18,13 @@ type Kind = (typeof TYPES)[number];
 const urn = (t: Kind) => `urn:entity:${t}`;
 
 // Safety: anything adult, romantic, or about alcohol, gambling or drugs is dropped before it reaches the app
-// (name, tags and age rating are checked). No pictures are sent at all: Qloo can't tell what's in an image.
+// (name, tags and age rating are checked). Pictures are sent as links; the app checks each one with the AI
+// before showing it (see src/lib/pictures.ts), because Qloo can't tell what's in an image.
 const BLOCK =
   /\b(porn\w*|erotic\w*|adult (film|video|content|animation)|hentai|ecchi|harem|nsfw|xxx|sex|sexy|sexual\w*|nudity|nude|strip(per|tease| club)|fetish|playboy|onlyfans|smut|seduct\w*|prostitut\w*|romance|romantic|love stor(y|ies)|rom-?com|dating|affair|lgbt\w*|alcohol\w*|beer|wine|whisk(e)?y|vodka|drinking|drunk\w*|bar ?crawl|casino\w*|gambl\w*|poker|betting|drugs?|drug dealing|cocaine|heroin|marijuana|cannabis|weed|stoner)\b/i;
 const BLOCK_RATING = /^(nc-?17|x|xxx|r18\+?|ao)$/i;
 
-type Item = { id: string; name: string; type: Kind; tags: string[] };
+type Item = { id: string; name: string; type: Kind; image?: string; tags: string[] };
 
 const cors = {
   'access-control-allow-origin': '*',
@@ -72,7 +73,8 @@ function slim(e: any): Item | undefined {
   const p = e.properties ?? {};
   const rating = String(p.content_rating ?? p.age_rating ?? '');
   if (BLOCK.test(name) || tags.some((t) => BLOCK.test(t)) || BLOCK_RATING.test(rating) || p.is_adult === true || p.adult === true) return undefined;
-  return { id: e.entity_id, name, type, tags: tags.slice(0, 12) };
+  const image = p.image?.url ?? p.images?.[0]?.url;
+  return { id: e.entity_id, name, type, image: typeof image === 'string' && image.startsWith('https://') ? image : undefined, tags: tags.slice(0, 12) };
 }
 
 const clean = (s: unknown, max = 60) => (typeof s === 'string' ? s.trim().slice(0, max) : '');

@@ -3,7 +3,8 @@
 //   2. three or more things inside those areas, from ready-made lists (recognition over recall), with
 //      search for anything missing. Every pick teaches the list: three related things (from Qloo) appear
 //      right after it. Islamic history is Drrys' own list: Qloo has no taste data for it.
-// No pictures anywhere (names and icons only), and no music or celebrities: see supabase/functions/qloo.
+// Pictures come from Qloo and are shown only after the AI check (components/SafePicture); no music or
+// celebrities: see supabase/functions/qloo.
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -13,6 +14,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, w
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COCO } from '@/art';
+import { SafePicture } from '@/components/SafePicture';
 import { Btn, Enter, OnbBar } from '@/components/ui';
 import { useBack } from '@/lib/back';
 import { tap } from '@/lib/feedback';
@@ -246,7 +248,7 @@ export default function World() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }} style={{ flex: 1 }}>
               {picked.map((x) => (
                 <View key={keyOf(x)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 99, backgroundColor: C.mint, borderWidth: 1, borderColor: C.mintBorder, paddingHorizontal: 10, paddingVertical: 4 }}>
-                  <Text style={{ fontSize: 12 }}>{TYPE_EMOJI[x.type]}</Text>
+                  <SafePicture uri={x.image} emoji={TYPE_EMOJI[x.type]} emojiSize={10} style={{ width: 18, height: 18, borderRadius: 9 }} />
                   <Text numberOfLines={1} style={{ maxWidth: 110, fontFamily: F.bold, fontSize: 12, color: C.mossDark }}>
                     {x.name}
                   </Text>
@@ -283,7 +285,11 @@ function Thing({ item, selected, fresh, onPress }: { item: WorldItem; selected: 
           { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, borderWidth: selected ? 2 : 1, borderBottomWidth: selected ? 4 : 2, borderColor: selected ? C.green : fresh ? C.amber : C.lineStrong, backgroundColor: selected ? C.mint : C.white },
           a,
         ]}>
-        <Text style={{ fontSize: 20 }}>{TYPE_EMOJI[item.type]}</Text>
+        {item.type === 'history' ? (
+          <Text style={{ fontSize: 20 }}>{TYPE_EMOJI[item.type]}</Text>
+        ) : (
+          <SafePicture uri={item.image} emoji={TYPE_EMOJI[item.type]} emojiSize={18} style={{ width: 36, height: 54, borderRadius: 6 }} />
+        )}
         <Text numberOfLines={2} style={{ flex: 1, fontFamily: F.bold, fontSize: 14, lineHeight: 18, color: C.ink }}>
           {item.name}
         </Text>

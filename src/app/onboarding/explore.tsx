@@ -9,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Line } from 'react-native-svg';
 
 import { COCO } from '@/art';
+import { SafePicture } from '@/components/SafePicture';
 import { Btn, Coco, Enter, OnbBar } from '@/components/ui';
 import { haptic, play, tap } from '@/lib/feedback';
 import { progressOf } from '@/lib/onboarding';
@@ -138,9 +139,7 @@ export default function Explore() {
 
 function Thumb({ item, size }: { item: WorldItem; size: number }) {
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: C.sand, borderWidth: 2, borderColor: C.white, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ fontSize: size * 0.45 }}>{TYPE_EMOJI[item.type]}</Text>
-    </View>
+    <SafePicture uri={item.image} emoji={TYPE_EMOJI[item.type]} emojiSize={size * 0.45} style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 2, borderColor: C.white }} />
   );
 }
 
