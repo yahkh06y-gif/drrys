@@ -1,7 +1,8 @@
 // Qloo (taste AI): finds the things a student loves, and what else fans of those things love.
 // The app never holds the Qloo key: every call goes through Drrys' server function (supabase/functions/qloo).
-// If Qloo can't be reached (offline, or the hackathon key has expired), every call fails quietly and the
-// onboarding falls back to simple interest tiles.
+// If Qloo can't be reached (offline, or the hackathon key has expired), every call fails quietly: the
+// ready-made lists still work, only the "more like this" and the exploring are skipped.
+// No pictures are shown anywhere: Qloo can't say what's in an image, so Drrys shows names and icons only.
 import { callFunction } from '@/lib/cloud';
 import type { WorldItem, WorldType } from '@/store';
 
@@ -13,10 +14,10 @@ export async function searchWorld(query: string, type?: WorldType): Promise<Worl
   return r.items ?? [];
 }
 
-/** The ready-made posters, turned into real Qloo things (with pictures). Same order as asked;
+/** The ready-made names, turned into real Qloo things (ids and themes). Same order as asked;
  *  null where Qloo had no match. */
 export async function resolveStarters(items: { name: string; type: WorldType }[]): Promise<(WorldItem | null)[]> {
-  const r = await ask<{ items: (WorldItem | null)[] }>({ action: 'resolve', items }, 20000);
+  const r = await ask<{ items: (WorldItem | null)[] }>({ action: 'resolve', items }, 30000);
   return items.map((_, i) => r.items?.[i] ?? null);
 }
 
@@ -31,80 +32,63 @@ export async function relatedTo(item: WorldItem): Promise<WorldItem[]> {
 export async function exploreWorld(picks: WorldItem[]): Promise<{ groups: { from: string; items: WorldItem[] }[]; tags: string[] }> {
   const withIds = picks.filter((p) => p.id).map((p) => ({ id: p.id, type: p.type, tags: p.tags ?? [] }));
   if (!withIds.length) return { groups: [], tags: [] };
-  const r = await ask<{ groups: { from: string; items: WorldItem[] }[]; tags: string[] }>({ action: 'explore', picks: withIds }, 25000);
+  const r = await ask<{ groups: { from: string; items: WorldItem[] }[]; tags: string[] }>({ action: 'explore', picks: withIds }, 40000);
   return { groups: r.groups ?? [], tags: r.tags ?? [] };
 }
 
-/* ---------- the ready-made posters (names only: pictures and ids come from Qloo at run time) ---------- */
+/* ---------- the categories and ready-made lists (names only: ids and themes come from Qloo at run time) ---------- */
 
-export const WORLD_TABS: { key: 'all' | WorldType; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'tv_show', label: 'Shows & Anime' },
-  { key: 'movie', label: 'Movies' },
-  { key: 'artist', label: 'Music' },
-  { key: 'brand', label: 'Teams & Brands' },
-  { key: 'book', label: 'Books' },
+export type CategoryKey = 'sports' | 'movies' | 'shows' | 'books' | 'islamic';
+
+/** First the student picks whole areas, then things inside them. No music and no celebrities: these are the
+ *  worlds that make good analogies. "Islamic history" is Drrys' own list (Qloo has no taste data for it). */
+export const CATEGORIES: { key: CategoryKey; label: string; emoji: string; type: WorldType; qloo: boolean }[] = [
+  { key: 'sports', label: 'Sports', emoji: '⚽', type: 'brand', qloo: true },
+  { key: 'movies', label: 'Movies', emoji: '🎬', type: 'movie', qloo: true },
+  { key: 'shows', label: 'Shows & Anime', emoji: '📺', type: 'tv_show', qloo: true },
+  { key: 'books', label: 'Books', emoji: '📚', type: 'book', qloo: true },
+  { key: 'islamic', label: 'Islamic history', emoji: '🕌', type: 'history', qloo: false },
 ];
+export const categoryOf = (t: WorldType) => CATEGORIES.find((c) => c.type === t);
 
-/** Arabic and global favourites, mixed so the first screen already feels like "my world". */
-export const STARTERS: { name: string; type: WorldType }[] = [
-  { name: 'One Piece', type: 'tv_show' },
-  { name: 'Fairuz', type: 'artist' },
-  { name: 'Real Madrid', type: 'brand' },
-  { name: 'Interstellar', type: 'movie' },
-  { name: 'Attack on Titan', type: 'tv_show' },
-  { name: 'Amr Diab', type: 'artist' },
-  { name: 'Minecraft', type: 'brand' },
-  { name: 'Breaking Bad', type: 'tv_show' },
-  { name: 'Taylor Swift', type: 'artist' },
-  { name: 'Spirited Away', type: 'movie' },
-  { name: 'FC Barcelona', type: 'brand' },
-  { name: 'Bab Al-Hara', type: 'tv_show' },
-  { name: 'Umm Kulthum', type: 'artist' },
-  { name: 'The Dark Knight', type: 'movie' },
-  { name: 'Naruto', type: 'tv_show' },
-  { name: 'Wegz', type: 'artist' },
-  { name: 'Harry Potter and the Philosopher\'s Stone', type: 'book' },
-  { name: 'Stranger Things', type: 'tv_show' },
-  { name: 'Coldplay', type: 'artist' },
-  { name: 'Spider-Man: Into the Spider-Verse', type: 'movie' },
-  { name: 'PlayStation', type: 'brand' },
-  { name: 'Demon Slayer', type: 'tv_show' },
-  { name: 'BTS', type: 'artist' },
-  { name: 'Inception', type: 'movie' },
-  { name: 'The Alchemist', type: 'book' },
-  { name: 'Friends', type: 'tv_show' },
-  { name: 'Drake', type: 'artist' },
-  { name: 'Formula 1', type: 'brand' },
-  { name: 'Toy Story', type: 'movie' },
-  { name: 'Atomic Habits', type: 'book' },
-  { name: 'Squid Game', type: 'tv_show' },
-  { name: 'Nike', type: 'brand' },
-  { name: 'The Little Prince', type: 'book' },
-  { name: 'Avengers: Endgame', type: 'movie' },
-  { name: 'Sherlock', type: 'tv_show' },
-  { name: '1984', type: 'book' },
-];
+export const STARTERS: Record<CategoryKey, string[]> = {
+  sports: ['Real Madrid', 'FC Barcelona', 'Liverpool F.C.', 'Manchester City', 'Al Hilal', 'Al Ahly', 'Al-Faisaly', 'Bayern Munich', 'Formula 1', 'NBA', 'Paris Saint-Germain', 'Juventus'],
+  movies: ['The Message', 'Lion of the Desert', 'Interstellar', 'Spirited Away', 'Toy Story', 'Finding Nemo', 'Up', 'Ratatouille', 'Kung Fu Panda', 'How to Train Your Dragon', 'Inception', 'The Lion King'],
+  shows: ['One Piece', 'Captain Tsubasa', 'Detective Conan', 'Attack on Titan', 'Naruto', 'Hunter x Hunter', 'Resurrection: Ertugrul', 'Omar', 'Avatar: The Last Airbender', 'Planet Earth', 'Sherlock', 'Haikyu!!'],
+  books: ['Atomic Habits', 'The Sealed Nectar', "Don't Be Sad", 'The 7 Habits of Highly Effective People', 'Rich Dad Poor Dad', 'The Little Prince', 'Thinking, Fast and Slow', 'The Adventures of Sherlock Holmes', '1984', 'Deep Work', 'The Muqaddimah', "Man's Search for Meaning"],
+  islamic: [
+    'Khalid ibn al-Walid',
+    'Umar ibn al-Khattab',
+    'Abu Bakr al-Siddiq',
+    'Ali ibn Abi Talib',
+    'Salah al-Din al-Ayyubi',
+    'Muhammad al-Fatih',
+    'The Battle of Badr',
+    'The Battle of Yarmouk',
+    'The Hijra',
+    'Building the Prophet’s Mosque',
+    'The House of Wisdom',
+    'Ibn al-Haytham',
+  ],
+};
 
-/** Shown on a poster that has no picture. */
-export const TYPE_EMOJI: Record<WorldType, string> = { tv_show: '📺', movie: '🎬', artist: '🎵', brand: '⭐', book: '📚', person: '🌟', podcast: '🎙️' };
+/** Shown on every card instead of a picture. */
+export const TYPE_EMOJI: Record<WorldType, string> = { tv_show: '📺', movie: '🎬', artist: '🎵', brand: '⚽', book: '📚', person: '🌟', podcast: '🎙️', history: '🕌' };
 
-export const TYPE_LABEL: Record<WorldType, string> = { tv_show: 'Show', movie: 'Movie', artist: 'Music', brand: 'Team / brand', book: 'Book', person: 'Person', podcast: 'Podcast' };
+export const TYPE_LABEL: Record<WorldType, string> = { tv_show: 'Show', movie: 'Movie', artist: 'Music', brand: 'Sports team', book: 'Book', person: 'Person', podcast: 'Podcast', history: 'Islamic history' };
 
 /** Coco's quick reaction to a pick (written by hand, no AI, so it's instant). */
 const COMMENTS: Record<WorldType, string[]> = {
-  tv_show: ['{n}? You have great taste.', '{n}! Respect.', 'Ooh, {n}. Good one.'],
-  movie: ['{n}? A classic.', '{n}! Great pick.', 'I love {n} too.'],
-  artist: ['{n}? Classy.', '{n} on repeat? Same.', 'Good ears! {n}.'],
+  tv_show: ['{n}? Great taste.', '{n}! Respect.', 'Ooh, {n}. Good one.'],
+  movie: ['{n}? A classic.', '{n}! Great pick.', 'I like {n} too.'],
+  artist: ['{n}? Nice.'],
   brand: ['{n}! Let’s go!', '{n} fan? Nice.', '{n}! Great choice.'],
   book: ['A reader! {n} is a great one.', '{n}? Smart pick.'],
-  person: ['{n}? Nice.', 'Big {n} fan? Love it.'],
+  person: ['{n}? Nice.'],
   podcast: ['{n}? Good listen.'],
+  history: ['{n}: there’s so much to learn from it.', 'Great choice. {n} has a lot to teach us.'],
 };
 export function cocoComment(item: WorldItem, nth: number) {
   const list = COMMENTS[item.type] ?? COMMENTS.tv_show;
   return list[nth % list.length].replace('{n}', item.name);
 }
-
-/** If Qloo can't be reached: the simple interest tiles from before (they still feed Coco's analogies). */
-export const FALLBACK_INTERESTS = ['Gaming', 'Football', 'Cars', 'UFC', 'Tech', 'Anime', 'Basketball', 'Music'];

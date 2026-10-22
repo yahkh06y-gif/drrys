@@ -48,8 +48,9 @@ export type CocoStyle = 'friendly' | 'calm' | 'direct' | 'playful';
 export type Depth = 'quick' | 'balanced' | 'deep';
 
 /** Something the student loves, found in Qloo (id = Qloo entity id). Picks typed without Qloo have no id. */
-export type WorldType = 'tv_show' | 'movie' | 'artist' | 'brand' | 'book' | 'person' | 'podcast';
-export type WorldItem = { id?: string; name: string; type: WorldType; image?: string; tags?: string[] };
+// history: Drrys' own "Islamic history" list (not from Qloo). artist / person / podcast are no longer offered.
+export type WorldType = 'tv_show' | 'movie' | 'artist' | 'brand' | 'book' | 'person' | 'podcast' | 'history';
+export type WorldItem = { id?: string; name: string; type: WorldType; tags?: string[] };
 /** The student's world: what they picked, what Qloo found that fans of it love, and its themes (tags). */
 export type World = { picks: WorldItem[]; because: { from: string; items: WorldItem[] }[]; tags: string[] };
 /** The promise made at the end of onboarding: one for the whole forest. */

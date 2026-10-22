@@ -39,7 +39,7 @@ export default function First() {
     if (!pick) return setAnalogy(null);
     explainWithWorld(
       { name: concept.name, usual: concept.usual, field: fieldName },
-      { name: pick.name, kind: pick.id ? TYPE_LABEL[pick.type] : 'interest', themes: pick.tags?.length ? pick.tags : world.tags },
+      { name: pick.name, kind: TYPE_LABEL[pick.type], themes: pick.tags?.length ? pick.tags : world.tags },
     )
       .then((a) => live && setAnalogy(a))
       .catch(() => live && setAnalogy(null));
@@ -83,8 +83,8 @@ export default function First() {
           <Animated.View style={[face, { backgroundColor: C.white, borderColor: C.bark, gap: 12 }, front]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               {pick && personal && (
-                <View style={{ width: 46, height: 69, borderRadius: 8, overflow: 'hidden', backgroundColor: C.sand, alignItems: 'center', justifyContent: 'center' }}>
-                  {pick.image ? <Image source={{ uri: pick.image }} style={{ width: '100%', height: '100%' }} contentFit="cover" /> : <Text style={{ fontSize: 22 }}>{TYPE_EMOJI[pick.type]}</Text>}
+                <View style={{ width: 46, height: 46, borderRadius: 23, overflow: 'hidden', backgroundColor: C.sand, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 24 }}>{TYPE_EMOJI[pick.type]}</Text>
                 </View>
               )}
               <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 22, lineHeight: 27, color: C.teal }}>{analogy === undefined ? concept.name : title}</Text>

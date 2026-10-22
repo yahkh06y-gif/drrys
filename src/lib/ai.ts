@@ -628,6 +628,7 @@ export async function explainWithWorld(
 Rules:
 - Build a single analogy that maps the parts of the idea onto that world. The concept must stay accurate: never bend the science to fit the story.
 - Only mention characters, events or details of that world you are sure about. When unsure, use its general themes (given below) instead.
+- If the student's world is from Islamic history, speak about its people and events with respect and use only well-established facts.
 - 3 or 4 short sentences, simple English, at most 70 words. Family-friendly. No emojis.
 Return ONLY JSON: {"analogy": "..."}`,
     [

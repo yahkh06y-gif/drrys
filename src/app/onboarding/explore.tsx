@@ -2,7 +2,6 @@
 // the map grow (labor illusion: seeing the work makes the result feel earned). Then Coco shows what he
 // found, "Because you love X → …", and anything that isn't you can be removed.
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
@@ -20,7 +19,7 @@ import { C, F } from '@/theme';
 const MIN_MS = 4000; // even if Qloo answers sooner: the student should see the exploring
 const LINES = (picks: WorldItem[]) => [
   `Looking at what ${picks[0]?.name ?? 'your'} fans love…`,
-  'Finding music that matches your taste…',
+  'Finding stories that match your taste…',
   'Reading what your world is about…',
   picks[1] ? `Following the trail from ${picks[1].name}…` : 'Connecting the dots…',
 ];
@@ -140,7 +139,7 @@ export default function Explore() {
 function Thumb({ item, size }: { item: WorldItem; size: number }) {
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: C.sand, borderWidth: 2, borderColor: C.white, alignItems: 'center', justifyContent: 'center' }}>
-      {item.image ? <Image source={{ uri: item.image }} style={{ width: '100%', height: '100%' }} contentFit="cover" /> : <Text style={{ fontSize: size * 0.4 }}>{TYPE_EMOJI[item.type]}</Text>}
+      <Text style={{ fontSize: size * 0.45 }}>{TYPE_EMOJI[item.type]}</Text>
     </View>
   );
 }
@@ -174,8 +173,11 @@ function Constellation({ size, picks, shown }: { size: number; picks: WorldItem[
       {picks.map((p, i) => {
         const q = at(angleOf(i), r1);
         return (
-          <View key={p.id ?? p.name} style={{ position: 'absolute', left: q.x - 27, top: q.y - 27 }}>
+          <View key={p.id ?? p.name} style={{ position: 'absolute', left: q.x - 40, top: q.y - 27, width: 80, alignItems: 'center' }}>
             <Thumb item={p} size={54} />
+            <Text numberOfLines={1} style={{ fontFamily: F.bold, fontSize: 10, color: C.white, marginTop: 2 }}>
+              {p.name}
+            </Text>
           </View>
         );
       })}
