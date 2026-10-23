@@ -2,7 +2,7 @@
 // The app never holds the Qloo key: every call goes through Drrys' server function (supabase/functions/qloo).
 // If Qloo can't be reached (offline, or the hackathon key has expired), every call fails quietly: the
 // ready-made lists still work, only the "more like this" and the exploring are skipped.
-// No pictures are shown anywhere: Qloo can't say what's in an image, so Drrys shows names and icons only.
+// Pictures come straight from Qloo; the server drops anything adult or unsuitable first. Things without one show an icon.
 import { callFunction } from '@/lib/cloud';
 import type { WorldItem, WorldType } from '@/store';
 
@@ -72,7 +72,7 @@ export const STARTERS: Record<CategoryKey, string[]> = {
   ],
 };
 
-/** Shown on every card instead of a picture. */
+/** Shown on a card when there's no picture. */
 export const TYPE_EMOJI: Record<WorldType, string> = { tv_show: '📺', movie: '🎬', artist: '🎵', brand: '⚽', book: '📚', person: '🌟', podcast: '🎙️', history: '🕌' };
 
 export const TYPE_LABEL: Record<WorldType, string> = { tv_show: 'Show', movie: 'Movie', artist: 'Music', brand: 'Sports team', book: 'Book', person: 'Person', podcast: 'Podcast', history: 'Islamic history' };

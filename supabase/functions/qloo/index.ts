@@ -18,11 +18,12 @@ type Kind = (typeof TYPES)[number];
 const urn = (t: Kind) => `urn:entity:${t}`;
 
 // Safety: anything adult, romantic, or about alcohol, gambling or drugs is dropped before it reaches the app
-// (name, tags and age rating are checked). Pictures are sent as links; the app checks each one with the AI
-// before showing it (see src/lib/pictures.ts), because Qloo can't tell what's in an image.
+// together with its picture (name, tags and age rating are checked). No AI is used: pictures come straight
+// from Qloo, so the onboarding stays fast and costs nothing.
 const BLOCK =
-  /\b(porn\w*|erotic\w*|adult (film|video|content|animation)|hentai|ecchi|harem|nsfw|xxx|sex|sexy|sexual\w*|nudity|nude|strip(per|tease| club)|fetish|playboy|onlyfans|smut|seduct\w*|prostitut\w*|romance|romantic|love stor(y|ies)|rom-?com|dating|affair|lgbt\w*|alcohol\w*|beer|wine|whisk(e)?y|vodka|drinking|drunk\w*|bar ?crawl|casino\w*|gambl\w*|poker|betting|drugs?|drug dealing|cocaine|heroin|marijuana|cannabis|weed|stoner)\b/i;
-const BLOCK_RATING = /^(nc-?17|x|xxx|r18\+?|ao)$/i;
+  /\b(porn\w*|erotic\w*|adult (film|video|content|animation)|hentai|ecchi|harem|nsfw|xxx|sex|sexy|sexual\w*|nudity|nude|strip(per|tease| club)|fetish|playboy|onlyfans|smut|seduct\w*|prostitut\w*|romance|romantic|love stor(y|ies)|rom-?com|dating|affair|lgbt\w*|alcohol\w*|beer|wine|whisk(e)?y|vodka|drinking|drunk\w*|bar ?crawl|casino\w*|gambl\w*|poker|betting|drugs?|drug dealing|cocaine|heroin|marijuana|cannabis|weed|stoner|mature|explicit|erotica|softcore|steamy|sensual|lust\w*|kiss\w*|lingerie|bikini|swimsuit|provocative)\b/i;
+// 17+/18+ ratings: films (R, NC-17), TV (TV-MA), anime (R - 17+, R+, Rx) and 18 / 18+ anywhere
+const BLOCK_RATING = /^\s*(r\b|r\+|rx|nc-?17|tv-?ma|ma\b|x{1,3}\b|ao\b|r-?18|18\+?\b)/i;
 
 type Item = { id: string; name: string; type: Kind; image?: string; tags: string[] };
 
@@ -127,7 +128,8 @@ Deno.serve(async (req) => {
       case 'search': {
         const q = clean(body.query);
         if (q.length < 2) return json({ items: [] });
-        return json({ items: await search(q, asKind(body.type)) });
+        const items = await search(q, asKind(body.type));
+        return json({ items });
       }
 
       // the ready-made posters: names written in the app, turned into real Qloo things (with pictures)
@@ -157,7 +159,8 @@ Deno.serve(async (req) => {
         const type = asKind(body.type) ?? 'tv_show';
         if (!id) return json({ items: [] });
         // more of the same kind: a team's fans → more teams, a show's fans → more shows…
-        return json({ items: await related([id], type, 3) });
+        const items = await related([id], type, 3);
+        return json({ items });
       }
 
       // "Coco is exploring your world": for each pick, what else its fans love, and the themes of the whole world

@@ -643,29 +643,3 @@ The student loves: ${world.name} (${world.kind}).${world.themes.length ? ` Its t
   const a = parseJSON<{ analogy?: string }>(raw).analogy?.trim();
   return a || null;
 }
-
-/** Pictures from Qloo are checked before the student sees them: Drrys is made for students who keep
- *  to Islamic modesty (lowering the gaze), so a picture is shown only when it's clearly suitable.
- *  Returns one true/false per picture (true = show it). Anything unsure, or any failure, means hide. */
-export async function checkPictures(pics: { data: string; mime: 'image/png' | 'image/jpeg' | 'image/webp' }[]): Promise<boolean[]> {
-  if (!aiEnabled || !pics.length) return pics.map(() => false);
-  const content: Block[] = pics.flatMap((p, i) => [
-    { type: 'text', text: `Picture ${i + 1}:` } as Block,
-    { type: 'image', source: { type: 'base64', media_type: p.mime, data: p.data } } as Block,
-  ]);
-  content.push({ type: 'text', text: `Judge all ${pics.length} pictures.` });
-  const raw = await call(
-    `You check pictures for a study app used by Muslim students who keep to Islamic modesty.
-For each picture answer "ok" ONLY if it is clearly suitable, which means it shows:
-- no woman or girl at all (real, drawn or animated),
-- no revealing clothing on anyone, no romance, hugging between couples or kissing,
-- no alcohol, gambling, drugs, blood, gore or frightening images.
-Logos, objects, places, animals, men or boys dressed modestly, and cartoons without women or girls are fine.
-If you are not sure, answer "hide".
-Return ONLY JSON: {"verdicts": ["ok" or "hide", one per picture, in order]}`,
-    content,
-    300,
-  );
-  const v = parseJSON<{ verdicts?: string[] }>(raw).verdicts ?? [];
-  return pics.map((_, i) => v[i] === 'ok');
-}
