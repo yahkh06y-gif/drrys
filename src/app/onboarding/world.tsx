@@ -2,8 +2,9 @@
 //   1. areas: sports, movies, shows & anime, books, history (big cards)
 //   2. niches inside them, straight from Qloo: its sports, its genres, its history genres (cover = the most
 //      popular thing in the niche). Only Islamic history is Drrys' own (Qloo has no data for it).
-//   3. things: the popular teams, players and titles in those niches, big pictures with the name under them,
-//      plus search. Every pick teaches the list: three related things (from Qloo) appear right after it.
+//   3. things: one tab per area (Sports, Movies…), and in it one row per niche (Mystery, then its films;
+//      Adventure, then its films…): the popular teams, players and titles, big pictures with the name under
+//      them, plus search. Every pick teaches the list: three related things (from Qloo) appear right after it.
 // The tray at the bottom always shows what's picked: tap one to take it out, wherever it came from.
 // An area's niches start loading the moment it's picked (and a niche's things too), so the next step is
 // usually ready on arrival.
@@ -45,7 +46,7 @@ export default function World() {
   const [nichesBy, setNichesBy] = useState<Partial<Record<CategoryKey, Load<Niche[]>>>>({});
   const [chosen, setChosen] = useState<string[]>([]); // niche keys
   const [shelves, setShelves] = useState<Record<string, Load<WorldItem[]>>>({});
-  const [tab, setTab] = useState('');
+  const [tab, setTab] = useState<CategoryKey | ''>('');
   const [picked, setPicked] = useState<WorldItem[]>([]);
   const [fresh, setFresh] = useState<Set<string>>(new Set()); // things the list just learned
   const [line, setLine] = useState('What do you love?');
@@ -56,8 +57,12 @@ export default function World() {
 
   const allNiches = useMemo(() => areas.flatMap((a) => (Array.isArray(nichesBy[a]) ? (nichesBy[a] as Niche[]) : [])), [areas, nichesBy]);
   const picks = useMemo(() => allNiches.filter((n) => chosen.includes(n.key)), [allNiches, chosen]);
-  const niche = picks.find((n) => n.key === tab) ?? picks[0];
+  const tabs = areas.filter((a) => picks.some((n) => n.area === a));
+  const area = tab && tabs.includes(tab) ? tab : tabs[0];
+  const rows = picks.filter((n) => n.area === area);
+  const lead = rows[0]; // where searched picks go
   const posterW = Math.floor((width - 40 - GAP * 2) / 3);
+  const rowW = Math.floor((width - 40) / 3.3); // a little of the next poster shows, so the row reads as scrollable
   const nicheW = Math.floor((width - 40 - GAP) / 2);
 
   const back = useCallback(() => {
@@ -99,26 +104,29 @@ export default function World() {
     setLine('Ooh, nice. Go deeper.');
   };
   const toThings = () => {
-    setTab(picks[0]?.key ?? '');
+    setTab(picks[0]?.area ?? '');
     setStep('things');
     setLine(picked.length ? 'Anything else?' : `Pick ${MIN} or more.`);
   };
 
-  /* ---------- search (inside the open niche; Islamic history searches its own list) ---------- */
+  /* ---------- search (inside the open area; Islamic history searches its own list too) ---------- */
 
   useEffect(() => {
     const q = query.trim();
-    if (q.length < 2 || !niche) return setResults(null);
-    if (niche.local) return setResults(niche.local.filter((x) => x.name.toLowerCase().includes(q.toLowerCase())));
+    if (q.length < 2 || !lead) return setResults(null);
+    const mine = rows.flatMap((r) => r.local ?? []).filter((x) => x.name.toLowerCase().includes(q.toLowerCase()));
+    const qloo = rows.find((r) => !r.local);
+    if (!qloo) return setResults(mine);
     setSearching(true);
     const t = setTimeout(() => {
-      searchWorld(q, niche.area === 'sports' ? 'sports' : niche.type)
-        .then(setResults)
-        .catch(() => setResults([]))
+      searchWorld(q, area === 'sports' ? 'sports' : qloo.type)
+        .then((found) => setResults([...mine, ...found]))
+        .catch(() => setResults(mine))
         .finally(() => setSearching(false));
     }, 450);
     return () => clearTimeout(t);
-  }, [query, niche]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, area, chosen]);
 
   /* ---------- picking things ---------- */
 
@@ -128,15 +136,15 @@ export default function World() {
     setPicked((p) => p.filter((y) => keyOf(y) !== keyOf(x)));
   };
 
-  const toggle = (x: WorldItem) => {
+  const toggle = (x: WorldItem, row?: string) => {
     if (isPicked(x)) return remove(x);
     tap('select');
     if (picked.length >= MAX) return setLine('That’s plenty! Tap one below to swap it.');
     setPicked((p) => [...p, x]);
     setLine(cocoComment(x, picked.length));
-    if (!niche) return;
-    const home = niche.key;
-    // a searched (or typed) pick joins the open list
+    const home = row ?? lead?.key;
+    if (!home) return;
+    // a searched (or typed) pick joins the area's first row
     if (results) {
       setShelves((m) => {
         const list = Array.isArray(m[home]) ? (m[home] as WorldItem[]) : [];
@@ -163,8 +171,7 @@ export default function World() {
   };
 
   const typed = query.trim();
-  const canAdd = !!results && !!niche && typed.length >= 2 && !results.some((r) => r.name.toLowerCase() === typed.toLowerCase());
-  const shelf = niche ? (results ?? shelves[niche.key]) : undefined;
+  const canAdd = !!results && !!lead && typed.length >= 2 && !results.some((r) => r.name.toLowerCase() === typed.toLowerCase());
 
   const next = () => {
     set({ world: { picks: picked, because: [], tags: [] } });
@@ -236,13 +243,16 @@ export default function World() {
       {step === 'things' && (
         <>
           <View style={{ paddingTop: 12, gap: 10 }}>
-            {picks.length > 1 && (
+            {tabs.length > 1 && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}>
-                {picks.map((n) => {
-                  const on = niche?.key === n.key;
+                {tabs.map((t) => {
+                  const cat = CATEGORIES.find((c) => c.key === t)!;
+                  const on = area === t;
                   return (
-                    <Pressable key={n.key} onPress={() => (tap('select'), setQuery(''), setTab(n.key))} style={{ paddingHorizontal: 14, height: 36, justifyContent: 'center', borderRadius: 99, backgroundColor: on ? C.teal : C.sand, borderWidth: 1, borderColor: on ? C.teal : C.line }}>
-                      <Text style={{ fontFamily: F.bold, fontSize: 13, color: on ? C.white : C.teal }}>{n.label}</Text>
+                    <Pressable key={t} onPress={() => (tap('select'), setQuery(''), setTab(t), scroller.current?.scrollTo({ y: 0, animated: false }))} style={{ paddingHorizontal: 14, height: 36, justifyContent: 'center', borderRadius: 99, backgroundColor: on ? C.teal : C.sand, borderWidth: 1, borderColor: on ? C.teal : C.line }}>
+                      <Text style={{ fontFamily: F.bold, fontSize: 13, color: on ? C.white : C.teal }}>
+                        {cat.emoji} {cat.label}
+                      </Text>
                     </Pressable>
                   );
                 })}
@@ -260,21 +270,43 @@ export default function World() {
               ) : null}
             </View>
           </View>
-          <ScrollView ref={scroller} contentContainerStyle={{ padding: 20, paddingTop: 14, flexDirection: 'row', flexWrap: 'wrap', columnGap: GAP, rowGap: 16 }} keyboardShouldPersistTaps="handled">
-            {shelf === 'error' ? (
-              niche && <Retry onPress={() => loadShelf(niche)} />
-            ) : shelf === 'loading' || shelf === undefined ? (
-              Array.from({ length: 9 }, (_, i) => <Pulse key={i} style={{ width: posterW, height: posterW * 1.5 + 22, borderRadius: 12 }} />)
+          <ScrollView ref={scroller} contentContainerStyle={{ paddingVertical: 14, gap: 22 }} keyboardShouldPersistTaps="handled">
+            {results ? (
+              // search: one grid of what was found
+              <View style={{ paddingHorizontal: 20, flexDirection: 'row', flexWrap: 'wrap', columnGap: GAP, rowGap: 16 }}>
+                {results.map((x) => (
+                  <Poster key={keyOf(x)} item={x} width={posterW} selected={isPicked(x)} fresh={false} onPress={() => toggle(x)} />
+                ))}
+                {canAdd && lead && (
+                  <Pressable
+                    onPress={() => toggle({ name: typed, type: lead.type })}
+                    style={{ width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: C.title }}>
+                    <Ionicons name="add-circle-outline" size={18} color={C.title} />
+                    <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 14, color: C.title }}>Add “{typed}”</Text>
+                  </Pressable>
+                )}
+              </View>
             ) : (
-              shelf.map((x) => <Poster key={keyOf(x)} item={x} width={posterW} selected={isPicked(x)} fresh={fresh.has(keyOf(x))} onPress={() => toggle(x)} />)
-            )}
-            {canAdd && niche && (
-              <Pressable
-                onPress={() => toggle({ name: typed, type: niche.type })}
-                style={{ width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: C.title }}>
-                <Ionicons name="add-circle-outline" size={18} color={C.title} />
-                <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 14, color: C.title }}>Add “{typed}”</Text>
-              </Pressable>
+              // one row per niche: its name, then its things
+              rows.map((n) => {
+                const got = shelves[n.key];
+                return (
+                  <View key={n.key} style={{ gap: 10 }}>
+                    <Text style={{ paddingHorizontal: 20, fontFamily: F.bold, fontSize: 18, color: C.teal }}>{n.label}</Text>
+                    {got === 'error' ? (
+                      <View style={{ paddingHorizontal: 20 }}>
+                        <Retry onPress={() => loadShelf(n)} />
+                      </View>
+                    ) : (
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: GAP }}>
+                        {got === 'loading' || got === undefined
+                          ? [0, 1, 2, 3].map((i) => <Pulse key={i} style={{ width: rowW, height: rowW * 1.5 + 22, borderRadius: 12 }} />)
+                          : got.map((x) => <Poster key={keyOf(x)} item={x} width={rowW} selected={isPicked(x)} fresh={fresh.has(keyOf(x))} onPress={() => toggle(x, n.key)} />)}
+                      </ScrollView>
+                    )}
+                  </View>
+                );
+              })
             )}
           </ScrollView>
         </>

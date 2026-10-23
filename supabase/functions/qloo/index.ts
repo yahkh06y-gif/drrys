@@ -170,7 +170,7 @@ async function sports(): Promise<Niche[]> {
       const id = String(t?.tag_id ?? t?.id ?? '');
       const m = id.match(/^urn:tag:genre:brand:sports_organization:([a-z_]+)$/);
       if (!m || m[1] === 'league_tournament' || found.has(id) || !org.entity_id) continue;
-      found.set(id, { key: id, area: 'sports', label: nice(String(t.name ?? m[1])), type: 'brand', tag: id, anchor: org.entity_id });
+      found.set(id, { key: `sports:${id}`, area: 'sports', label: nice(String(t.name ?? m[1])), type: 'brand', tag: id, anchor: org.entity_id });
     }
   }
   return [...found.values()].slice(0, 10);
@@ -201,7 +201,7 @@ async function nichesOf(area: Area): Promise<Niche[]> {
     found = tags
       .filter((t) => typeof t?.id === 'string' && typeof t?.name === 'string' && !SKIP_GENRE.test(t.id) && !BLOCK.test(t.name) && !seen.has(t.id) && seen.add(t.id))
       .slice(0, 16)
-      .map((t) => ({ key: t.id, area, label: nice(t.name), type: area === 'history' ? 'book' : type, tag: t.id }));
+      .map((t) => ({ key: `${area}:${t.id}`, area, label: nice(t.name), type: area === 'history' ? 'book' : type, tag: t.id }));
   }
   // keep only niches with suitable things in them; the cover is the most popular one's picture
   // (the same call as the niche's own list later, so that one is already cached)
