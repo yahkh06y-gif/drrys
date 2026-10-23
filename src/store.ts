@@ -48,7 +48,7 @@ export type CocoStyle = 'friendly' | 'calm' | 'direct' | 'playful';
 export type Depth = 'quick' | 'balanced' | 'deep';
 
 /** Something the student loves, found in Qloo (id = Qloo entity id). Picks typed without Qloo have no id. */
-// history: Drrys' own "Islamic history" list (not from Qloo). artist / person / podcast are no longer offered.
+// history: Drrys' own lists (Islamic history, Ancient Egypt…; not from Qloo). person: athletes only, from the sports lists. artist / podcast are no longer offered.
 export type WorldType = 'tv_show' | 'movie' | 'artist' | 'brand' | 'book' | 'person' | 'podcast' | 'history';
 export type WorldItem = { id?: string; name: string; type: WorldType; image?: string; tags?: string[] }; // image: straight from Qloo
 /** The student's world: what they picked, what Qloo found that fans of it love, and its themes (tags). */

@@ -11,10 +11,13 @@ const BASE = 'https://hackathon.api.qloo.com';
 const KEY = Deno.env.get('QLOO_API_KEY') ?? '';
 
 // What a student can pick: shows, movies, books and teams (Qloo files sports teams under "brand").
-// No people, singers or podcasts: Drrys keeps to things that are good for explaining ideas, and that fit
+// No singers, actors or podcasts: Drrys keeps to things that are good for explaining ideas, and that fit
 // the values of the students it's made for.
 const TYPES = ['tv_show', 'movie', 'brand', 'book'] as const;
-type Kind = (typeof TYPES)[number];
+// Athletes are the only people: the app asks for them by name in its sports lists (search and resolve
+// with type "person"). They never come up unasked, and "more like this" for one gives teams, not people.
+const KINDS = [...TYPES, 'person'] as const;
+type Kind = (typeof KINDS)[number];
 const urn = (t: Kind) => `urn:entity:${t}`;
 
 // Safety: anything adult, romantic, or about alcohol, gambling or drugs is dropped before it reaches the app
@@ -61,7 +64,7 @@ function kindOf(e: any): Kind | undefined {
   const types: string[] = e?.types ?? (e?.subtype ? [e.subtype] : []);
   for (const t of types) {
     const k = String(t).split(':').pop() as Kind;
-    if ((TYPES as readonly string[]).includes(k)) return k;
+    if ((KINDS as readonly string[]).includes(k)) return k;
   }
   return undefined;
 }
@@ -79,7 +82,7 @@ function slim(e: any): Item | undefined {
 }
 
 const clean = (s: unknown, max = 60) => (typeof s === 'string' ? s.trim().slice(0, max) : '');
-const asKind = (t: unknown): Kind | undefined => ((TYPES as readonly string[]).includes(t as string) ? (t as Kind) : undefined);
+const asKind = (t: unknown): Kind | undefined => ((KINDS as readonly string[]).includes(t as string) ? (t as Kind) : undefined);
 
 async function search(query: string, type?: Kind, take = 8): Promise<Item[]> {
   const params: Record<string, string> = { query, take: String(take + 4) };
@@ -94,7 +97,7 @@ async function related(ids: string[], type: Kind, take: number): Promise<Item[]>
 }
 
 // What else a fan of this thing would love: more of the same kind, plus shows or movies (their themes are richest).
-const exploreTypes = (t: Kind): Kind[] => [t, t === 'tv_show' ? 'movie' : 'tv_show'];
+const exploreTypes = (t: Kind): Kind[] => [t === 'person' ? 'brand' : t, t === 'tv_show' ? 'movie' : 'tv_show'];
 
 /** Run jobs a few at a time (the hackathon key turns away bursts). */
 async function pool<T, R>(items: T[], size: number, job: (x: T) => Promise<R>): Promise<R[]> {
@@ -156,9 +159,10 @@ Deno.serve(async (req) => {
       // the grid learns: three things close to what was just picked
       case 'related': {
         const id = clean(body.id, 80);
-        const type = asKind(body.type) ?? 'tv_show';
+        const asked = asKind(body.type) ?? 'tv_show';
+        const type = asked === 'person' ? 'brand' : asked;
         if (!id) return json({ items: [] });
-        // more of the same kind: a team's fans → more teams, a show's fans → more shows…
+        // more of the same kind: a team's fans → more teams, a show's fans → more shows… (a player's fans → teams)
         const items = await related([id], type, 3);
         return json({ items });
       }

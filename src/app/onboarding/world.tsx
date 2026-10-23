@@ -1,42 +1,51 @@
-// "Show Coco your world" — two quick steps:
-//   1. the areas the student is into (sports, movies, shows & anime, books, Islamic history)
-//   2. three or more things inside those areas, from ready-made lists (recognition over recall), with
-//      search for anything missing. Every pick teaches the list: three related things (from Qloo) appear
-//      right after it. Islamic history is Drrys' own list: Qloo has no taste data for it.
-// Pictures come from Qloo and are shown only after the AI check (components/SafePicture); no music or
-// celebrities: see supabase/functions/qloo.
+// "Show Coco your world" — from wide to deep:
+//   1. the areas the student is into (sports, movies, shows & anime, books, history), as big picture cards
+//   2. for sports and history, which ones (football, basketball… / Islamic history, Ancient Egypt…)
+//   3. three or more things inside them: big pictures with the name under them, from ready-made lists
+//      (recognition over recall), with search for anything missing. Every pick teaches the list: three
+//      related things (from Qloo) appear right after it. History is Drrys' own list: Qloo has no taste data for it.
+// Pictures come straight from Qloo (the server drops anything adult first); no music or celebrities, and the
+// only people are athletes: see supabase/functions/qloo.
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COCO } from '@/art';
 import { SafePicture } from '@/components/SafePicture';
-import { Btn, Enter, OnbBar } from '@/components/ui';
+import { Btn, Choice, Enter, OnbBar } from '@/components/ui';
 import { useBack } from '@/lib/back';
 import { tap } from '@/lib/feedback';
 import { progressOf } from '@/lib/onboarding';
-import { CATEGORIES, categoryOf, cocoComment, relatedTo, resolveStarters, searchWorld, STARTERS, TYPE_EMOJI, type CategoryKey } from '@/lib/qloo';
+import { CATEGORIES, cocoComment, relatedTo, resolveStarters, searchWorld, shelvesFor, SUBS, TYPE_EMOJI, type CategoryKey, type Shelf } from '@/lib/qloo';
 import { useApp, type WorldItem } from '@/store';
 import { C, F } from '@/theme';
 
 const MIN = 3;
 const MAX = 8;
+const GAP = 12;
 const keyOf = (x: WorldItem) => x.id ?? `${x.type}:${x.name.toLowerCase()}`;
-type Pools = Record<CategoryKey, WorldItem[]>;
+type Step = 'areas' | 'subs' | 'things';
+type Pools = Record<string, WorldItem[]>;
 
-const startPools = (): Pools =>
-  Object.fromEntries(CATEGORIES.map((c) => [c.key, STARTERS[c.key].map((name) => ({ name, type: c.type }))])) as Pools;
+const ALL = shelvesFor(
+  CATEGORIES.map((c) => c.key),
+  [],
+);
+const startPools = (): Pools => Object.fromEntries(ALL.map((s) => [s.key, s.starters.map((x) => ({ ...x }))]));
+const toggleIn = <T,>(list: T[], x: T) => (list.includes(x) ? list.filter((y) => y !== x) : [...list, x]);
 
 export default function World() {
   const setProfile = useApp((s) => s.setProfile);
   const set = useApp((s) => s.set);
-  const [step, setStep] = useState<'areas' | 'things'>('areas');
+  const { width } = useWindowDimensions();
+  const [step, setStep] = useState<Step>('areas');
   const [areas, setAreas] = useState<CategoryKey[]>([]);
-  const [tab, setTab] = useState<CategoryKey>('sports');
+  const [subs, setSubs] = useState<string[]>([]);
+  const [tab, setTab] = useState(ALL[0].key);
   const [pools, setPools] = useState<Pools>(startPools);
   const [resolving, setResolving] = useState(false);
   const [picked, setPicked] = useState<WorldItem[]>([]);
@@ -46,68 +55,73 @@ export default function World() {
   const [results, setResults] = useState<WorldItem[] | null>(null);
   const [searching, setSearching] = useState(false);
   const scroller = useRef<ScrollView>(null);
-  const resolved = useRef(false);
-  const cat = CATEGORIES.find((c) => c.key === tab)!;
+  const resolved = useRef(new Set<string>()); // lists whose names Qloo has already turned into things
+  const shelves = useMemo(() => shelvesFor(areas, subs), [areas, subs]);
+  const shelf = shelves.find((s) => s.key === tab) ?? shelves[0] ?? ALL[0];
+  const deeper = areas.filter((a) => SUBS[a]);
+  const posterW = Math.floor((width - 40 - GAP * 2) / 3);
 
   const back = useCallback(() => {
-    if (step === 'things') return setStep('areas'), true;
+    if (step === 'things') return setQuery(''), setStep(deeper.length ? 'subs' : 'areas'), true;
+    if (step === 'subs') return setStep('areas'), true;
     return false;
-  }, [step]);
+  }, [step, deeper.length]);
   useBack(back);
 
+  // the ready-made names become real Qloo things (ids, pictures and themes), once per list
   const toThings = () => {
-    setTab(areas[0]);
+    const now = shelvesFor(areas, subs);
+    setTab(now[0].key);
     setStep('things');
     setLine('Now pick 3 or more things you love.');
-    // the ready-made names become real Qloo things (ids and themes), once
-    if (resolved.current) return;
-    resolved.current = true;
-    const ask = CATEGORIES.filter((c) => c.qloo).flatMap((c) => STARTERS[c.key].map((name) => ({ name, type: c.type, key: c.key })));
+    const todo = now.filter((s) => s.qloo && !resolved.current.has(s.key));
+    if (!todo.length) return;
+    todo.forEach((s) => resolved.current.add(s.key));
+    const ask = todo.flatMap((s) => s.starters.map((x) => ({ ...x, shelf: s.key })));
     setResolving(true);
     resolveStarters(ask.map(({ name, type }) => ({ name, type })))
       .then((found) => {
-        const next = startPools();
+        const hits = new Map<string, WorldItem>(); // "list/name" → the thing Qloo found
         const seen = new Set<string>();
         ask.forEach((a, i) => {
           const hit = found[i];
-          if (!hit) return;
-          const k = keyOf(hit);
-          if (seen.has(k)) return;
-          seen.add(k);
-          const list = next[a.key];
-          const j = list.findIndex((x) => x.name === a.name);
-          // the list keeps our spelling only when Qloo found something of a different kind
-          if (j >= 0 && hit.type === a.type) list[j] = hit;
+          // our spelling stays when Qloo found nothing, or something of another kind
+          if (!hit || hit.type !== a.type || seen.has(keyOf(hit))) return;
+          seen.add(keyOf(hit));
+          hits.set(`${a.shelf}/${a.name}`, hit);
         });
         setPools((cur) => {
-          // keep anything the student already added (searched or related)
-          const merged = { ...next };
-          (Object.keys(cur) as CategoryKey[]).forEach((k) => {
-            const extra = cur[k].filter((x) => !STARTERS[k].includes(x.name) && !merged[k].some((m) => keyOf(m) === keyOf(x)));
-            merged[k] = [...extra, ...merged[k]];
-          });
-          return merged;
+          const next = { ...cur };
+          todo.forEach((s) => (next[s.key] = cur[s.key].map((x) => (!x.id && hits.get(`${s.key}/${x.name}`)) || x)));
+          return next;
         });
-        setPicked((p) => p.map((x) => (x.id ? x : (next[categoryOf(x.type)?.key ?? 'sports']?.find((n) => n.name === x.name) ?? x))));
+        const byName = new Map([...hits.entries()].map(([k, v]) => [k.slice(k.indexOf('/') + 1), v]));
+        setPicked((p) => p.map((x) => (x.id ? x : (byName.get(x.name) ?? x))));
       })
-      .catch(() => {}) // Qloo unreachable: the lists still work, without "more like this"
+      .catch(() => {}) // Qloo unreachable: the lists still work, without pictures and "more like this"
       .finally(() => setResolving(false));
   };
 
-  // search, a moment after typing stops (Islamic history searches its own list)
+  const fromAreas = () => {
+    if (!deeper.length) return toThings();
+    setStep('subs');
+    setLine(deeper.length > 1 ? 'Nice! Now which ones?' : `Nice! Which ${CATEGORIES.find((c) => c.key === deeper[0])!.label.toLowerCase()}?`);
+  };
+
+  // search, a moment after typing stops (history searches its own list)
   useEffect(() => {
     const q = query.trim();
     if (q.length < 2) return setResults(null);
-    if (!cat.qloo) return setResults(pools[cat.key].filter((x) => x.name.toLowerCase().includes(q.toLowerCase())));
+    if (!shelf.qloo) return setResults(pools[shelf.key].filter((x) => x.name.toLowerCase().includes(q.toLowerCase())));
     setSearching(true);
     const t = setTimeout(() => {
-      searchWorld(q, cat.type)
+      searchWorld(q, shelf.type)
         .then(setResults)
         .catch(() => setResults([]))
         .finally(() => setSearching(false));
     }, 450);
     return () => clearTimeout(t);
-  }, [query, cat, pools]);
+  }, [query, shelf, pools]);
 
   const isPicked = (x: WorldItem) => picked.some((p) => keyOf(p) === keyOf(x));
 
@@ -117,7 +131,7 @@ export default function World() {
     if (picked.length >= MAX) return setLine(`That’s plenty! ${MAX} is the most I need.`);
     setPicked((p) => [...p, x]);
     setLine(cocoComment(x, picked.length));
-    const home = categoryOf(x.type)?.key ?? tab;
+    const home = shelf.key;
     // a searched (or typed) pick joins its list
     if (results) {
       setPools((cur) => (cur[home].some((c) => keyOf(c) === keyOf(x)) ? cur : { ...cur, [home]: [x, ...cur[home]] }));
@@ -145,7 +159,7 @@ export default function World() {
   const typed = query.trim();
   const canAdd = !!results && typed.length >= 2 && !results.some((r) => r.name.toLowerCase() === typed.toLowerCase());
 
-  const shown = useMemo(() => results ?? pools[tab], [results, pools, tab]);
+  const shown = useMemo(() => results ?? pools[shelf.key] ?? [], [results, pools, shelf]);
   const ready = picked.length >= MIN;
 
   const next = () => {
@@ -171,47 +185,37 @@ export default function World() {
       </View>
 
       {step === 'areas' ? (
-        <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
-          {CATEGORIES.map((c, k) => {
-            const on = areas.includes(c.key);
-            return (
-              <Enter key={c.key} delay={k * 50}>
-                <Pressable
-                  onPress={() => (tap('select'), setAreas((a) => (on ? a.filter((x) => x !== c.key) : [...a, c.key])))}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: on }}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 16, borderWidth: 2, borderBottomWidth: on ? 5 : 2, borderColor: on ? C.green : C.brown, backgroundColor: on ? C.cardSelected : C.card }}>
-                  <Text style={{ fontSize: 30 }}>{c.emoji}</Text>
-                  <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 20, color: C.teal }}>{c.label}</Text>
-                  <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={26} color={on ? C.green : C.lineStrong} />
-                </Pressable>
-              </Enter>
-            );
-          })}
+        <ScrollView contentContainerStyle={{ padding: 20, flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
+          {CATEGORIES.map((c, k) => (
+            <Enter key={c.key} delay={k * 40} style={{ width: '47%' }}>
+              <Choice label={c.icon !== undefined ? c.label : `${c.emoji} ${c.label}`} icon={c.icon} selected={areas.includes(c.key)} onPress={() => setAreas((a) => toggleIn(a, c.key))} />
+            </Enter>
+          ))}
+        </ScrollView>
+      ) : step === 'subs' ? (
+        <ScrollView contentContainerStyle={{ padding: 20, gap: 18 }}>
+          {deeper.map((a) => (
+            <View key={a} style={{ gap: 10 }}>
+              {deeper.length > 1 && <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.teal }}>{CATEGORIES.find((c) => c.key === a)!.label}</Text>}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
+                {SUBS[a]!.map((s, k) => (
+                  <Enter key={s.key} delay={k * 40} style={{ width: '47%' }}>
+                    <Choice label={s.icon !== undefined ? s.label : `${s.emoji} ${s.label}`} icon={s.icon} selected={subs.includes(s.key)} onPress={() => setSubs((x) => toggleIn(x, s.key))} />
+                  </Enter>
+                ))}
+              </View>
+            </View>
+          ))}
         </ScrollView>
       ) : (
         <>
           <View style={{ paddingHorizontal: 20, paddingTop: 12, gap: 10 }}>
-            {areas.length > 1 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                {CATEGORIES.filter((c) => areas.includes(c.key)).map((c) => {
-                  const on = tab === c.key;
-                  return (
-                    <Pressable key={c.key} onPress={() => (tap('select'), setQuery(''), setTab(c.key))} style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 99, backgroundColor: on ? C.teal : C.sand, borderWidth: 1, borderColor: on ? C.teal : C.line }}>
-                      <Text style={{ fontFamily: F.bold, fontSize: 13, color: on ? C.white : C.teal }}>
-                        {c.emoji} {c.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            )}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderRadius: 12, paddingHorizontal: 12 }}>
               <Ionicons name="search" size={16} color={C.muted} />
               <TextInput
                 value={query}
                 onChangeText={setQuery}
-                placeholder={`Can’t find it? Search ${cat.label.toLowerCase()}…`}
+                placeholder="Can’t find it? Search…"
                 placeholderTextColor="#A69A8A"
                 returnKeyType="search"
                 style={{ flex: 1, paddingVertical: 10, fontFamily: F.medium, fontSize: 14, color: C.ink }}
@@ -224,14 +228,21 @@ export default function World() {
                 </Pressable>
               ) : null}
             </View>
+            {shelves.length > 1 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                {shelves.map((s) => (
+                  <ShelfTab key={s.key} shelf={s} on={shelf.key === s.key} onPress={() => (tap('select'), setQuery(''), setTab(s.key))} />
+                ))}
+              </ScrollView>
+            )}
           </View>
-          <ScrollView ref={scroller} contentContainerStyle={{ padding: 20, paddingTop: 14, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }} keyboardShouldPersistTaps="handled">
+          <ScrollView ref={scroller} contentContainerStyle={{ padding: 20, paddingTop: 14, flexDirection: 'row', flexWrap: 'wrap', columnGap: GAP, rowGap: 16 }} keyboardShouldPersistTaps="handled">
             {shown.map((x) => (
-              <Thing key={keyOf(x)} item={x} selected={isPicked(x)} fresh={fresh.has(keyOf(x))} onPress={() => toggle(x)} />
+              <Poster key={keyOf(x)} item={x} width={posterW} selected={isPicked(x)} fresh={fresh.has(keyOf(x))} loading={resolving && shelf.qloo && !x.id} onPress={() => toggle(x)} />
             ))}
             {canAdd && (
               <Pressable
-                onPress={() => toggle({ name: typed, type: cat.type })}
+                onPress={() => toggle({ name: typed, type: shelf.type })}
                 style={{ width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: C.title }}>
                 <Ionicons name="add-circle-outline" size={18} color={C.title} />
                 <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 14, color: C.title }}>Add “{typed}”</Text>
@@ -241,25 +252,22 @@ export default function World() {
         </>
       )}
 
-      {/* the way on: areas first, then the tray with what's picked */}
+      {/* the way on: areas, then which ones, then the tray with what's picked */}
       <View style={{ borderTopWidth: 1, borderColor: C.line, backgroundColor: C.paper, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12, gap: 10 }}>
         {step === 'things' && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }} style={{ flex: 1 }}>
               {picked.map((x) => (
-                <View key={keyOf(x)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 99, backgroundColor: C.mint, borderWidth: 1, borderColor: C.mintBorder, paddingHorizontal: 10, paddingVertical: 4 }}>
-                  <SafePicture uri={x.image} emoji={TYPE_EMOJI[x.type]} emojiSize={10} style={{ width: 18, height: 18, borderRadius: 9 }} />
-                  <Text numberOfLines={1} style={{ maxWidth: 110, fontFamily: F.bold, fontSize: 12, color: C.mossDark }}>
-                    {x.name}
-                  </Text>
-                </View>
+                <SafePicture key={keyOf(x)} uri={x.image} emoji={TYPE_EMOJI[x.type]} emojiSize={16} style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: C.green }} />
               ))}
             </ScrollView>
             <Text style={{ fontFamily: F.bold, fontSize: 15, color: ready ? C.green : C.muted }}>{picked.length} / 5</Text>
           </View>
         )}
         {step === 'areas' ? (
-          <Btn title="continue" mono disabled={!areas.length} kind={areas.length ? 'green' : 'light'} onPress={toThings} />
+          <Btn title="continue" mono disabled={!areas.length} kind={areas.length ? 'green' : 'light'} onPress={fromAreas} />
+        ) : step === 'subs' ? (
+          <Btn title="continue" mono kind="green" onPress={toThings} />
         ) : (
           <Btn title="continue" mono disabled={!ready} kind={ready ? 'green' : 'light'} onPress={next} />
         )}
@@ -268,7 +276,18 @@ export default function World() {
   );
 }
 
-function Thing({ item, selected, fresh, onPress }: { item: WorldItem; selected: boolean; fresh: boolean; onPress: () => void }) {
+function ShelfTab({ shelf, on, onPress }: { shelf: Shelf; on: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 99, backgroundColor: on ? C.teal : C.sand, borderWidth: 1, borderColor: on ? C.teal : C.line }}>
+      <Text style={{ fontFamily: F.bold, fontSize: 13, color: on ? C.white : C.teal }}>
+        {shelf.emoji} {shelf.label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/** A big picture with the name under it. */
+function Poster({ item, width, selected, fresh, loading, onPress }: { item: WorldItem; width: number; selected: boolean; fresh: boolean; loading: boolean; onPress: () => void }) {
   const s = useSharedValue(fresh ? 0.6 : 1);
   useEffect(() => {
     if (fresh) s.value = withSpring(1, { damping: 12 });
@@ -279,22 +298,26 @@ function Thing({ item, selected, fresh, onPress }: { item: WorldItem; selected: 
     onPress();
   };
   return (
-    <Pressable onPress={press} style={{ width: '48%' }} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} accessibilityLabel={item.name}>
-      <Animated.View
-        style={[
-          { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, borderWidth: selected ? 2 : 1, borderBottomWidth: selected ? 4 : 2, borderColor: selected ? C.green : fresh ? C.amber : C.lineStrong, backgroundColor: selected ? C.mint : C.white },
-          a,
-        ]}>
-        {item.type === 'history' ? (
-          <Text style={{ fontSize: 20 }}>{TYPE_EMOJI[item.type]}</Text>
-        ) : (
-          <SafePicture uri={item.image} emoji={TYPE_EMOJI[item.type]} emojiSize={18} style={{ width: 36, height: 54, borderRadius: 6 }} />
-        )}
-        <Text numberOfLines={2} style={{ flex: 1, fontFamily: F.bold, fontSize: 14, lineHeight: 18, color: C.ink }}>
-          {item.name}
-        </Text>
-        {selected && <Ionicons name="checkmark-circle" size={18} color={C.green} />}
+    <Pressable onPress={press} style={{ width }} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} accessibilityLabel={item.name}>
+      <Animated.View style={a}>
+        <View style={{ width, height: width * 1.5, borderRadius: 12, overflow: 'hidden', backgroundColor: C.sand, borderWidth: selected ? 3 : 1, borderColor: selected ? C.green : fresh ? C.amber : C.line, alignItems: 'center', justifyContent: 'center' }}>
+          {item.image ? (
+            <Image source={{ uri: item.image }} style={{ position: 'absolute', inset: 0 }} contentFit="cover" transition={200} />
+          ) : loading ? (
+            <ActivityIndicator color={C.teal} />
+          ) : (
+            <Text style={{ fontSize: 30, opacity: 0.6 }}>{TYPE_EMOJI[item.type]}</Text>
+          )}
+          {selected && (
+            <View style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 11, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="checkmark" size={15} color={C.white} />
+            </View>
+          )}
+        </View>
       </Animated.View>
+      <Text numberOfLines={2} style={{ fontFamily: F.bold, fontSize: 13, lineHeight: 16, color: C.ink, marginTop: 6 }}>
+        {item.name}
+      </Text>
     </Pressable>
   );
 }
