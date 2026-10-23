@@ -84,15 +84,19 @@ function slim(e: any): Item | undefined {
 const clean = (s: unknown, max = 60) => (typeof s === 'string' ? s.trim().slice(0, max) : '');
 const asKind = (t: unknown): Kind | undefined => ((KINDS as readonly string[]).includes(t as string) ? (t as Kind) : undefined);
 
-async function search(query: string, type?: Kind, take = 8): Promise<Item[]> {
+async function search(query: string, type?: Kind | Kind[], take = 8): Promise<Item[]> {
   const params: Record<string, string> = { query, take: String(take + 4) };
-  params.types = type ? urn(type) : TYPES.map(urn).join(',');
+  params.types = (type ? [type].flat() : TYPES).map(urn).join(',');
   const r = await qloo('/search', params);
   return (r?.results ?? []).map(slim).filter(Boolean).slice(0, take) as Item[];
 }
 
+// Age ratings Qloo filters by itself: films up to PG-13, TV up to TV-14 (unrated ones are left out too).
+const SAFE_RATINGS: Partial<Record<Kind, string>> = { movie: 'G,PG,PG-13', tv_show: 'TV-Y,TV-Y7,TV-G,TV-PG,TV-14' };
+const rated = (type: Kind): Record<string, string> => (SAFE_RATINGS[type] ? { 'filter.content_rating': SAFE_RATINGS[type]! } : {});
+
 async function related(ids: string[], type: Kind, take: number): Promise<Item[]> {
-  const r = await qloo('/v2/insights', { 'filter.type': urn(type), 'signal.interests.entities': ids.join(','), take: String(take + 3) });
+  const r = await qloo('/v2/insights', { 'filter.type': urn(type), 'signal.interests.entities': ids.join(','), ...rated(type), take: String(take + 3) });
   return (r?.results?.entities ?? []).map(slim).filter(Boolean).slice(0, take) as Item[];
 }
 
@@ -114,6 +118,99 @@ async function pool<T, R>(items: T[], size: number, job: (x: T) => Promise<R>): 
   return out;
 }
 
+/* ---------- Niches: the student goes from an area (sports, movies…) to a niche (basketball, comedy…) ----------
+ * Everything here comes from Qloo itself, not from a list we wrote: the genres Qloo files films, shows and
+ * books under; the sports of its sports organisations; the history genres of its books. A niche is offered only when
+ * Qloo has suitable things in it, and its cover is the picture of the most popular one. Worked out once per
+ * server instance and kept for a few hours. */
+type Area = 'sports' | 'movies' | 'shows' | 'books' | 'history';
+const AREAS: Area[] = ['sports', 'movies', 'shows', 'books', 'history'];
+type Niche = { key: string; area: Area; label: string; type: Kind; tag?: string; anchor?: string; cover?: string };
+
+// genres left out on purpose: romance, and the occult (horror, paranormal, supernatural)
+const SKIP_GENRE = /romance|horror|paranormal|supernatural/i;
+const ATHLETE = 'urn:tag:genre:person:athlete';
+const SPORTS_ORG = 'urn:tag:genre:brand:sports_organization';
+// how Qloo names a few things, and how a student would
+const RENAME: Record<string, string> = { soccer: 'Football', football: 'American football', motorsports: 'Motorsport' };
+const nice = (s: string) => {
+  const t = s.trim();
+  return RENAME[t.toLowerCase()] ?? t.charAt(0).toUpperCase() + t.slice(1);
+};
+
+/** Popular things inside one niche: teams and players for a sport, titles for a genre. */
+async function shelf(n: Pick<Niche, 'type' | 'tag' | 'anchor'>, take = 24): Promise<Item[]> {
+  if (!n.tag) return [];
+  if (n.anchor) {
+    // a sport: its teams, and the players fans of its best-known team or league love (men only: their
+    // photos come without a picture check)
+    const half = String(Math.ceil(take / 2) + 3);
+    const [teams, people] = await Promise.all([
+      qloo('/v2/insights', { 'filter.type': urn('brand'), 'filter.tags': n.tag, take: half }),
+      qloo('/v2/insights', { 'filter.type': urn('person'), 'filter.tags': ATHLETE, 'filter.gender': 'male', 'signal.interests.entities': n.anchor, take: half }).catch(() => undefined),
+    ]);
+    const a = ((teams?.results?.entities ?? []) as any[]).map(slim).filter(Boolean) as Item[];
+    const b = ((people?.results?.entities ?? []) as any[]).map(slim).filter(Boolean) as Item[];
+    // teams and players, taking turns
+    const out: Item[] = [];
+    for (let i = 0; out.length < take && (i < a.length || i < b.length); i++) [a[i], b[i]].forEach((x) => x && out.length < take && out.push(x));
+    return out;
+  }
+  const r = await qloo('/v2/insights', { 'filter.type': urn(n.type), 'filter.tags': n.tag, ...rated(n.type), take: String(take + 6) });
+  return ((r?.results?.entities ?? []) as any[]).map(slim).filter(Boolean).slice(0, take) as Item[];
+}
+
+/** The sports Qloo knows, found in the tags of its most popular sports organisations (soccer, basketball…),
+ *  most popular first. Each comes with its best-known team or league, to find the sport's players. */
+async function sports(): Promise<Niche[]> {
+  const r = await qloo('/v2/insights', { 'filter.type': urn('brand'), 'filter.tags': SPORTS_ORG, take: '50' });
+  const found = new Map<string, Niche>();
+  for (const org of (r?.results?.entities ?? []) as any[]) {
+    for (const t of (org?.tags ?? []) as any[]) {
+      const id = String(t?.tag_id ?? t?.id ?? '');
+      const m = id.match(/^urn:tag:genre:brand:sports_organization:([a-z_]+)$/);
+      if (!m || m[1] === 'league_tournament' || found.has(id) || !org.entity_id) continue;
+      found.set(id, { key: id, area: 'sports', label: nice(String(t.name ?? m[1])), type: 'brand', tag: id, anchor: org.entity_id });
+    }
+  }
+  return [...found.values()].slice(0, 10);
+}
+
+const nicheCache = new Map<Area, { at: number; v: Niche[] }>();
+
+async function nichesOf(area: Area): Promise<Niche[]> {
+  const hit = nicheCache.get(area);
+  if (hit && Date.now() - hit.at < TTL) return hit.v;
+  let found: Niche[] = [];
+  if (area === 'sports') {
+    found = await sports();
+  } else {
+    const type: Kind = area === 'movies' ? 'movie' : area === 'shows' ? 'tv_show' : 'book';
+    let tags: { id: string; name: string }[];
+    if (area === 'history') {
+      // Qloo's history genres (history, history of science…): its history lives in books
+      const r = await qloo('/v2/tags', { 'filter.query': 'history', take: '40' });
+      tags = ((r?.results?.tags ?? []) as any[]).filter((t) => String(t?.id).startsWith('urn:tag:genre:media:history'));
+    } else {
+      const r = await qloo('/v2/tags', { 'filter.parents.types': urn(type), take: '50' });
+      tags = r?.results?.tags ?? [];
+      // anime isn't one of Qloo's genres, but it is one of its sub-genres
+      if (area === 'shows') tags = [{ id: 'urn:tag:subgenre:qloo:anime', name: 'Anime' }, ...tags];
+    }
+    const seen = new Set<string>();
+    found = tags
+      .filter((t) => typeof t?.id === 'string' && typeof t?.name === 'string' && !SKIP_GENRE.test(t.id) && !BLOCK.test(t.name) && !seen.has(t.id) && seen.add(t.id))
+      .slice(0, 16)
+      .map((t) => ({ key: t.id, area, label: nice(t.name), type: area === 'history' ? 'book' : type, tag: t.id }));
+  }
+  // keep only niches with suitable things in them; the cover is the most popular one's picture
+  // (the same call as the niche's own list later, so that one is already cached)
+  const covers = await pool(found, 3, (n) => shelf(n).catch(() => [] as Item[]));
+  const v = found.map((n, i) => ({ ...n, cover: covers[i].find((x) => x.image)?.image })).filter((_, i) => covers[i].length > 0);
+  if (v.length) nicheCache.set(area, { at: Date.now(), v });
+  return v;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
@@ -131,7 +228,8 @@ Deno.serve(async (req) => {
       case 'search': {
         const q = clean(body.query);
         if (q.length < 2) return json({ items: [] });
-        const items = await search(q, asKind(body.type));
+        // "sports": teams and athletes
+        const items = await search(q, body.type === 'sports' ? ['brand', 'person'] : asKind(body.type));
         return json({ items });
       }
 
@@ -198,6 +296,22 @@ Deno.serve(async (req) => {
         }
         const tags = [...tagCount.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t).filter((t) => !BLOCK.test(t)).slice(0, 15);
         return json({ groups, tags });
+      }
+
+      // step 2 of "Show Coco your world": the niches inside the areas the student picked
+      case 'niches': {
+        const areas = (Array.isArray(body.areas) ? body.areas : []).filter((a: unknown): a is Area => AREAS.includes(a as Area));
+        const lists = await pool(areas, 2, (a: Area) => nichesOf(a).catch(() => [] as Niche[]));
+        return json({ niches: lists.flat() });
+      }
+
+      // step 3: the popular things inside one niche
+      case 'shelf': {
+        const type = asKind(body.type);
+        const tag = clean(body.tag, 120);
+        const anchor = clean(body.anchor, 80);
+        if (!type || !tag.startsWith('urn:tag:')) return json({ items: [] });
+        return json({ items: await shelf({ type, tag, anchor: anchor || undefined }) });
       }
 
       default:

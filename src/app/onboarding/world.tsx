@@ -1,17 +1,19 @@
-// "Show Coco your world" — from wide to deep:
-//   1. the areas the student is into (sports, movies, shows & anime, books, history), as big picture cards
-//   2. for sports and history, which ones (football, basketball… / Islamic history, Ancient Egypt…)
-//   3. three or more things inside them: big pictures with the name under them, from ready-made lists
-//      (recognition over recall), with search for anything missing. Every pick teaches the list: three
-//      related things (from Qloo) appear right after it. History is Drrys' own list: Qloo has no taste data for it.
-// Pictures come straight from Qloo (the server drops anything adult first); no music or celebrities, and the
-// only people are athletes: see supabase/functions/qloo.
+// "Show Coco your world" — from wide to narrow, each step one simple choice:
+//   1. areas: sports, movies, shows & anime, books, history (big cards)
+//   2. niches inside them, straight from Qloo: its sports, its genres, its history genres (cover = the most
+//      popular thing in the niche). Only Islamic history is Drrys' own (Qloo has no data for it).
+//   3. things: the popular teams, players and titles in those niches, big pictures with the name under them,
+//      plus search. Every pick teaches the list: three related things (from Qloo) appear right after it.
+// The tray at the bottom always shows what's picked: tap one to take it out, wherever it came from.
+// An area's niches start loading the moment it's picked (and a niche's things too), so the next step is
+// usually ready on arrival.
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View, type ViewStyle } from 'react-native';
+import Animated, { FadeIn, FadeOut, LinearTransition, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COCO } from '@/art';
@@ -20,7 +22,7 @@ import { Btn, Choice, Enter, OnbBar } from '@/components/ui';
 import { useBack } from '@/lib/back';
 import { tap } from '@/lib/feedback';
 import { progressOf } from '@/lib/onboarding';
-import { CATEGORIES, cocoComment, relatedTo, resolveStarters, searchWorld, shelvesFor, SUBS, TYPE_EMOJI, type CategoryKey, type Shelf } from '@/lib/qloo';
+import { CATEGORIES, cocoComment, nichesFor, relatedTo, searchWorld, shelfOf, TYPE_EMOJI, type CategoryKey, type Niche } from '@/lib/qloo';
 import { useApp, type WorldItem } from '@/store';
 import { C, F } from '@/theme';
 
@@ -28,15 +30,11 @@ const MIN = 3;
 const MAX = 8;
 const GAP = 12;
 const keyOf = (x: WorldItem) => x.id ?? `${x.type}:${x.name.toLowerCase()}`;
-type Step = 'areas' | 'subs' | 'things';
-type Pools = Record<string, WorldItem[]>;
-
-const ALL = shelvesFor(
-  CATEGORIES.map((c) => c.key),
-  [],
-);
-const startPools = (): Pools => Object.fromEntries(ALL.map((s) => [s.key, s.starters.map((x) => ({ ...x }))]));
 const toggleIn = <T,>(list: T[], x: T) => (list.includes(x) ? list.filter((y) => y !== x) : [...list, x]);
+type Step = 'areas' | 'niches' | 'things';
+type Load<T> = T | 'loading' | 'error';
+
+const TITLE: Record<Step, string> = { areas: 'Show Coco your world', niches: 'Narrow it down', things: 'Your favourites' };
 
 export default function World() {
   const setProfile = useApp((s) => s.setProfile);
@@ -44,97 +42,106 @@ export default function World() {
   const { width } = useWindowDimensions();
   const [step, setStep] = useState<Step>('areas');
   const [areas, setAreas] = useState<CategoryKey[]>([]);
-  const [subs, setSubs] = useState<string[]>([]);
-  const [tab, setTab] = useState(ALL[0].key);
-  const [pools, setPools] = useState<Pools>(startPools);
-  const [resolving, setResolving] = useState(false);
+  const [nichesBy, setNichesBy] = useState<Partial<Record<CategoryKey, Load<Niche[]>>>>({});
+  const [chosen, setChosen] = useState<string[]>([]); // niche keys
+  const [shelves, setShelves] = useState<Record<string, Load<WorldItem[]>>>({});
+  const [tab, setTab] = useState('');
   const [picked, setPicked] = useState<WorldItem[]>([]);
   const [fresh, setFresh] = useState<Set<string>>(new Set()); // things the list just learned
-  const [line, setLine] = useState('First, what are you into? Pick as many as you like.');
+  const [line, setLine] = useState('What do you love?');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<WorldItem[] | null>(null);
   const [searching, setSearching] = useState(false);
   const scroller = useRef<ScrollView>(null);
-  const resolved = useRef(new Set<string>()); // lists whose names Qloo has already turned into things
-  const shelves = useMemo(() => shelvesFor(areas, subs), [areas, subs]);
-  const shelf = shelves.find((s) => s.key === tab) ?? shelves[0] ?? ALL[0];
-  const deeper = areas.filter((a) => SUBS[a]);
+
+  const allNiches = useMemo(() => areas.flatMap((a) => (Array.isArray(nichesBy[a]) ? (nichesBy[a] as Niche[]) : [])), [areas, nichesBy]);
+  const picks = useMemo(() => allNiches.filter((n) => chosen.includes(n.key)), [allNiches, chosen]);
+  const niche = picks.find((n) => n.key === tab) ?? picks[0];
   const posterW = Math.floor((width - 40 - GAP * 2) / 3);
+  const nicheW = Math.floor((width - 40 - GAP) / 2);
 
   const back = useCallback(() => {
-    if (step === 'things') return setQuery(''), setStep(deeper.length ? 'subs' : 'areas'), true;
-    if (step === 'subs') return setStep('areas'), true;
+    if (step === 'things') return setQuery(''), setStep('niches'), true;
+    if (step === 'niches') return setStep('areas'), true;
     return false;
-  }, [step, deeper.length]);
+  }, [step]);
   useBack(back);
 
-  // the ready-made names become real Qloo things (ids, pictures and themes), once per list
+  /* ---------- loading from Qloo ---------- */
+
+  const loadNiches = useCallback((a: CategoryKey) => {
+    setNichesBy((m) => ({ ...m, [a]: 'loading' }));
+    nichesFor([a])
+      .then((list) => setNichesBy((m) => ({ ...m, [a]: list.length ? list : 'error' })))
+      .catch(() => setNichesBy((m) => ({ ...m, [a]: 'error' })));
+  }, []);
+
+  const loadShelf = useCallback((n: Niche) => {
+    setShelves((m) => ({ ...m, [n.key]: 'loading' }));
+    shelfOf(n)
+      .then((items) => setShelves((m) => ({ ...m, [n.key]: items.length ? items : 'error' })))
+      .catch(() => setShelves((m) => ({ ...m, [n.key]: 'error' })));
+  }, []);
+
+  const pickArea = (a: CategoryKey) => {
+    setAreas((x) => toggleIn(x, a));
+    if (!areas.includes(a) && (nichesBy[a] === undefined || nichesBy[a] === 'error')) loadNiches(a);
+  };
+
+  const pickNiche = (n: Niche) => {
+    tap('select');
+    setChosen((x) => toggleIn(x, n.key));
+    if (!chosen.includes(n.key) && (shelves[n.key] === undefined || shelves[n.key] === 'error')) loadShelf(n);
+  };
+
+  const toNiches = () => {
+    setStep('niches');
+    setLine('Ooh, nice. Go deeper.');
+  };
   const toThings = () => {
-    const now = shelvesFor(areas, subs);
-    setTab(now[0].key);
+    setTab(picks[0]?.key ?? '');
     setStep('things');
-    setLine('Now pick 3 or more things you love.');
-    const todo = now.filter((s) => s.qloo && !resolved.current.has(s.key));
-    if (!todo.length) return;
-    todo.forEach((s) => resolved.current.add(s.key));
-    const ask = todo.flatMap((s) => s.starters.map((x) => ({ ...x, shelf: s.key })));
-    setResolving(true);
-    resolveStarters(ask.map(({ name, type }) => ({ name, type })))
-      .then((found) => {
-        const hits = new Map<string, WorldItem>(); // "list/name" → the thing Qloo found
-        const seen = new Set<string>();
-        ask.forEach((a, i) => {
-          const hit = found[i];
-          // our spelling stays when Qloo found nothing, or something of another kind
-          if (!hit || hit.type !== a.type || seen.has(keyOf(hit))) return;
-          seen.add(keyOf(hit));
-          hits.set(`${a.shelf}/${a.name}`, hit);
-        });
-        setPools((cur) => {
-          const next = { ...cur };
-          todo.forEach((s) => (next[s.key] = cur[s.key].map((x) => (!x.id && hits.get(`${s.key}/${x.name}`)) || x)));
-          return next;
-        });
-        const byName = new Map([...hits.entries()].map(([k, v]) => [k.slice(k.indexOf('/') + 1), v]));
-        setPicked((p) => p.map((x) => (x.id ? x : (byName.get(x.name) ?? x))));
-      })
-      .catch(() => {}) // Qloo unreachable: the lists still work, without pictures and "more like this"
-      .finally(() => setResolving(false));
+    setLine(picked.length ? 'Anything else?' : `Pick ${MIN} or more.`);
   };
 
-  const fromAreas = () => {
-    if (!deeper.length) return toThings();
-    setStep('subs');
-    setLine(deeper.length > 1 ? 'Nice! Now which ones?' : `Nice! Which ${CATEGORIES.find((c) => c.key === deeper[0])!.label.toLowerCase()}?`);
-  };
+  /* ---------- search (inside the open niche; Islamic history searches its own list) ---------- */
 
-  // search, a moment after typing stops (history searches its own list)
   useEffect(() => {
     const q = query.trim();
-    if (q.length < 2) return setResults(null);
-    if (!shelf.qloo) return setResults(pools[shelf.key].filter((x) => x.name.toLowerCase().includes(q.toLowerCase())));
+    if (q.length < 2 || !niche) return setResults(null);
+    if (niche.local) return setResults(niche.local.filter((x) => x.name.toLowerCase().includes(q.toLowerCase())));
     setSearching(true);
     const t = setTimeout(() => {
-      searchWorld(q, shelf.type)
+      searchWorld(q, niche.area === 'sports' ? 'sports' : niche.type)
         .then(setResults)
         .catch(() => setResults([]))
         .finally(() => setSearching(false));
     }, 450);
     return () => clearTimeout(t);
-  }, [query, shelf, pools]);
+  }, [query, niche]);
+
+  /* ---------- picking things ---------- */
 
   const isPicked = (x: WorldItem) => picked.some((p) => keyOf(p) === keyOf(x));
+  const remove = (x: WorldItem) => {
+    tap('select');
+    setPicked((p) => p.filter((y) => keyOf(y) !== keyOf(x)));
+  };
 
   const toggle = (x: WorldItem) => {
+    if (isPicked(x)) return remove(x);
     tap('select');
-    if (isPicked(x)) return setPicked((p) => p.filter((y) => keyOf(y) !== keyOf(x)));
-    if (picked.length >= MAX) return setLine(`That’s plenty! ${MAX} is the most I need.`);
+    if (picked.length >= MAX) return setLine('That’s plenty! Tap one below to swap it.');
     setPicked((p) => [...p, x]);
     setLine(cocoComment(x, picked.length));
-    const home = shelf.key;
-    // a searched (or typed) pick joins its list
+    if (!niche) return;
+    const home = niche.key;
+    // a searched (or typed) pick joins the open list
     if (results) {
-      setPools((cur) => (cur[home].some((c) => keyOf(c) === keyOf(x)) ? cur : { ...cur, [home]: [x, ...cur[home]] }));
+      setShelves((m) => {
+        const list = Array.isArray(m[home]) ? (m[home] as WorldItem[]) : [];
+        return list.some((c) => keyOf(c) === keyOf(x)) ? m : { ...m, [home]: [x, ...list] };
+      });
       setQuery('');
       scroller.current?.scrollTo({ y: 0, animated: true });
     }
@@ -142,25 +149,22 @@ export default function World() {
     if (x.id)
       relatedTo(x)
         .then((more) => {
-          setPools((cur) => {
-            const list = cur[home];
+          setShelves((m) => {
+            const list = Array.isArray(m[home]) ? (m[home] as WorldItem[]) : [];
             const have = new Set(list.map(keyOf));
-            const add = more.filter((m) => !have.has(keyOf(m)));
-            if (!add.length) return cur;
+            const add = more.filter((r) => !have.has(keyOf(r)));
+            if (!add.length) return m;
             setFresh((f) => new Set([...f, ...add.map(keyOf)]));
             const i = list.findIndex((c) => keyOf(c) === keyOf(x));
-            return { ...cur, [home]: i < 0 ? [...add, ...list] : [...list.slice(0, i + 1), ...add, ...list.slice(i + 1)] };
+            return { ...m, [home]: i < 0 ? [...add, ...list] : [...list.slice(0, i + 1), ...add, ...list.slice(i + 1)] };
           });
         })
         .catch(() => {});
   };
 
-  // something that isn't in any list: the student can still add it by name
   const typed = query.trim();
-  const canAdd = !!results && typed.length >= 2 && !results.some((r) => r.name.toLowerCase() === typed.toLowerCase());
-
-  const shown = useMemo(() => results ?? pools[shelf.key] ?? [], [results, pools, shelf]);
-  const ready = picked.length >= MIN;
+  const canAdd = !!results && !!niche && typed.length >= 2 && !results.some((r) => r.name.toLowerCase() === typed.toLowerCase());
+  const shelf = niche ? (results ?? shelves[niche.key]) : undefined;
 
   const next = () => {
     set({ world: { picks: picked, because: [], tags: [] } });
@@ -168,59 +172,86 @@ export default function World() {
     router.push(picked.some((x) => x.id) ? '/onboarding/explore' : '/onboarding/first');
   };
 
+  /* ---------- the way on: one button, and it says what's missing ---------- */
+
+  const left = MIN - picked.length;
+  const cta =
+    step === 'areas'
+      ? { title: 'continue', ok: areas.length > 0, go: toNiches }
+      : step === 'niches'
+        ? { title: 'continue', ok: picks.length > 0, go: toThings }
+        : { title: left > 0 ? `pick ${left} more` : 'continue', ok: left <= 0, go: next };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.cream }}>
       <View style={{ paddingHorizontal: 20, paddingTop: 20, gap: 14 }}>
         <OnbBar value={progressOf('world')} onBack={() => back() || (router.canGoBack() && router.back())} />
         {/* Coco in the corner, reacting to every pick */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Image source={COCO.classic} style={{ width: 48, height: 60 }} contentFit="contain" />
+          <Image source={COCO.classic} style={{ width: 44, height: 54 }} contentFit="contain" />
           <Enter key={line} style={{ flex: 1 }}>
-            <View style={{ backgroundColor: C.white, borderRadius: 14, borderWidth: 1, borderColor: C.line, paddingHorizontal: 12, paddingVertical: 9 }}>
+            <View style={{ alignSelf: 'flex-start', backgroundColor: C.white, borderRadius: 14, borderWidth: 1, borderColor: C.line, paddingHorizontal: 12, paddingVertical: 8 }}>
               <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.teal }}>{line}</Text>
             </View>
           </Enter>
         </View>
-        <Text style={{ fontFamily: F.bold, fontSize: 28, lineHeight: 32, color: C.title }}>Show Coco your world</Text>
+        <Enter key={step}>
+          <Text style={{ fontFamily: F.bold, fontSize: 28, lineHeight: 32, color: C.title }}>{TITLE[step]}</Text>
+        </Enter>
       </View>
 
-      {step === 'areas' ? (
+      {step === 'areas' && (
         <ScrollView contentContainerStyle={{ padding: 20, flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
           {CATEGORIES.map((c, k) => (
             <Enter key={c.key} delay={k * 40} style={{ width: '47%' }}>
-              <Choice label={c.icon !== undefined ? c.label : `${c.emoji} ${c.label}`} icon={c.icon} selected={areas.includes(c.key)} onPress={() => setAreas((a) => toggleIn(a, c.key))} />
+              <Choice label={c.icon !== undefined ? c.label : `${c.emoji} ${c.label}`} icon={c.icon} selected={areas.includes(c.key)} onPress={() => pickArea(c.key)} />
             </Enter>
           ))}
         </ScrollView>
-      ) : step === 'subs' ? (
-        <ScrollView contentContainerStyle={{ padding: 20, gap: 18 }}>
-          {deeper.map((a) => (
-            <View key={a} style={{ gap: 10 }}>
-              {deeper.length > 1 && <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.teal }}>{CATEGORIES.find((c) => c.key === a)!.label}</Text>}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
-                {SUBS[a]!.map((s, k) => (
-                  <Enter key={s.key} delay={k * 40} style={{ width: '47%' }}>
-                    <Choice label={s.icon !== undefined ? s.label : `${s.emoji} ${s.label}`} icon={s.icon} selected={subs.includes(s.key)} onPress={() => setSubs((x) => toggleIn(x, s.key))} />
-                  </Enter>
-                ))}
+      )}
+
+      {step === 'niches' && (
+        <ScrollView contentContainerStyle={{ padding: 20, gap: 22 }}>
+          {areas.map((a) => {
+            const cat = CATEGORIES.find((c) => c.key === a)!;
+            const got = nichesBy[a];
+            return (
+              <View key={a} style={{ gap: 10 }}>
+                {areas.length > 1 && <Text style={{ fontFamily: F.bold, fontSize: 13, letterSpacing: 1, color: C.muted }}>{cat.label.toUpperCase()}</Text>}
+                {got === 'error' ? (
+                  <Retry onPress={() => loadNiches(a)} />
+                ) : (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
+                    {got === 'loading' || got === undefined
+                      ? [0, 1, 2, 3].map((i) => <Pulse key={i} style={{ width: nicheW, height: 96, borderRadius: 16 }} />)
+                      : got.map((n) => <NicheCard key={n.key} niche={n} emoji={cat.emoji} width={nicheW} selected={chosen.includes(n.key)} onPress={() => pickNiche(n)} />)}
+                  </View>
+                )}
               </View>
-            </View>
-          ))}
+            );
+          })}
         </ScrollView>
-      ) : (
+      )}
+
+      {step === 'things' && (
         <>
-          <View style={{ paddingHorizontal: 20, paddingTop: 12, gap: 10 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderRadius: 12, paddingHorizontal: 12 }}>
+          <View style={{ paddingTop: 12, gap: 10 }}>
+            {picks.length > 1 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}>
+                {picks.map((n) => {
+                  const on = niche?.key === n.key;
+                  return (
+                    <Pressable key={n.key} onPress={() => (tap('select'), setQuery(''), setTab(n.key))} style={{ paddingHorizontal: 14, height: 36, justifyContent: 'center', borderRadius: 99, backgroundColor: on ? C.teal : C.sand, borderWidth: 1, borderColor: on ? C.teal : C.line }}>
+                      <Text style={{ fontFamily: F.bold, fontSize: 13, color: on ? C.white : C.teal }}>{n.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
+            <View style={{ marginHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderRadius: 12, paddingHorizontal: 12 }}>
               <Ionicons name="search" size={16} color={C.muted} />
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Can’t find it? Search…"
-                placeholderTextColor="#A69A8A"
-                returnKeyType="search"
-                style={{ flex: 1, paddingVertical: 10, fontFamily: F.medium, fontSize: 14, color: C.ink }}
-              />
-              {searching || resolving ? (
+              <TextInput value={query} onChangeText={setQuery} placeholder="Search" placeholderTextColor="#A69A8A" returnKeyType="search" style={{ flex: 1, paddingVertical: 10, fontFamily: F.medium, fontSize: 15, color: C.ink }} />
+              {searching ? (
                 <ActivityIndicator size="small" color={C.teal} />
               ) : query ? (
                 <Pressable hitSlop={8} onPress={() => setQuery('')}>
@@ -228,21 +259,18 @@ export default function World() {
                 </Pressable>
               ) : null}
             </View>
-            {shelves.length > 1 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                {shelves.map((s) => (
-                  <ShelfTab key={s.key} shelf={s} on={shelf.key === s.key} onPress={() => (tap('select'), setQuery(''), setTab(s.key))} />
-                ))}
-              </ScrollView>
-            )}
           </View>
           <ScrollView ref={scroller} contentContainerStyle={{ padding: 20, paddingTop: 14, flexDirection: 'row', flexWrap: 'wrap', columnGap: GAP, rowGap: 16 }} keyboardShouldPersistTaps="handled">
-            {shown.map((x) => (
-              <Poster key={keyOf(x)} item={x} width={posterW} selected={isPicked(x)} fresh={fresh.has(keyOf(x))} loading={resolving && shelf.qloo && !x.id} onPress={() => toggle(x)} />
-            ))}
-            {canAdd && (
+            {shelf === 'error' ? (
+              niche && <Retry onPress={() => loadShelf(niche)} />
+            ) : shelf === 'loading' || shelf === undefined ? (
+              Array.from({ length: 9 }, (_, i) => <Pulse key={i} style={{ width: posterW, height: posterW * 1.5 + 22, borderRadius: 12 }} />)
+            ) : (
+              shelf.map((x) => <Poster key={keyOf(x)} item={x} width={posterW} selected={isPicked(x)} fresh={fresh.has(keyOf(x))} onPress={() => toggle(x)} />)
+            )}
+            {canAdd && niche && (
               <Pressable
-                onPress={() => toggle({ name: typed, type: shelf.type })}
+                onPress={() => toggle({ name: typed, type: niche.type })}
                 style={{ width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: C.title }}>
                 <Ionicons name="add-circle-outline" size={18} color={C.title} />
                 <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 14, color: C.title }}>Add “{typed}”</Text>
@@ -252,42 +280,57 @@ export default function World() {
         </>
       )}
 
-      {/* the way on: areas, then which ones, then the tray with what's picked */}
+      {/* the tray: everything picked, one tap takes it out */}
       <View style={{ borderTopWidth: 1, borderColor: C.line, backgroundColor: C.paper, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12, gap: 10 }}>
         {step === 'things' && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }} style={{ flex: 1 }}>
-              {picked.map((x) => (
-                <SafePicture key={keyOf(x)} uri={x.image} emoji={TYPE_EMOJI[x.type]} emojiSize={16} style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: C.green }} />
-              ))}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingTop: 6, paddingRight: 6 }} style={{ flex: 1 }}>
+              {picked.length === 0
+                ? Array.from({ length: MIN }, (_, i) => <View key={i} style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderStyle: 'dashed', borderColor: C.lineStrong }} />)
+                : picked.map((x) => (
+                    <Animated.View key={keyOf(x)} entering={FadeIn.duration(180)} exiting={FadeOut.duration(150)} layout={LinearTransition}>
+                      <Pressable onPress={() => remove(x)} hitSlop={4} accessibilityRole="button" accessibilityLabel={`Remove ${x.name}`}>
+                        <SafePicture uri={x.image} emoji={TYPE_EMOJI[x.type]} emojiSize={16} style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: C.green }} />
+                        <View style={{ position: 'absolute', top: -5, right: -5, width: 20, height: 20, borderRadius: 10, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.paper }}>
+                          <Ionicons name="close" size={11} color={C.white} />
+                        </View>
+                      </Pressable>
+                    </Animated.View>
+                  ))}
             </ScrollView>
-            <Text style={{ fontFamily: F.bold, fontSize: 15, color: ready ? C.green : C.muted }}>{picked.length} / 5</Text>
+            <Text style={{ fontFamily: F.bold, fontSize: 15, color: left <= 0 ? C.green : C.muted }}>
+              {picked.length}/{MAX}
+            </Text>
           </View>
         )}
-        {step === 'areas' ? (
-          <Btn title="continue" mono disabled={!areas.length} kind={areas.length ? 'green' : 'light'} onPress={fromAreas} />
-        ) : step === 'subs' ? (
-          <Btn title="continue" mono kind="green" onPress={toThings} />
-        ) : (
-          <Btn title="continue" mono disabled={!ready} kind={ready ? 'green' : 'light'} onPress={next} />
-        )}
+        <Btn title={cta.title} mono disabled={!cta.ok} kind={cta.ok ? 'green' : 'light'} onPress={cta.go} />
       </View>
     </SafeAreaView>
   );
 }
 
-function ShelfTab({ shelf, on, onPress }: { shelf: Shelf; on: boolean; onPress: () => void }) {
+/** A niche: the picture of its most popular thing, with its name on it. */
+function NicheCard({ niche, emoji, width, selected, onPress }: { niche: Niche; emoji: string; width: number; selected: boolean; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 99, backgroundColor: on ? C.teal : C.sand, borderWidth: 1, borderColor: on ? C.teal : C.line }}>
-      <Text style={{ fontFamily: F.bold, fontSize: 13, color: on ? C.white : C.teal }}>
-        {shelf.emoji} {shelf.label}
-      </Text>
+    <Pressable onPress={onPress} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} accessibilityLabel={niche.label}>
+      <View style={{ width, height: 96, borderRadius: 16, overflow: 'hidden', backgroundColor: C.sand, borderWidth: selected ? 3 : 1, borderColor: selected ? C.green : C.line, justifyContent: 'flex-end' }}>
+        {niche.cover ? (
+          <Image source={{ uri: niche.cover }} style={{ position: 'absolute', inset: 0 }} contentFit="cover" transition={200} />
+        ) : (
+          <Text style={{ position: 'absolute', top: 10, right: 12, fontSize: 30, opacity: 0.5 }}>{emoji}</Text>
+        )}
+        {niche.cover && <LinearGradient colors={['transparent', 'rgba(20,12,4,0.78)']} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 64 }} />}
+        <Text numberOfLines={2} style={{ padding: 10, fontFamily: F.bold, fontSize: 16, lineHeight: 19, color: niche.cover ? C.white : C.teal }}>
+          {niche.label}
+        </Text>
+        {selected && <Check />}
+      </View>
     </Pressable>
   );
 }
 
 /** A big picture with the name under it. */
-function Poster({ item, width, selected, fresh, loading, onPress }: { item: WorldItem; width: number; selected: boolean; fresh: boolean; loading: boolean; onPress: () => void }) {
+function Poster({ item, width, selected, fresh, onPress }: { item: WorldItem; width: number; selected: boolean; fresh: boolean; onPress: () => void }) {
   const s = useSharedValue(fresh ? 0.6 : 1);
   useEffect(() => {
     if (fresh) s.value = withSpring(1, { damping: 12 });
@@ -301,23 +344,40 @@ function Poster({ item, width, selected, fresh, loading, onPress }: { item: Worl
     <Pressable onPress={press} style={{ width }} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} accessibilityLabel={item.name}>
       <Animated.View style={a}>
         <View style={{ width, height: width * 1.5, borderRadius: 12, overflow: 'hidden', backgroundColor: C.sand, borderWidth: selected ? 3 : 1, borderColor: selected ? C.green : fresh ? C.amber : C.line, alignItems: 'center', justifyContent: 'center' }}>
-          {item.image ? (
-            <Image source={{ uri: item.image }} style={{ position: 'absolute', inset: 0 }} contentFit="cover" transition={200} />
-          ) : loading ? (
-            <ActivityIndicator color={C.teal} />
-          ) : (
-            <Text style={{ fontSize: 30, opacity: 0.6 }}>{TYPE_EMOJI[item.type]}</Text>
-          )}
-          {selected && (
-            <View style={{ position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 11, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="checkmark" size={15} color={C.white} />
-            </View>
-          )}
+          {item.image ? <Image source={{ uri: item.image }} style={{ position: 'absolute', inset: 0 }} contentFit="cover" transition={200} /> : <Text style={{ fontSize: 30, opacity: 0.6 }}>{TYPE_EMOJI[item.type]}</Text>}
+          {selected && <Check />}
         </View>
       </Animated.View>
       <Text numberOfLines={2} style={{ fontFamily: F.bold, fontSize: 13, lineHeight: 16, color: C.ink, marginTop: 6 }}>
         {item.name}
       </Text>
+    </Pressable>
+  );
+}
+
+function Check() {
+  return (
+    <View style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: 12, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.white }}>
+      <Ionicons name="checkmark" size={14} color={C.white} />
+    </View>
+  );
+}
+
+/** A grey shape that breathes while something loads (it keeps the layout still, unlike a spinner). */
+function Pulse({ style }: { style: ViewStyle }) {
+  const o = useSharedValue(0.45);
+  useEffect(() => {
+    o.value = withRepeat(withTiming(0.9, { duration: 700 }), -1, true);
+  }, [o]);
+  const a = useAnimatedStyle(() => ({ opacity: o.value }));
+  return <Animated.View style={[{ backgroundColor: C.track }, style, a]} />;
+}
+
+function Retry({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={{ width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, borderRadius: 14, borderWidth: 1, borderColor: C.lineStrong, backgroundColor: C.white }}>
+      <Ionicons name="refresh" size={18} color={C.teal} />
+      <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.teal }}>Try again</Text>
     </Pressable>
   );
 }
