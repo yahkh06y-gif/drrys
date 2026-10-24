@@ -1,10 +1,12 @@
 // "Show Coco your world" — from wide to narrow, each step one simple choice:
 //   1. areas: sports, movies, shows & anime, books, history (big cards)
-//   2. niches inside them, straight from Qloo: its sports, its genres, its history genres (cover = the most
-//      popular thing in the niche). Only Islamic history is Drrys' own (Qloo has no data for it).
+//   2. niches, straight from Qloo: its sports, its genres, its history genres (Coco's picture when there is one,
+//      else the most popular thing in the niche). Films, shows and books share one set of genres ("Stories"),
+//      so drama is picked once, not three times. Only Islamic history is Drrys' own (Qloo has no data for it).
 //   3. things: one tab per area (Sports, Movies…), and in it one row per niche (Mystery, then its films;
-//      Adventure, then its films…): the popular teams, players and titles, big pictures with the name under
-//      them, plus search. Every pick teaches the list: three related things (from Qloo) appear right after it.
+//      Adventure, then its films…; in Shows, mystery shows…): the popular teams, players and titles, big
+//      pictures with the name under them, plus search. Every pick teaches the list: three related things
+//      (from Qloo) appear right after it.
 // The tray at the bottom always shows what's picked: tap one to take it out, wherever it came from.
 // An area's niches start loading the moment it's picked (and a niche's things too), so the next step is
 // usually ready on arrival.
@@ -18,12 +20,13 @@ import Animated, { FadeIn, FadeOut, LinearTransition, useAnimatedStyle, useShare
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COCO } from '@/art';
+import { NICHE_ART } from '@/art-niches';
 import { SafePicture } from '@/components/SafePicture';
 import { Btn, Choice, Enter, OnbBar } from '@/components/ui';
 import { useBack } from '@/lib/back';
 import { tap } from '@/lib/feedback';
 import { progressOf } from '@/lib/onboarding';
-import { CATEGORIES, cocoComment, nichesFor, relatedTo, searchWorld, shelfOf, TYPE_EMOJI, type CategoryKey, type Niche } from '@/lib/qloo';
+import { CATEGORIES, cocoComment, nichesFor, relatedTo, rowOf, searchWorld, SECTION_LABEL, sectionOf, shelfOf, TYPE_EMOJI, type CategoryKey, type Niche, type Row, type Section } from '@/lib/qloo';
 import { useApp, type WorldItem } from '@/store';
 import { C, F } from '@/theme';
 
@@ -36,6 +39,7 @@ type Step = 'areas' | 'niches' | 'things';
 type Load<T> = T | 'loading' | 'error';
 
 const TITLE: Record<Step, string> = { areas: 'Show Coco your world', niches: 'Narrow it down', things: 'Your favourites' };
+const SECTION_EMOJI: Record<Section, string> = { sports: '⚽', stories: '🎬', history: '🏛️' };
 
 export default function World() {
   const setProfile = useApp((s) => s.setProfile);
@@ -43,7 +47,7 @@ export default function World() {
   const { width } = useWindowDimensions();
   const [step, setStep] = useState<Step>('areas');
   const [areas, setAreas] = useState<CategoryKey[]>([]);
-  const [nichesBy, setNichesBy] = useState<Partial<Record<CategoryKey, Load<Niche[]>>>>({});
+  const [nichesBy, setNichesBy] = useState<Partial<Record<Section, Load<Niche[]>>>>({});
   const [chosen, setChosen] = useState<string[]>([]); // niche keys
   const [shelves, setShelves] = useState<Record<string, Load<WorldItem[]>>>({});
   const [tab, setTab] = useState<CategoryKey | ''>('');
@@ -55,15 +59,20 @@ export default function World() {
   const [searching, setSearching] = useState(false);
   const scroller = useRef<ScrollView>(null);
 
-  const allNiches = useMemo(() => areas.flatMap((a) => (Array.isArray(nichesBy[a]) ? (nichesBy[a] as Niche[]) : [])), [areas, nichesBy]);
+  const sections = useMemo(() => [...new Set(areas.map(sectionOf))], [areas]);
+  // a story genre shows only if films, shows or books picked have it (anime: shows only)
+  const visible = useCallback((n: Niche) => areas.some((a) => rowOf(n, a)), [areas]);
+  const allNiches = useMemo(() => sections.flatMap((x) => (Array.isArray(nichesBy[x]) ? (nichesBy[x] as Niche[]).filter(visible) : [])), [sections, nichesBy, visible]);
   const picks = useMemo(() => allNiches.filter((n) => chosen.includes(n.key)), [allNiches, chosen]);
-  const tabs = areas.filter((a) => picks.some((n) => n.area === a));
+  const rowsIn = (a: CategoryKey) => picks.map((n) => rowOf(n, a)).filter((r): r is Row => !!r);
+  const tabs = areas.filter((a) => rowsIn(a).length > 0);
   const area = tab && tabs.includes(tab) ? tab : tabs[0];
-  const rows = picks.filter((n) => n.area === area);
+  const rows = area ? rowsIn(area) : [];
   const lead = rows[0]; // where searched picks go
   const posterW = Math.floor((width - 40 - GAP * 2) / 3);
   const rowW = Math.floor((width - 40) / 3.3); // a little of the next poster shows, so the row reads as scrollable
   const nicheW = Math.floor((width - 40 - GAP) / 2);
+  const nicheH = Math.floor(nicheW * 0.8);
 
   const back = useCallback(() => {
     if (step === 'things') return setQuery(''), setStep('niches'), true;
@@ -74,29 +83,41 @@ export default function World() {
 
   /* ---------- loading from Qloo ---------- */
 
-  const loadNiches = useCallback((a: CategoryKey) => {
-    setNichesBy((m) => ({ ...m, [a]: 'loading' }));
-    nichesFor([a])
-      .then((list) => setNichesBy((m) => ({ ...m, [a]: list.length ? list : 'error' })))
-      .catch(() => setNichesBy((m) => ({ ...m, [a]: 'error' })));
+  const loadNiches = useCallback((x: Section) => {
+    setNichesBy((m) => ({ ...m, [x]: 'loading' }));
+    nichesFor(x)
+      .then((list) => setNichesBy((m) => ({ ...m, [x]: list.length ? list : 'error' })))
+      .catch(() => setNichesBy((m) => ({ ...m, [x]: 'error' })));
   }, []);
 
-  const loadShelf = useCallback((n: Niche) => {
-    setShelves((m) => ({ ...m, [n.key]: 'loading' }));
-    shelfOf(n)
-      .then((items) => setShelves((m) => ({ ...m, [n.key]: items.length ? items : 'error' })))
-      .catch(() => setShelves((m) => ({ ...m, [n.key]: 'error' })));
+  const loadShelf = useCallback((r: Row) => {
+    setShelves((m) => ({ ...m, [r.key]: 'loading' }));
+    shelfOf(r)
+      .then((items) => setShelves((m) => ({ ...m, [r.key]: items.length ? items : 'error' })))
+      .catch(() => setShelves((m) => ({ ...m, [r.key]: 'error' })));
   }, []);
+  const needs = (key: string) => shelves[key] === undefined || shelves[key] === 'error';
 
   const pickArea = (a: CategoryKey) => {
     setAreas((x) => toggleIn(x, a));
-    if (!areas.includes(a) && (nichesBy[a] === undefined || nichesBy[a] === 'error')) loadNiches(a);
+    if (areas.includes(a)) return;
+    const x = sectionOf(a);
+    if (nichesBy[x] === undefined || nichesBy[x] === 'error') loadNiches(x);
+    // a genre already picked now has a row here too (drama shows, after drama films)
+    picks.forEach((n) => {
+      const r = rowOf(n, a);
+      if (r && needs(r.key)) loadShelf(r);
+    });
   };
 
   const pickNiche = (n: Niche) => {
     tap('select');
     setChosen((x) => toggleIn(x, n.key));
-    if (!chosen.includes(n.key) && (shelves[n.key] === undefined || shelves[n.key] === 'error')) loadShelf(n);
+    if (chosen.includes(n.key)) return;
+    areas.forEach((a) => {
+      const r = rowOf(n, a);
+      if (r && needs(r.key)) loadShelf(r);
+    });
   };
 
   const toNiches = () => {
@@ -104,7 +125,7 @@ export default function World() {
     setLine('Ooh, nice. Go deeper.');
   };
   const toThings = () => {
-    setTab(picks[0]?.area ?? '');
+    setTab(tabs[0] ?? '');
     setStep('things');
     setLine(picked.length ? 'Anything else?' : `Pick ${MIN} or more.`);
   };
@@ -114,8 +135,8 @@ export default function World() {
   useEffect(() => {
     const q = query.trim();
     if (q.length < 2 || !lead) return setResults(null);
-    const mine = rows.flatMap((r) => r.local ?? []).filter((x) => x.name.toLowerCase().includes(q.toLowerCase()));
-    const qloo = rows.find((r) => !r.local);
+    const mine = rows.flatMap((r) => r.niche.local ?? []).filter((x) => x.name.toLowerCase().includes(q.toLowerCase()));
+    const qloo = rows.find((r) => !r.niche.local);
     if (!qloo) return setResults(mine);
     setSearching(true);
     const t = setTimeout(() => {
@@ -219,19 +240,18 @@ export default function World() {
 
       {step === 'niches' && (
         <ScrollView contentContainerStyle={{ padding: 20, gap: 22 }}>
-          {areas.map((a) => {
-            const cat = CATEGORIES.find((c) => c.key === a)!;
-            const got = nichesBy[a];
+          {sections.map((x) => {
+            const got = nichesBy[x];
             return (
-              <View key={a} style={{ gap: 10 }}>
-                {areas.length > 1 && <Text style={{ fontFamily: F.bold, fontSize: 13, letterSpacing: 1, color: C.muted }}>{cat.label.toUpperCase()}</Text>}
+              <View key={x} style={{ gap: 10 }}>
+                {sections.length > 1 && <Text style={{ fontFamily: F.bold, fontSize: 13, letterSpacing: 1, color: C.muted }}>{SECTION_LABEL[x].toUpperCase()}</Text>}
                 {got === 'error' ? (
-                  <Retry onPress={() => loadNiches(a)} />
+                  <Retry onPress={() => loadNiches(x)} />
                 ) : (
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
                     {got === 'loading' || got === undefined
-                      ? [0, 1, 2, 3].map((i) => <Pulse key={i} style={{ width: nicheW, height: 96, borderRadius: 16 }} />)
-                      : got.map((n) => <NicheCard key={n.key} niche={n} emoji={cat.emoji} width={nicheW} selected={chosen.includes(n.key)} onPress={() => pickNiche(n)} />)}
+                      ? [0, 1, 2, 3].map((i) => <Pulse key={i} style={{ width: nicheW, height: nicheH, borderRadius: 16 }} />)
+                      : got.filter(visible).map((n) => <NicheCard key={n.key} niche={n} emoji={SECTION_EMOJI[x]} width={nicheW} height={nicheH} selected={chosen.includes(n.key)} onPress={() => pickNiche(n)} />)}
                   </View>
                 )}
               </View>
@@ -288,20 +308,20 @@ export default function World() {
               </View>
             ) : (
               // one row per niche: its name, then its things
-              rows.map((n) => {
-                const got = shelves[n.key];
+              rows.map((r) => {
+                const got = shelves[r.key];
                 return (
-                  <View key={n.key} style={{ gap: 10 }}>
-                    <Text style={{ paddingHorizontal: 20, fontFamily: F.bold, fontSize: 18, color: C.teal }}>{n.label}</Text>
+                  <View key={r.key} style={{ gap: 10 }}>
+                    <Text style={{ paddingHorizontal: 20, fontFamily: F.bold, fontSize: 18, color: C.teal }}>{r.niche.label}</Text>
                     {got === 'error' ? (
                       <View style={{ paddingHorizontal: 20 }}>
-                        <Retry onPress={() => loadShelf(n)} />
+                        <Retry onPress={() => loadShelf(r)} />
                       </View>
                     ) : (
                       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: GAP }}>
                         {got === 'loading' || got === undefined
                           ? [0, 1, 2, 3].map((i) => <Pulse key={i} style={{ width: rowW, height: rowW * 1.5 + 22, borderRadius: 12 }} />)
-                          : got.map((x) => <Poster key={keyOf(x)} item={x} width={rowW} selected={isPicked(x)} fresh={fresh.has(keyOf(x))} onPress={() => toggle(x, n.key)} />)}
+                          : got.map((x) => <Poster key={keyOf(x)} item={x} width={rowW} selected={isPicked(x)} fresh={fresh.has(keyOf(x))} onPress={() => toggle(x, r.key)} />)}
                       </ScrollView>
                     )}
                   </View>
@@ -341,18 +361,20 @@ export default function World() {
   );
 }
 
-/** A niche: the picture of its most popular thing, with its name on it. */
-function NicheCard({ niche, emoji, width, selected, onPress }: { niche: Niche; emoji: string; width: number; selected: boolean; onPress: () => void }) {
+/** A niche: Coco's picture for it, or else the picture of its most popular thing, with its name on it. */
+function NicheCard({ niche, emoji, width, height, selected, onPress }: { niche: Niche; emoji: string; width: number; height: number; selected: boolean; onPress: () => void }) {
+  const art = NICHE_ART[niche.slug];
+  const pic = art ?? (niche.cover ? { uri: niche.cover } : undefined);
   return (
     <Pressable onPress={onPress} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} accessibilityLabel={niche.label}>
-      <View style={{ width, height: 96, borderRadius: 16, overflow: 'hidden', backgroundColor: C.sand, borderWidth: selected ? 3 : 1, borderColor: selected ? C.green : C.line, justifyContent: 'flex-end' }}>
-        {niche.cover ? (
-          <Image source={{ uri: niche.cover }} style={{ position: 'absolute', inset: 0 }} contentFit="cover" transition={200} />
+      <View style={{ width, height, borderRadius: 16, overflow: 'hidden', backgroundColor: C.sand, borderWidth: selected ? 3 : 1, borderColor: selected ? C.green : C.line, justifyContent: 'flex-end' }}>
+        {pic ? (
+          <Image source={pic} style={{ position: 'absolute', inset: 0 }} contentFit="cover" transition={200} />
         ) : (
           <Text style={{ position: 'absolute', top: 10, right: 12, fontSize: 30, opacity: 0.5 }}>{emoji}</Text>
         )}
-        {niche.cover && <LinearGradient colors={['transparent', 'rgba(20,12,4,0.78)']} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 64 }} />}
-        <Text numberOfLines={2} style={{ padding: 10, fontFamily: F.bold, fontSize: 16, lineHeight: 19, color: niche.cover ? C.white : C.teal }}>
+        {pic && <LinearGradient colors={['transparent', 'rgba(20,12,4,0.78)']} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 64 }} />}
+        <Text numberOfLines={2} style={{ padding: 10, fontFamily: F.bold, fontSize: 16, lineHeight: 19, color: pic ? C.white : C.teal }}>
           {niche.label}
         </Text>
         {selected && <Check />}

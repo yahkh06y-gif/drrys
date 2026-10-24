@@ -4,6 +4,7 @@
 // to try again or skip, and "more like this" and the exploring are skipped.
 // Pictures come straight from Qloo; the server drops anything adult or unsuitable first. Things without one show an icon.
 import { OPTION_ICONS } from '@/art';
+import { AREA_ART } from '@/art-niches';
 import { callFunction } from '@/lib/cloud';
 import type { WorldItem, WorldType } from '@/store';
 
@@ -37,20 +38,41 @@ export type CategoryKey = 'sports' | 'movies' | 'shows' | 'books' | 'history';
 /** Step 1: the big areas. No music and no celebrities: these are the worlds that make good analogies.
  *  Icons are placeholders until the real art arrives. */
 export const CATEGORIES: { key: CategoryKey; label: string; emoji: string; icon?: number }[] = [
-  { key: 'sports', label: 'Sports', emoji: '⚽', icon: OPTION_ICONS['interests:Football'] },
-  { key: 'movies', label: 'Movies', emoji: '🎬' },
-  { key: 'shows', label: 'Shows & Anime', emoji: '📺', icon: OPTION_ICONS['interests:Anime'] },
-  { key: 'books', label: 'Books', emoji: '📚' },
-  { key: 'history', label: 'History', emoji: '🏛️' },
+  { key: 'sports', label: 'Sports', emoji: '⚽', icon: AREA_ART.sports ?? OPTION_ICONS['interests:Football'] },
+  { key: 'movies', label: 'Movies', emoji: '🎬', icon: AREA_ART.movies },
+  { key: 'shows', label: 'Shows & Anime', emoji: '📺', icon: AREA_ART.shows ?? OPTION_ICONS['interests:Anime'] },
+  { key: 'books', label: 'Books', emoji: '📚', icon: AREA_ART.books },
+  { key: 'history', label: 'History', emoji: '🏛️', icon: AREA_ART.history },
 ];
 
-/** Step 2: a niche inside an area (basketball, comedy, history of science…). They come from Qloo itself
- *  (see supabase/functions/qloo, "Niches"); only Islamic history is Drrys' own, because Qloo has no data for it. */
-export type Niche = { key: string; area: CategoryKey; label: string; type: WorldType; tag?: string; anchor?: string; cover?: string; local?: WorldItem[] };
+/** Films, shows and books share one set of genres ("stories"): picked once, shown for each of the three. */
+export type Section = 'sports' | 'stories' | 'history';
+export const sectionOf = (a: CategoryKey): Section => (a === 'sports' || a === 'history' ? a : 'stories');
+export const SECTION_LABEL: Record<Section, string> = { sports: 'Sports', stories: 'Stories', history: 'History' };
+/** The kind of thing each area holds. */
+export const AREA_TYPE: Record<CategoryKey, WorldType> = { sports: 'brand', movies: 'movie', shows: 'tv_show', books: 'book', history: 'book' };
+
+/** Step 2: a niche (basketball, comedy, history of science…). They come from Qloo itself (see
+ *  supabase/functions/qloo, "Niches"); only Islamic history is Drrys' own, because Qloo has no data for it.
+ *  A story genre has a tag for each of films, shows and books it exists in (tags); slug names its picture. */
+export type Niche = { key: string; area: Section; slug: string; label: string; type: WorldType; tag?: string; tags?: Partial<Record<WorldType, string>>; anchor?: string; cover?: string; local?: WorldItem[] };
+
+/** Step 3: one row = one niche inside one area (drama films, drama shows…). */
+export type Row = { key: string; niche: Niche; type: WorldType; tag?: string };
+
+/** The rows a niche makes inside an area, if any. */
+export function rowOf(n: Niche, a: CategoryKey): Row | undefined {
+  if (n.area !== sectionOf(a)) return undefined;
+  if (n.area !== 'stories') return { key: `${a}|${n.key}`, niche: n, type: n.type, tag: n.tag };
+  const type = AREA_TYPE[a];
+  const tag = n.tags?.[type];
+  return tag ? { key: `${a}|${n.key}`, niche: n, type, tag } : undefined;
+}
 
 const ISLAMIC: Niche = {
   key: 'islamic',
   area: 'history',
+  slug: 'islamic',
   label: 'Islamic history',
   type: 'history',
   local: [
@@ -71,18 +93,19 @@ const ISLAMIC: Niche = {
   ].map((name) => ({ name, type: 'history' as const })),
 };
 
-/** The niches inside the areas picked, in the order the areas were picked. */
-export async function nichesFor(areas: CategoryKey[]): Promise<Niche[]> {
+/** The niches of one section (all its genres for stories: the app shows those of the areas picked). */
+export async function nichesFor(section: Section): Promise<Niche[]> {
+  const areas: CategoryKey[] = section === 'stories' ? ['movies', 'shows', 'books'] : [section];
   const r = await ask<{ niches: Niche[] }>({ action: 'niches', areas }, 30000);
-  const found = r.niches ?? [];
-  return areas.flatMap((a) => [...(a === 'history' ? [ISLAMIC] : []), ...found.filter((n) => n.area === a)]);
+  const found = (r.niches ?? []).filter((n) => n.area === section);
+  return section === 'history' ? [ISLAMIC, ...found] : found;
 }
 
-/** Step 3: the popular things inside one niche (teams and players, or titles). */
-export async function shelfOf(n: Niche): Promise<WorldItem[]> {
-  if (n.local) return n.local;
-  const r = await ask<{ items: WorldItem[] }>({ action: 'shelf', type: n.type, tag: n.tag, anchor: n.anchor }, 15000);
-  return r.items ?? [];
+/** Step 3: the popular things in one row (teams and players, or titles). */
+export async function shelfOf(r: Row): Promise<WorldItem[]> {
+  if (r.niche.local) return r.niche.local;
+  const res = await ask<{ items: WorldItem[] }>({ action: 'shelf', type: r.type, tag: r.tag, anchor: r.niche.anchor, slug: r.niche.slug }, 15000);
+  return res.items ?? [];
 }
 
 /** Shown on a card when there's no picture. */
