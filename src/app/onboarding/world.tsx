@@ -7,12 +7,12 @@
 //      Adventure, then its films…; in Shows, mystery shows…): the popular teams, players and titles, big
 //      pictures with the name under them, plus search. Every pick teaches the list: three related things
 //      (from Qloo) appear right after it.
+// Step 2 shows one row per section (Sports, Stories, History) that slides left and right.
 // The tray at the bottom always shows what's picked: tap one to take it out, wherever it came from.
 // An area's niches start loading the moment it's picked (and a niche's things too), so the next step is
 // usually ready on arrival.
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View, type ViewStyle } from 'react-native';
@@ -71,8 +71,7 @@ export default function World() {
   const lead = rows[0]; // where searched picks go
   const posterW = Math.floor((width - 40 - GAP * 2) / 3);
   const rowW = Math.floor((width - 40) / 3.3); // a little of the next poster shows, so the row reads as scrollable
-  const nicheW = Math.floor((width - 40 - GAP) / 2);
-  const nicheH = Math.floor(nicheW * 0.8);
+  const nicheW = Math.floor((width - 40) / 2.4); // a little of the next card shows, so the row reads as scrollable
 
   const back = useCallback(() => {
     if (step === 'things') return setQuery(''), setStep('niches'), true;
@@ -239,20 +238,23 @@ export default function World() {
       )}
 
       {step === 'niches' && (
-        <ScrollView contentContainerStyle={{ padding: 20, gap: 22 }}>
+        // one row per section (Sports, Stories, History): its niches slide left and right
+        <ScrollView contentContainerStyle={{ paddingVertical: 20, gap: 24 }}>
           {sections.map((x) => {
             const got = nichesBy[x];
             return (
               <View key={x} style={{ gap: 10 }}>
-                {sections.length > 1 && <Text style={{ fontFamily: F.bold, fontSize: 13, letterSpacing: 1, color: C.muted }}>{SECTION_LABEL[x].toUpperCase()}</Text>}
+                <Text style={{ paddingHorizontal: 20, fontFamily: F.bold, fontSize: 18, color: C.teal }}>{SECTION_LABEL[x]}</Text>
                 {got === 'error' ? (
-                  <Retry onPress={() => loadNiches(x)} />
-                ) : (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
-                    {got === 'loading' || got === undefined
-                      ? [0, 1, 2, 3].map((i) => <Pulse key={i} style={{ width: nicheW, height: nicheH, borderRadius: 16 }} />)
-                      : got.filter(visible).map((n) => <NicheCard key={n.key} niche={n} emoji={SECTION_EMOJI[x]} width={nicheW} height={nicheH} selected={chosen.includes(n.key)} onPress={() => pickNiche(n)} />)}
+                  <View style={{ paddingHorizontal: 20 }}>
+                    <Retry onPress={() => loadNiches(x)} />
                   </View>
+                ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: GAP }}>
+                    {got === 'loading' || got === undefined
+                      ? [0, 1, 2].map((i) => <Pulse key={i} style={{ width: nicheW, height: nicheW + 26, borderRadius: 16 }} />)
+                      : got.filter(visible).map((n) => <NicheCard key={n.key} niche={n} emoji={SECTION_EMOJI[x]} width={nicheW} selected={chosen.includes(n.key)} onPress={() => pickNiche(n)} />)}
+                  </ScrollView>
                 )}
               </View>
             );
@@ -361,24 +363,24 @@ export default function World() {
   );
 }
 
-/** A niche: Coco's picture for it, or else the picture of its most popular thing, with its name on it. */
-function NicheCard({ niche, emoji, width, height, selected, onPress }: { niche: Niche; emoji: string; width: number; height: number; selected: boolean; onPress: () => void }) {
+/** A niche: Coco's picture for it (or else the picture of its most popular thing), with its name under it. */
+function NicheCard({ niche, emoji, width, selected, onPress }: { niche: Niche; emoji: string; width: number; selected: boolean; onPress: () => void }) {
   const art = NICHE_ART[niche.slug];
-  const pic = art ?? (niche.cover ? { uri: niche.cover } : undefined);
   return (
-    <Pressable onPress={onPress} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} accessibilityLabel={niche.label}>
-      <View style={{ width, height, borderRadius: 16, overflow: 'hidden', backgroundColor: C.sand, borderWidth: selected ? 3 : 1, borderColor: selected ? C.green : C.line, justifyContent: 'flex-end' }}>
-        {pic ? (
-          <Image source={pic} style={{ position: 'absolute', inset: 0 }} contentFit="cover" transition={200} />
+    <Pressable onPress={onPress} style={{ width }} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} accessibilityLabel={niche.label}>
+      <View style={{ width, height: width, borderRadius: 16, overflow: 'hidden', backgroundColor: art ? C.white : C.sand, borderWidth: selected ? 3 : 1, borderColor: selected ? C.green : C.line, alignItems: 'center', justifyContent: 'center' }}>
+        {art ? (
+          <Image source={art} style={{ width: '88%', height: '88%' }} contentFit="contain" />
+        ) : niche.cover ? (
+          <Image source={{ uri: niche.cover }} style={{ position: 'absolute', inset: 0 }} contentFit="cover" transition={200} />
         ) : (
-          <Text style={{ position: 'absolute', top: 10, right: 12, fontSize: 30, opacity: 0.5 }}>{emoji}</Text>
+          <Text style={{ fontSize: 36, opacity: 0.5 }}>{emoji}</Text>
         )}
-        {pic && <LinearGradient colors={['transparent', 'rgba(20,12,4,0.78)']} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 64 }} />}
-        <Text numberOfLines={2} style={{ padding: 10, fontFamily: F.bold, fontSize: 16, lineHeight: 19, color: pic ? C.white : C.teal }}>
-          {niche.label}
-        </Text>
         {selected && <Check />}
       </View>
+      <Text numberOfLines={1} style={{ fontFamily: F.bold, fontSize: 15, color: selected ? C.green : C.ink, marginTop: 6, textAlign: 'center' }}>
+        {niche.label}
+      </Text>
     </Pressable>
   );
 }
