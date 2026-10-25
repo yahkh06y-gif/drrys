@@ -2,7 +2,7 @@
  * Coco's brain — one thin client, two providers:
  *   - Claude (EXPO_PUBLIC_ANTHROPIC_API_KEY) — used when its key is set
  *   - Google Gemini (EXPO_PUBLIC_GEMINI_API_KEY) — the free-tier option, used otherwise
- * Both read the lecture PDF natively. With no key at all, every call falls back to a
+ * Both read the lecture PDF natively; a PowerPoint is opened in the app first (lib/slides) and sent as text + pictures. With no key at all, every call falls back to a
  * hand-written demo session so the app is still fully explorable (e.g. by judges).
  *
  * NOTE: calling the API straight from the app is fine for a prototype / competition build.
@@ -11,6 +11,7 @@
 import { Platform } from 'react-native';
 
 import { DEMO } from './demo';
+import type { Slide } from './slides';
 
 const KEY = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY ?? '';
 const MODEL = process.env.EXPO_PUBLIC_CLAUDE_MODEL || 'claude-sonnet-5-5';
@@ -59,6 +60,7 @@ export type Context = {
   subject: string;
   chapter: string;
   pdfBase64?: string;
+  slides?: Slide[]; // a PowerPoint lecture instead of a PDF: the chosen slides, numbered as pages 1..N
   course?: { label: string; data: string }[]; // syllabus / past papers: guide what to ask, never new content
   fromPage?: number;
   toPage?: number;
@@ -140,7 +142,7 @@ async function callGemini(system: string, content: Block[], maxTokens: number, o
   const order = [...chain].sort((x, y) => (x === first ? -1 : y === first ? 1 : 0));
   const ready = order.filter((m) => (cooldown.get(m) ?? 0) < now);
   const tryList = ready.length ? ready : order; // everything cooling down → try anyway
-  const hasPdf = content.some((b) => b.type === 'document');
+  const hasPdf = content.some((b) => b.type === 'document') || content.filter((b) => b.type === 'image').length > 1; // a PDF or a slide deck
   const hasAudio = content.some((b) => b.type === 'audio');
   let last = '';
   for (const model of tryList) {
@@ -210,9 +212,20 @@ Subject: ${c.subject}. Chapter: ${c.chapter}.
 STAY INSIDE THE STUDENT'S MATERIAL: when lecture files are provided (or the session is built on them), every fact, definition, number, example and question must come from those files. Never add anything from your own general knowledge: no outside facts, examples, numbers, extra topics or details the lecture pages don't contain, even if they are true and related. If something isn't covered in the material, say so instead of filling it in.
 Keep language simple, encouraging, and concise.`;
 
+/** A lecture file is attached (a PDF or PowerPoint slides). */
+const hasLecture = (c: Context) => !!(c.pdfBase64 || c.slides?.length);
+
 function material(c: Context): Block[] {
   const blocks: Block[] = [];
-  if (c.pdfBase64) {
+  if (c.slides?.length) {
+    const n = c.slides.length;
+    blocks.push({ type: 'text', text: `TODAY'S LECTURE is a PowerPoint deck: ONLY slides ${c.fromPage ?? 1}–${c.toPage ?? 'end'} of the student's file, ${n} slide${n > 1 ? 's' : ''}. Each slide is one PAGE, numbered 1 to ${n} below; its text (and speaker notes) comes first, then its pictures. It is the ONLY source of content for this session: every fact, definition, number, example and question must be found on these pages. Nothing else exists for this session.` });
+    for (const sl of c.slides) {
+      blocks.push({ type: 'text', text: `=== PAGE ${sl.page} (slide ${sl.slide} of the file) ===\n${sl.text || '(no text on this slide, only the pictures below)'}` });
+      for (const im of sl.images) blocks.push({ type: 'image', source: { type: 'base64', media_type: im.mime, data: im.data } });
+    }
+    blocks.push({ type: 'text', text: '=== END OF THE LECTURE ===' });
+  } else if (c.pdfBase64) {
     blocks.push(
       { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: c.pdfBase64 } },
       { type: 'text', text: `The document above is TODAY'S LECTURE: ONLY the pages ${c.fromPage ?? 1}–${c.toPage ?? 'end'} of the student's file${c.pageCount ? `, ${c.pageCount} page${c.pageCount > 1 ? 's' : ''}; in this document they are numbered 1 to ${c.pageCount}` : ''}. It is the ONLY source of content for this session: every fact, definition, number, example and question must be found on these pages. Nothing else exists for this session.` },
@@ -272,7 +285,7 @@ export async function prepareSession(c: Context, recall: string): Promise<Sessio
         text: (attempt ? 'YOUR PREVIOUS ANSWER WAS CUT OFF OR NOT VALID JSON. Answer again with COMPLETE, valid JSON: keep every "detail" and "ideal" short (one sentence) and the map entries minimal, but keep all the ideas, questions and cards.\n\n' : '') + `The student did a "brain dump" — everything they remember about this, from memory:
 """${recall}"""
 
-Compare it with ${c.pdfBase64 ? "today's lecture pages" : 'the topic (no lecture file attached, so use standard curriculum knowledge for this chapter)'} and prepare today's session.
+Compare it with ${hasLecture(c) ? "today's lecture pages" : 'the topic (no lecture file attached, so use standard curriculum knowledge for this chapter)'} and prepare today's session.
 Return ONLY JSON with this shape:
 {
  "map": [{"idea": "short name", "page": "page ref if known", "weight": 3, "status": "nailed|missed|wrong"}],
@@ -332,7 +345,7 @@ Rules:
  */
 function enforceGrounding(c: Context, plan: SessionPlan): SessionPlan {
   const n = c.pageCount;
-  if (!c.pdfBase64 || !n) return plan; // no lecture file: nothing to check against
+  if (!hasLecture(c) || !n) return plan; // no lecture file: nothing to check against
   const ok = (x: unknown) => {
     const v = Number((x as { src?: unknown })?.src);
     return Number.isInteger(v) && v >= 1 && v <= n;
@@ -392,7 +405,7 @@ export async function analyzeRecall(c: Context, recall: string): Promise<Analysi
         text: `The student did a "brain dump" — everything they remember, from memory:
 """${recall}"""
 
-Compare it with the lecture${c.pdfBase64 ? '' : ' topic (no file attached, use standard curriculum knowledge)'}.
+Compare it with the lecture${hasLecture(c) ? '' : ' topic (no file attached, use standard curriculum knowledge)'}.
 Return ONLY JSON:
 {"summary": "1 short encouraging sentence",
  "nailed": [{"title": "concept", "detail": "what they got right (1 sentence)", "tag": "Strong Recall|Exact Match|Firmly Grasped"}],

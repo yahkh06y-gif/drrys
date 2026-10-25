@@ -10,6 +10,7 @@ import { Btn, Enter, IconBtn, T } from '@/components/ui';
 import { haptic, play, tap } from '@/lib/feedback';
 import { finishOnboarding } from '@/lib/finish';
 import { checkPdf, keepFile } from '@/lib/session';
+import { LECTURE_TYPES } from '@/lib/slides';
 import { chapterLimit, LIMITS } from '@/lib/purchases';
 import { friendBranches } from '@/lib/together';
 import { uid, useApp, type Chapter, type Material } from '@/store';
@@ -41,13 +42,13 @@ export default function SubjectForm() {
   const patch = (cid: string, p: Partial<Chapter>) => setChapters((cs) => cs.map((c) => (c.id === cid ? { ...c, ...p } : c)));
 
   const pick = async (cid: string) => {
-    const r = await DocumentPicker.getDocumentAsync({ type: ['application/pdf'], copyToCacheDirectory: true, multiple: false });
+    const r = await DocumentPicker.getDocumentAsync({ type: LECTURE_TYPES, copyToCacheDirectory: true, multiple: false });
     if (r.canceled) return;
     const f = r.assets[0];
     const bad = await checkPdf(f, { chapter: true, isPro });
     if (bad) return Alert.alert('Can’t use this file', bad);
     play('select');
-    const uri = await keepFile(f.uri);
+    const uri = await keepFile(f.uri, f.name);
     setChapters((cs) =>
       cs.map((c) => (c.id === cid ? { ...c, materials: [...c.materials, { id: uid(), name: f.name, uri, size: f.size, mime: f.mimeType }] } : c)),
     );
@@ -180,7 +181,7 @@ export default function SubjectForm() {
                     ))}
                     <Pressable onPress={() => pick(c.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 4 }}>
                       <Ionicons name="cloud-upload-outline" size={14} color={C.title} />
-                      <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.title }}>{c.materials.length ? 'Add file' : 'Upload lecture slides (PDF)'}</Text>
+                      <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.title }}>{c.materials.length ? 'Add file' : 'Upload lecture slides (PDF or PowerPoint)'}</Text>
                     </Pressable>
                   </View>
                   {chapters.length > 1 && (

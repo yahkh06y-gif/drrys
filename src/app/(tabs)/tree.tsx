@@ -19,6 +19,7 @@ import { haptic, play, tap } from '@/lib/feedback';
 import { isResting, LIMITS } from '@/lib/purchases';
 import { makeSampleLecture, SAMPLE_PAGES, SAMPLE_TITLE } from '@/lib/sample';
 import { checkPdf, keepFile } from '@/lib/session';
+import { LECTURE_TYPES } from '@/lib/slides';
 import { activeSubject, EMPTY_STATS, isDue, streak, today, uid, useApp, type Chapter, type Material, type Subject } from '@/store';
 import { C, F } from '@/theme';
 
@@ -585,12 +586,12 @@ function GuideTip({ subject, step, width, height }: { subject: Subject; step: 'f
   };
 
   const upload = async () => {
-    const r = await DocumentPicker.getDocumentAsync({ type: ['application/pdf'], copyToCacheDirectory: true });
+    const r = await DocumentPicker.getDocumentAsync({ type: LECTURE_TYPES, copyToCacheDirectory: true });
     if (r.canceled) return;
     const f = r.assets[0];
     const bad = await checkPdf(f, { chapter: true, isPro });
     if (bad) return Alert.alert('Can’t use this file', bad);
-    addFile({ id: uid(), name: f.name, uri: await keepFile(f.uri), size: f.size, mime: f.mimeType });
+    addFile({ id: uid(), name: f.name, uri: await keepFile(f.uri, f.name), size: f.size, mime: f.mimeType });
   };
 
   const sample = async () => {
@@ -642,7 +643,7 @@ function GuideTip({ subject, step, width, height }: { subject: Subject; step: 'f
             <Btn title="Got it!" kind="teal" height={48} onPress={close} />
           ) : step === 'files' ? (
             <View style={{ gap: 10 }}>
-              <Btn title="Upload a lecture (PDF)" iconLeft="cloud-upload-outline" kind="teal" height={50} disabled={busy} onPress={upload} />
+              <Btn title="Upload a lecture (PDF or PowerPoint)" iconLeft="cloud-upload-outline" kind="teal" height={50} disabled={busy} onPress={upload} />
               <Pressable
                 onPress={sample}
                 disabled={busy}

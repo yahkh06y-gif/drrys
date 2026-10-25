@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Btn, Enter, SessionHeader, T } from '@/components/ui';
 import { play, tap } from '@/lib/feedback';
 import { checkPdf, keepFile } from '@/lib/session';
+import { isSlides, LECTURE_TYPES } from '@/lib/slides';
 import { uid, useApp } from '@/store';
 import { C, F } from '@/theme';
 
@@ -20,12 +21,12 @@ export default function Choose() {
   if (!session || !subject || !chapter) return null;
 
   const upload = async () => {
-    const r = await DocumentPicker.getDocumentAsync({ type: ['application/pdf'], copyToCacheDirectory: true });
+    const r = await DocumentPicker.getDocumentAsync({ type: LECTURE_TYPES, copyToCacheDirectory: true });
     if (r.canceled) return;
     const f = r.assets[0];
     const bad = await checkPdf(f, { chapter: true, isPro: useApp.getState().isPro });
     if (bad) return Alert.alert('Can’t use this file', bad);
-    const m = { id: uid(), name: f.name, uri: await keepFile(f.uri), size: f.size, mime: f.mimeType };
+    const m = { id: uid(), name: f.name, uri: await keepFile(f.uri, f.name), size: f.size, mime: f.mimeType };
     updateSubject(subject.id, { chapters: subject.chapters.map((c) => (c.id === chapter.id ? { ...c, materials: [...c.materials, m] } : c)) });
     patchSession({ materialId: m.id });
     play('select');
@@ -63,7 +64,7 @@ export default function Choose() {
                   <Text numberOfLines={1} style={{ fontFamily: F.bold, fontSize: 14, color: C.teal }}>
                     {m.name}
                   </Text>
-                  {!!m.size && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>{m.sample ? 'Sample lecture by Drrys' : `${(m.size / 1e6).toFixed(1)} MB`} • PDF</Text>}
+                  {!!m.size && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>{m.sample ? 'Sample lecture by Drrys' : `${(m.size / 1e6).toFixed(1)} MB`} • {isSlides(m) ? 'PowerPoint' : 'PDF'}</Text>}
                 </View>
                 <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={on ? C.teal : C.lineStrong} />
               </Pressable>
@@ -71,7 +72,7 @@ export default function Choose() {
           })}
           <Pressable onPress={upload} style={{ borderWidth: 1, borderStyle: 'dashed', borderColor: C.title, borderRadius: 14, padding: 14, flexDirection: 'row', gap: 8, justifyContent: 'center' }}>
             <Ionicons name="cloud-upload-outline" size={16} color={C.title} />
-            <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.title }}>Upload new file (PDF)</Text>
+            <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.title }}>Upload new file (PDF or PowerPoint)</Text>
           </Pressable>
           <Pressable
             onPress={() => (tap('select'), patchSession({ materialId: undefined }))}
@@ -83,7 +84,7 @@ export default function Choose() {
 
         {session.materialId && (
           <Enter style={{ gap: 10 }}>
-            <T v="label">Pages for today</T>
+            <T v="label">{chapter.materials.find((m) => m.id === session.materialId && isSlides(m)) ? 'Slides for today' : 'Pages for today'}</T>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               {(['fromPage', 'toPage'] as const).map((k) => (
                 <View key={k} style={{ flex: 1, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, borderRadius: 16, padding: 12 }}>

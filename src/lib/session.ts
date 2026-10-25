@@ -3,17 +3,20 @@ import { PDFDocument } from 'pdf-lib';
 import { Platform } from 'react-native';
 
 import { readFileBase64 } from '@/lib/readfile';
+import { countSlides, isOldPpt, isSlides, readSlides, type Slide } from '@/lib/slides';
 import type { Analysis, Context } from '@/lib/ai';
 import { useApp } from '@/store';
 
-/** A picked PDF lives in the cache, which Android may clear: copy it into the app's own documents
- *  so Coco can still read the lecture weeks later. Falls back to the picked copy if anything fails. */
-export async function keepFile(uri: string): Promise<string> {
+/** A picked file lives in the cache, which Android may clear: copy it into the app's own documents
+ *  so Coco can still read the lecture weeks later. Falls back to the picked copy if anything fails.
+ *  `name`: the picked file's name, so a PowerPoint keeps its .pptx ending. */
+export async function keepFile(uri: string, name?: string): Promise<string> {
   if (Platform.OS === 'web') return uri;
   try {
     const dir = new Directory(Paths.document, 'materials');
     dir.create({ intermediates: true, idempotent: true });
-    const dest = new File(dir, `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.pdf`);
+    const ext = /\.(pptx|ppsx)$/i.exec(name ?? '')?.[1]?.toLowerCase() ?? 'pdf';
+    const dest = new File(dir, `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.${ext}`);
     try {
       await new File(uri).copy(dest);
     } catch {
@@ -38,8 +41,31 @@ async function pdfPages(uri: string): Promise<number | undefined> {
   }
 }
 
-/** Returns a reason the file can't be used, or undefined if it's fine. `chapter`: a lecture file (page limit applies). */
-export async function checkPdf(f: { uri: string; size?: number | null }, opts: { chapter: boolean; isPro: boolean }): Promise<string | undefined> {
+/** A slide holds far less than a PDF page, so a deck may have more slides than a PDF has pages. */
+export const SLIDE_LIMITS = { maxMB: 40, freeSlides: 80, proSlides: 300 };
+
+/** Returns a reason the file can't be used, or undefined if it's fine. `chapter`: a lecture file (page limit applies).
+ *  `name` / `mimeType`: the picked file's, to tell a PowerPoint from a PDF. */
+export async function checkPdf(
+  f: { uri: string; size?: number | null; name?: string | null; mimeType?: string | null },
+  opts: { chapter: boolean; isPro: boolean },
+): Promise<string | undefined> {
+  if (isOldPpt(f) && !isSlides(f)) return 'This is an old PowerPoint file (.ppt). Open it in PowerPoint and choose Save As → .pptx (or PDF), then upload that.';
+  if (isSlides(f)) {
+    if (!opts.chapter) return 'Upload the syllabus and past papers as PDF. PowerPoint works for lecture slides.';
+    if (f.size && f.size > SLIDE_LIMITS.maxMB * 1e6) return `This deck is ${(f.size / 1e6).toFixed(0)} MB. Decks up to ${SLIDE_LIMITS.maxMB} MB work — in PowerPoint use File → Compress Pictures, or save it as PDF.`;
+    let n: number | undefined;
+    try {
+      n = countSlides(await readFileBase64(f.uri));
+    } catch {}
+    if (!n) return 'Drrys could not open this PowerPoint file. Save it again as .pptx (or as PDF) and upload that.';
+    const maxS = opts.isPro ? SLIDE_LIMITS.proSlides : SLIDE_LIMITS.freeSlides;
+    if (n > maxS)
+      return opts.isPro
+        ? `This deck has ${n} slides. One chapter can have up to ${maxS} — split it into chapters, one branch each.`
+        : `This deck has ${n} slides. On the free plan a chapter can have up to ${maxS} slides — one chapter per branch. Drrys Pro gives you 5 branches per tree.`;
+    return undefined;
+  }
   if (f.size && f.size > PDF_LIMITS.maxMB * 1e6) return `This file is ${(f.size / 1e6).toFixed(0)} MB. Files up to ${PDF_LIMITS.maxMB} MB work best — try exporting it again with smaller images.`;
   if (!opts.chapter) return undefined;
   const max = opts.isPro ? PDF_LIMITS.proPages : PDF_LIMITS.freePages;
@@ -66,6 +92,7 @@ async function slicePages(base64: string, from?: number, to?: number): Promise<{
 }
 
 const cache = new Map<string, string>();
+const slideCache = new Map<string, Slide[]>();
 const pageCounts = new Map<string, number>();
 
 const readBase64 = readFileBase64;
@@ -98,8 +125,22 @@ export async function sessionContext(withPdf = true): Promise<Context> {
   const chapter = subject?.chapters.find((c) => c.id === d.chapterId);
   const mat = chapter?.materials.find((m) => m.id === d.materialId);
   let pdfBase64: string | undefined;
+  let slides: Slide[] | undefined;
   let why = '';
-  if (withPdf && mat) {
+  if (withPdf && mat && isSlides(mat)) {
+    // a PowerPoint: the chosen slides' text, notes and pictures (one slide = one page)
+    const key = `${mat.uri}#${d.fromPage}-${d.toPage}`;
+    slides = slideCache.get(key);
+    if (!slides) {
+      try {
+        slides = readSlides(await readFileBase64(mat.uri), d.fromPage, d.toPage);
+        slideCache.set(key, slides);
+      } catch (e) {
+        why = String((e as Error)?.message ?? e).slice(0, 90);
+      }
+    }
+    if (!slides?.length) throw new Error(`File problem${why ? ` (${why})` : ''}: Drrys could not read your slides, so it did not start. Re-add the file and try again.`);
+  } else if (withPdf && mat) {
     const key = `${mat.uri}#${d.fromPage}-${d.toPage}`;
     pdfBase64 = cache.get(key);
     if (!pdfBase64) {
@@ -131,7 +172,8 @@ export async function sessionContext(withPdf = true): Promise<Context> {
     subject: subject?.name ?? 'General',
     chapter: chapter?.title ?? 'Chapter',
     pdfBase64,
-    pageCount: pdfBase64 ? pageCounts.get(`${mat?.uri}#${d.fromPage}-${d.toPage}`) : undefined,
+    slides,
+    pageCount: slides ? slides.length : pdfBase64 ? pageCounts.get(`${mat?.uri}#${d.fromPage}-${d.toPage}`) : undefined,
     course,
     fromPage: d.fromPage,
     toPage: d.toPage,
