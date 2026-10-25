@@ -111,6 +111,10 @@ export async function shelfOf(r: Row): Promise<WorldItem[]> {
 /** Shown on a card when there's no picture. */
 export const TYPE_EMOJI: Record<WorldType, string> = { tv_show: '📺', movie: '🎬', artist: '🎵', brand: '🏆', book: '📚', person: '🏅', podcast: '🎙️', history: '🏛️' };
 
+/** Shown on a card when there's no picture: the icon of its area (from "Show Coco your world"). */
+export const TYPE_ICON: Partial<Record<WorldType, number>> = { tv_show: AREA_ART.shows, movie: AREA_ART.movies, brand: AREA_ART.sports, person: AREA_ART.sports, book: AREA_ART.books, history: AREA_ART.history };
+export const SECTION_ICON: Record<Section, number | undefined> = { sports: AREA_ART.sports, stories: AREA_ART.movies, history: AREA_ART.history };
+
 export const TYPE_LABEL: Record<WorldType, string> = { tv_show: 'Show', movie: 'Movie', artist: 'Music', brand: 'Sports team', book: 'Book', person: 'Athlete', podcast: 'Podcast', history: 'History' };
 
 /** Coco's quick reaction to a pick (written by hand, no AI, so it's instant). */

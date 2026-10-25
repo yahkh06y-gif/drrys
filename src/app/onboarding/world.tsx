@@ -26,7 +26,8 @@ import { Btn, Choice, Enter, OnbBar } from '@/components/ui';
 import { useBack } from '@/lib/back';
 import { tap } from '@/lib/feedback';
 import { progressOf } from '@/lib/onboarding';
-import { CATEGORIES, cocoComment, nichesFor, relatedTo, rowOf, searchWorld, SECTION_LABEL, sectionOf, shelfOf, TYPE_EMOJI, type CategoryKey, type Niche, type Row, type Section } from '@/lib/qloo';
+import { prepareFirst } from '@/lib/first';
+import { CATEGORIES, cocoComment, nichesFor, relatedTo, rowOf, searchWorld, SECTION_ICON, SECTION_LABEL, sectionOf, shelfOf, TYPE_EMOJI, TYPE_ICON, type CategoryKey, type Niche, type Row, type Section } from '@/lib/qloo';
 import { useApp, type WorldItem } from '@/store';
 import { C, F } from '@/theme';
 
@@ -196,7 +197,9 @@ export default function World() {
   const next = () => {
     set({ world: { picks: picked, because: [], tags: [] } });
     setProfile({ interests: picked.map((x) => x.name) });
-    router.push(picked.some((x) => x.id) ? '/onboarding/explore' : '/onboarding/first');
+    // Coco's first explanation starts now, and is made while the student sets up their plan
+    prepareFirst();
+    router.push('/onboarding/plan');
   };
 
   /* ---------- the way on: one button, and it says what's missing ---------- */
@@ -253,7 +256,7 @@ export default function World() {
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: GAP }}>
                     {got === 'loading' || got === undefined
                       ? [0, 1, 2].map((i) => <Pulse key={i} style={{ width: nicheW, height: nicheW + 26, borderRadius: 16 }} />)
-                      : got.filter(visible).map((n) => <NicheCard key={n.key} niche={n} emoji={SECTION_EMOJI[x]} width={nicheW} selected={chosen.includes(n.key)} onPress={() => pickNiche(n)} />)}
+                      : got.filter(visible).map((n) => <NicheCard key={n.key} niche={n} emoji={SECTION_EMOJI[x]} icon={SECTION_ICON[x]} width={nicheW} selected={chosen.includes(n.key)} onPress={() => pickNiche(n)} />)}
                   </ScrollView>
                 )}
               </View>
@@ -271,10 +274,9 @@ export default function World() {
                   const cat = CATEGORIES.find((c) => c.key === t)!;
                   const on = area === t;
                   return (
-                    <Pressable key={t} onPress={() => (tap('select'), setQuery(''), setTab(t), scroller.current?.scrollTo({ y: 0, animated: false }))} style={{ paddingHorizontal: 14, height: 36, justifyContent: 'center', borderRadius: 99, backgroundColor: on ? C.teal : C.sand, borderWidth: 1, borderColor: on ? C.teal : C.line }}>
-                      <Text style={{ fontFamily: F.bold, fontSize: 13, color: on ? C.white : C.teal }}>
-                        {cat.emoji} {cat.label}
-                      </Text>
+                    <Pressable key={t} onPress={() => (tap('select'), setQuery(''), setTab(t), scroller.current?.scrollTo({ y: 0, animated: false }))} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 6, paddingRight: 14, height: 40, borderRadius: 99, backgroundColor: on ? C.teal : C.sand, borderWidth: 1, borderColor: on ? C.teal : C.line }}>
+                      {cat.icon !== undefined ? <Image source={cat.icon} style={{ width: 28, height: 28 }} contentFit="contain" /> : <Text style={{ fontSize: 16 }}>{cat.emoji}</Text>}
+                      <Text style={{ fontFamily: F.bold, fontSize: 13, color: on ? C.white : C.teal }}>{cat.label}</Text>
                     </Pressable>
                   );
                 })}
@@ -344,7 +346,7 @@ export default function World() {
                 : picked.map((x) => (
                     <Animated.View key={keyOf(x)} entering={FadeIn.duration(180)} exiting={FadeOut.duration(150)} layout={LinearTransition}>
                       <Pressable onPress={() => remove(x)} hitSlop={4} accessibilityRole="button" accessibilityLabel={`Remove ${x.name}`}>
-                        <SafePicture uri={x.image} emoji={TYPE_EMOJI[x.type]} emojiSize={16} style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: C.green }} />
+                        <SafePicture uri={x.image} emoji={TYPE_EMOJI[x.type]} icon={TYPE_ICON[x.type]} emojiSize={16} style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: C.green }} />
                         <View style={{ position: 'absolute', top: -5, right: -5, width: 20, height: 20, borderRadius: 10, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: C.paper }}>
                           <Ionicons name="close" size={11} color={C.white} />
                         </View>
@@ -363,16 +365,14 @@ export default function World() {
   );
 }
 
-/** A niche: Coco's picture for it (or else the picture of its most popular thing), with its name under it. */
-function NicheCard({ niche, emoji, width, selected, onPress }: { niche: Niche; emoji: string; width: number; selected: boolean; onPress: () => void }) {
-  const art = NICHE_ART[niche.slug];
+/** A niche: Coco's picture for it (or else its section's icon), with its name under it. */
+function NicheCard({ niche, emoji, icon, width, selected, onPress }: { niche: Niche; emoji: string; icon?: number; width: number; selected: boolean; onPress: () => void }) {
+  const art = NICHE_ART[niche.slug] ?? icon;
   return (
     <Pressable onPress={onPress} style={{ width }} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} accessibilityLabel={niche.label}>
       <View style={{ width, height: width, borderRadius: 16, overflow: 'hidden', backgroundColor: art ? C.white : C.sand, borderWidth: selected ? 3 : 1, borderColor: selected ? C.green : C.line, alignItems: 'center', justifyContent: 'center' }}>
         {art ? (
           <Image source={art} style={{ width: '88%', height: '88%' }} contentFit="contain" />
-        ) : niche.cover ? (
-          <Image source={{ uri: niche.cover }} style={{ position: 'absolute', inset: 0 }} contentFit="cover" transition={200} />
         ) : (
           <Text style={{ fontSize: 36, opacity: 0.5 }}>{emoji}</Text>
         )}
@@ -400,7 +400,13 @@ function Poster({ item, width, selected, fresh, onPress }: { item: WorldItem; wi
     <Pressable onPress={press} style={{ width }} accessibilityRole="checkbox" accessibilityState={{ checked: selected }} accessibilityLabel={item.name}>
       <Animated.View style={a}>
         <View style={{ width, height: width * 1.5, borderRadius: 12, overflow: 'hidden', backgroundColor: C.sand, borderWidth: selected ? 3 : 1, borderColor: selected ? C.green : fresh ? C.amber : C.line, alignItems: 'center', justifyContent: 'center' }}>
-          {item.image ? <Image source={{ uri: item.image }} style={{ position: 'absolute', inset: 0 }} contentFit="cover" transition={200} /> : <Text style={{ fontSize: 30, opacity: 0.6 }}>{TYPE_EMOJI[item.type]}</Text>}
+          {item.image ? (
+            <Image source={{ uri: item.image }} style={{ position: 'absolute', inset: 0 }} contentFit="cover" transition={200} />
+          ) : TYPE_ICON[item.type] !== undefined ? (
+            <Image source={TYPE_ICON[item.type]} style={{ width: '80%', height: '80%' }} contentFit="contain" />
+          ) : (
+            <Text style={{ fontSize: 30, opacity: 0.6 }}>{TYPE_EMOJI[item.type]}</Text>
+          )}
           {selected && <Check />}
         </View>
       </Animated.View>

@@ -23,6 +23,8 @@ export const NICHE_ART: Record<string, number> = {
   cricket: require('../assets/art/onboarding/niches/niche-cricket.png'),
   volleyball: require('../assets/art/onboarding/niches/niche-volleyball.png'),
   cycling: require('../assets/art/onboarding/niches/niche-cycling.png'),
+  golf: require('../assets/art/onboarding/niches/niche-golf.png'),
+  hockey: require('../assets/art/onboarding/niches/niche-hockey.png'),
   'table-tennis': require('../assets/art/onboarding/niches/niche-table-tennis.png'),
   handball: require('../assets/art/onboarding/niches/niche-handball.png'),
   rugby: require('../assets/art/onboarding/niches/niche-rugby.png'),
@@ -48,4 +50,5 @@ export const NICHE_ART: Record<string, number> = {
 };
 // a few of Qloo's names for the same thing
 NICHE_ART.animation = NICHE_ART.family;
+NICHE_ART['ice-hockey'] = NICHE_ART.hockey;
 NICHE_ART['political-history'] = NICHE_ART['history-politics'] = NICHE_ART['military-history'] = NICHE_ART.empires;

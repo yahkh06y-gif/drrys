@@ -4,8 +4,10 @@
 //   3. reminder time, then the promise written from those choices: hold to promise (it fills with water),
 //      and only then the system's notification prompt.
 // One promise for the whole forest: the streak and the reminder are shared; the minutes are each tree's default.
+// It comes right after "Show Coco your world": while the student answers, Coco's first explanation is made in
+// the background (lib/first), so "Let me show you how we'll study" is ready when they get there.
 import { Image } from 'expo-image';
-import { router, Stack } from 'expo-router';
+import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import Animated, { cancelAnimation, Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
@@ -14,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COCO } from '@/art';
 import { Btn, Enter, OnbBar } from '@/components/ui';
 import { useBack } from '@/lib/back';
-import { haptic, play, tap } from '@/lib/feedback';
+import { haptic, tap } from '@/lib/feedback';
 import { enableReminders, hourLabel } from '@/lib/notify';
 import { progressOf } from '@/lib/onboarding';
 import { useApp, type Depth, type Plan as PlanT } from '@/store';
@@ -47,13 +49,10 @@ export default function Plan() {
   const [hour, setHour] = useState(20);
   const [promised, setPromised] = useState(false);
 
-  // the tree is already planted: going back to the planting screen would plant it twice
-  const planted = useApp((s) => s.subjects.length > 0);
   const back = useCallback(() => {
-    if (promised) return true;
-    if (step > 0) return setStep(step - 1), true;
-    return planted;
-  }, [step, promised, planted]);
+    if (step > 0 && !promised) return setStep(step - 1), true;
+    return false;
+  }, [step, promised]);
   useBack(back);
 
   const save = (didPromise: boolean) => {
@@ -65,14 +64,8 @@ export default function Plan() {
     setProfile({ reminderHour: hour });
   };
 
-  // onto the tree: Coco waters the new sapling, then the one guided step (add a lecture)
-  const finish = () => {
-    const st = useApp.getState();
-    const tree = st.subjects.at(-1);
-    set({ onboarded: true, justWatered: tree?.id, guide: tree ? 'files' : undefined, coachSeen: !!tree || st.coachSeen });
-    play('celebrate');
-    router.replace('/(tabs)/tree');
-  };
+  // on to Coco's first explanation (made in the background while the student was here)
+  const finish = () => router.push('/onboarding/first');
 
   const onPromise = async () => {
     setPromised(true);
@@ -92,8 +85,7 @@ export default function Plan() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.cream, padding: 20 }}>
-      <Stack.Screen options={{ gestureEnabled: !planted }} />
-      <OnbBar value={progressOf('plan')} onBack={promised || (planted && step === 0) ? false : () => back() || (router.canGoBack() && router.back())} style={{ marginBottom: 18 }} />
+      <OnbBar value={progressOf('plan')} onBack={() => back() || (router.canGoBack() && router.back())} style={{ marginBottom: 18 }} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 18 }}>
         <Image source={promised ? COCO.bell : COCO.classic} style={{ width: 56, height: 70 }} contentFit="contain" />
         <Enter key={`${step}${promised}`} style={{ flex: 1 }}>
@@ -159,7 +151,10 @@ export default function Plan() {
       {step < 2 ? (
         <Btn title="continue" mono onPress={() => setStep(step + 1)} />
       ) : (
-        !promised && (
+        // promised already (back from the next screen): straight on
+        promised ? (
+          <Btn title="continue" mono onPress={finish} />
+        ) : (
           <Pressable onPress={notNow} style={{ alignSelf: 'center', padding: 8 }}>
             <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>Not now</Text>
           </Pressable>

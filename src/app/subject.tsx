@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Btn, Enter, IconBtn, T } from '@/components/ui';
 import { haptic, play, tap } from '@/lib/feedback';
+import { finishOnboarding } from '@/lib/finish';
 import { checkPdf, keepFile } from '@/lib/session';
 import { chapterLimit, LIMITS } from '@/lib/purchases';
 import { friendBranches } from '@/lib/together';
@@ -283,7 +284,7 @@ export default function SubjectForm() {
             </View>
           )}
           {onboarding && (
-            <Pressable onPress={() => router.replace('/onboarding/plan')} style={{ alignSelf: 'center' }}>
+            <Pressable onPress={finishOnboarding} style={{ alignSelf: 'center' }}>
               <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted, textDecorationLine: 'underline' }}>Skip for now, finish later</Text>
             </Pressable>
           )}

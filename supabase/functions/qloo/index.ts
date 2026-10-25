@@ -172,10 +172,11 @@ const MORE_SPORTS: { slug: string; label: string; find: string }[] = [
   { slug: 'handball', label: 'Handball', find: 'EHF Champions League' },
   { slug: 'table-tennis', label: 'Table tennis', find: 'World Table Tennis' },
   { slug: 'padel', label: 'Padel', find: 'Premier Padel' },
-  { slug: 'athletics', label: 'Athletics', find: 'Diamond League' },
 ];
 // sports whose players are mostly pictured without a shirt or in very little: their teams and leagues only
 const NO_PEOPLE = new Set(['mma', 'boxing', 'athletics', 'wrestling', 'swimming', 'bodybuilding']);
+// niches left out on purpose (athletes pictured in very little; history of medicine)
+const SKIP_NICHE = /athletics|track-and-field|medicine|medical/;
 
 /** Popular things inside one niche: teams and players for a sport, titles for a genre. */
 async function shelf(n: Pick<Niche, 'type' | 'tag' | 'anchor' | 'slug'>, take = 24): Promise<Item[]> {
@@ -216,7 +217,7 @@ async function sports(): Promise<Niche[]> {
       const m = id.match(/^urn:tag:genre:brand:sports_organization:([a-z_]+)$/);
       if (!m || m[1] === 'league_tournament' || !org.entity_id) continue;
       const slug = SPORT_SLUG[slugOf(id)] ?? slugOf(id);
-      if (found.has(slug)) continue;
+      if (found.has(slug) || SKIP_NICHE.test(slug)) continue;
       found.set(slug, { key: `sports:${slug}`, area: 'sports', slug, label: nice(String(t.name ?? m[1])), type: 'brand', tag: id, anchor: org.entity_id });
     }
   }
@@ -244,6 +245,7 @@ async function stories(): Promise<Niche[]> {
       if (typeof t?.id !== 'string' || typeof t?.name !== 'string' || SKIP_GENRE.test(t.id) || BLOCK.test(t.name)) continue;
       const own = slugOf(t.id);
       const slug = FOLD[own] ?? own;
+      if (SKIP_NICHE.test(slug)) continue;
       const n = found.get(slug) ?? { key: `stories:${slug}`, area: 'stories' as const, slug, label: STORY_LABEL[slug] ?? nice(t.name), type: k, tags: {} };
       // the genre's own tag wins over a folded sub-genre's
       if (!n.tags![k] || own === slug) n.tags![k] = t.id;
@@ -262,10 +264,11 @@ async function historyNiches(): Promise<Niche[]> {
   const r = await qloo('/v2/tags', { 'filter.query': 'history', take: '40' });
   const seen = new Set<string>();
   return ((r?.results?.tags ?? []) as any[])
-    .filter((t) => typeof t?.name === 'string' && String(t?.id).startsWith('urn:tag:genre:media:history') && !BLOCK.test(t.name) && !seen.has(t.id) && seen.add(t.id))
+    .filter((t) => typeof t?.name === 'string' && String(t?.id).startsWith('urn:tag:genre:media:history') && !BLOCK.test(t.name) && !SKIP_NICHE.test(slugOf(t.id)) && !/medic/i.test(t.name) && !seen.has(t.id) && seen.add(t.id))
     .slice(0, 12)
     .map((t) => {
-      const slug = HISTORY_SLUG[slugOf(t.id)] ?? slugOf(t.id);
+      // named by what it's about, so it finds Coco's picture whatever Qloo calls it
+      const slug = /scien/i.test(t.name) ? 'science-history' : HISTORY_SLUG[slugOf(t.id)] ?? slugOf(t.id);
       return { key: `history:${slug}`, area: 'history' as const, slug, label: nice(t.name), type: 'book' as Kind, tag: t.id };
     });
 }

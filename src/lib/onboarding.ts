@@ -1,7 +1,7 @@
 // Onboarding shared bits.
 
 /** Every onboarding screen that shows the progress bar, in order — the bar fills one step per screen. */
-const STEPS = ['study', 'world', 'explore', 'first', 'plant', 'plan'] as const;
+const STEPS = ['study', 'world', 'plan', 'first', 'plant'] as const;
 export type OnboardingStep = (typeof STEPS)[number];
 export const progressOf = (step: OnboardingStep) => (STEPS.indexOf(step) + 1) / STEPS.length;
 

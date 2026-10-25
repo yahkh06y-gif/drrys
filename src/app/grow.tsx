@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Motion } from '@/components/Motion';
 import { useBack } from '@/lib/back';
 import { haptic } from '@/lib/feedback';
+import { finishOnboarding } from '@/lib/finish';
 import { F } from '@/theme';
 
 export default function Grow() {
@@ -16,7 +17,7 @@ export default function Grow() {
   const go = useCallback(() => {
     if (done.current) return;
     done.current = true;
-    if (onboarding) router.replace('/onboarding/plan');
+    if (onboarding) finishOnboarding();
     else router.dismissTo('/(tabs)/tree');
   }, [onboarding]);
 

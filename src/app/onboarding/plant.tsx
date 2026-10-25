@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Motion } from '@/components/Motion';
 import { Btn, Enter, OnbBar, T } from '@/components/ui';
 import { haptic } from '@/lib/feedback';
+import { finishOnboarding } from '@/lib/finish';
 import { progressOf } from '@/lib/onboarding';
 import { useApp } from '@/store';
 import { C } from '@/theme';
@@ -70,7 +71,7 @@ export default function Plant() {
         <View style={{ flex: 1 }} />
         <View style={{ gap: 10 }}>
           <Btn title="Plant Now" kind="leaf" mono onPress={startCatch} />
-          <Btn title="Not now" kind="green" height={46} mono onPress={() => router.push('/onboarding/plan')} />
+          <Btn title="Not now" kind="green" height={46} mono onPress={finishOnboarding} />
         </View>
       </SafeAreaView>
 
