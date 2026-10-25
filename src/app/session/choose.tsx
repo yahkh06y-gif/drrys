@@ -2,12 +2,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Btn, Enter, SessionHeader, T } from '@/components/ui';
 import { play, tap } from '@/lib/feedback';
-import { checkPdf, keepFile } from '@/lib/session';
+import { checkPdf, fileLength, keepFile } from '@/lib/session';
 import { isSlides, LECTURE_TYPES } from '@/lib/slides';
 import { uid, useApp } from '@/store';
 import { C, F } from '@/theme';
@@ -18,6 +19,42 @@ export default function Choose() {
   const patchSession = useApp((s) => s.patchSession);
   const updateSubject = useApp((s) => s.updateSubject);
   const chapter = subject?.chapters.find((c) => c.id === session?.chapterId);
+  const mat = chapter?.materials.find((m) => m.id === session?.materialId);
+  const total = mat?.pages; // pages (or slides) in the chosen file, once counted
+  const [unreadable, setUnreadable] = useState<string>(); // a file whose pages couldn't be counted (the range is then free)
+  const counting = !!mat && !mat.pages && unreadable !== mat.id;
+
+  // count the chosen file's pages once (kept on the file), so the range always matches the real file
+  const subjectId = subject?.id;
+  const chapterId = chapter?.id;
+  useEffect(() => {
+    if (!mat || mat.pages || !subjectId || !chapterId) return;
+    let alive = true;
+    fileLength(mat).then((n) => {
+      if (!alive) return;
+      if (!n) setUnreadable(mat.id);
+      const st = useApp.getState();
+      const sub = st.subjects.find((x) => x.id === subjectId);
+      if (!n || !sub) return;
+      st.updateSubject(subjectId, {
+        chapters: sub.chapters.map((c) => (c.id === chapterId ? { ...c, materials: c.materials.map((x) => (x.id === mat.id ? { ...x, pages: n } : x)) } : c)),
+      });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [mat, subjectId, chapterId]);
+
+  // a newly chosen file starts on all its pages; the range never goes past the last page
+  const from = session?.fromPage ?? 1;
+  const to = session?.toPage ?? 1;
+  const rangeFor = session?.rangeFor;
+  useEffect(() => {
+    if (!mat || !total) return;
+    if (rangeFor !== mat.id) patchSession({ fromPage: 1, toPage: total, rangeFor: mat.id });
+    else if (to > total) patchSession({ fromPage: Math.min(from, total), toPage: total });
+  }, [mat, total, rangeFor, from, to, patchSession]);
+
   if (!session || !subject || !chapter) return null;
 
   const upload = async () => {
@@ -34,10 +71,14 @@ export default function Choose() {
 
   const step = (k: 'fromPage' | 'toPage', d: number) => {
     tap();
-    const v = Math.max(1, session[k] + d);
+    const v = Math.min(total ?? Infinity, Math.max(1, session[k] + d));
     if (k === 'fromPage') patchSession({ fromPage: Math.min(v, session.toPage) });
     else patchSession({ toPage: Math.max(v, session.fromPage) });
   };
+
+  const unit = mat && isSlides(mat) ? 'slide' : 'page';
+  const n = session.toPage - session.fromPage + 1;
+  const whole = !!total && session.fromPage === 1 && session.toPage === total;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
@@ -84,25 +125,42 @@ export default function Choose() {
 
         {session.materialId && (
           <Enter style={{ gap: 10 }}>
-            <T v="label">{chapter.materials.find((m) => m.id === session.materialId && isSlides(m)) ? 'Slides for today' : 'Pages for today'}</T>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <T v="label">{unit === 'slide' ? 'Slides for today' : 'Pages for today'}</T>
+              {!!total && (
+                <Pressable
+                  onPress={() => (tap('select'), patchSession({ fromPage: 1, toPage: total }))}
+                  disabled={whole}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: whole ? C.mint : C.white, borderWidth: 1, borderColor: whole ? C.mintBorder : C.lineStrong, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 5 }}>
+                  {whole && <Ionicons name="checkmark" size={13} color={C.mossDark} />}
+                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: whole ? C.mossDark : C.teal }}>All {total}</Text>
+                </Pressable>
+              )}
+            </View>
             <View style={{ flexDirection: 'row', gap: 12 }}>
-              {(['fromPage', 'toPage'] as const).map((k) => (
-                <View key={k} style={{ flex: 1, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, borderRadius: 16, padding: 12 }}>
-                  <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>{k === 'fromPage' ? 'From page' : 'To page'}</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-                    <Pressable hitSlop={8} onPress={() => step(k, -1)}>
-                      <Ionicons name="remove-circle-outline" size={24} color={C.teal} />
-                    </Pressable>
-                    <Text style={{ fontFamily: F.bold, fontSize: 24, color: C.ink }}>{session[k]}</Text>
-                    <Pressable hitSlop={8} onPress={() => step(k, 1)}>
-                      <Ionicons name="add-circle-outline" size={24} color={C.teal} />
-                    </Pressable>
+              {(['fromPage', 'toPage'] as const).map((k) => {
+                const atMin = session[k] <= (k === 'toPage' ? session.fromPage : 1);
+                const atMax = k === 'fromPage' ? session.fromPage >= session.toPage : !!total && session.toPage >= total;
+                return (
+                  <View key={k} style={{ flex: 1, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, borderRadius: 16, padding: 12 }}>
+                    <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>{k === 'fromPage' ? 'From' : 'To'}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                      <Pressable hitSlop={8} disabled={atMin} onPress={() => step(k, -1)} style={{ opacity: atMin ? 0.3 : 1 }}>
+                        <Ionicons name="remove-circle-outline" size={24} color={C.teal} />
+                      </Pressable>
+                      <Text style={{ fontFamily: F.bold, fontSize: 24, color: C.ink }}>{session[k]}</Text>
+                      <Pressable hitSlop={8} disabled={atMax} onPress={() => step(k, 1)} style={{ opacity: atMax ? 0.3 : 1 }}>
+                        <Ionicons name="add-circle-outline" size={24} color={C.teal} />
+                      </Pressable>
+                    </View>
                   </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
             <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.teal }}>
-              ⏱ {session.toPage - session.fromPage + 1} pages selected • ~{Math.max(10, (session.toPage - session.fromPage + 1) * 3)} min session
+              {counting && !total
+                ? `Counting the ${unit}s…`
+                : `⏱ ${n} ${n === 1 ? unit : `${unit}s`}${total ? ` of ${total}` : ''} • ~${Math.max(10, n * 3)} min session`}
             </Text>
           </Enter>
         )}

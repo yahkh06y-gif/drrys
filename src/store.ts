@@ -6,7 +6,7 @@ import { shrinkBigPictures } from '@/lib/shrink';
 
 import type { Analysis, ActiveQuestion } from '@/lib/ai';
 
-export type Material = { id: string; name: string; uri: string; size?: number; mime?: string; sample?: boolean }; // sample: Drrys' own demo lecture ("Fill sample answer" works only there)
+export type Material = { id: string; name: string; uri: string; size?: number; mime?: string; sample?: boolean; pages?: number }; // sample: Drrys' own demo lecture ("Fill sample answer" works only there) · pages: pages (or slides) in the file, counted once
 export type Chapter = { id: string; title: string; materials: Material[]; mastery: number; sessions: number };
 export type Subject = {
   id: string;
@@ -77,6 +77,7 @@ export type SessionDraft = {
   materialId?: string;
   fromPage: number;
   toPage: number;
+  rangeFor?: string; // the file fromPage/toPage were set for: another file starts on its whole length again
   recall: string;
   analysis?: Analysis;
   analyzedFor?: string; // what the analysis was made from (recall + pages): going back and forward again without a change does not ask the AI again

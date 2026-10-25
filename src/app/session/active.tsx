@@ -50,6 +50,18 @@ const toneOf = (g: QResult['grade']) =>
       ? { bg: '#FFF3DC', border: '#F0A63A', icon: 'alert-circle' as const, color: '#E08A00', text: '#B86A00', title: 'Almost there' }
       : { bg: '#FDECEA', border: '#E8998B', icon: 'close-circle' as const, color: '#D9573B', text: '#C2452B', title: 'Not yet' };
 
+// the right answer, written out for each format (shown under the feedback when the student missed it)
+const solution = (q: ActiveQuestion) =>
+  q.format === 'order' && q.steps
+    ? q.steps.map((x, k) => `${k + 1}. ${x}`).join('\n')
+    : q.format === 'blank' && q.text
+      ? q.text.replace(/\[\[(.+?)\]\]/g, '$1')
+      : q.format === 'match' && q.pairs
+        ? q.pairs.map((p) => `${p.left}  →  ${p.right}`).join('\n')
+        : q.format === 'sort' && q.buckets
+          ? q.buckets.map((b) => `${b.name}: ${b.items.join(', ')}`).join('\n')
+          : q.ideal;
+
 export default function Active() {
   const qs = useApp((s) => s.session?.questions ?? []);
   const results = useApp((s) => s.session?.results);
@@ -247,7 +259,7 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
         {!grade && (
           <Enter>
             <Pill text={(FORMAT_LINE[fmt] ?? KIND[q.kind ?? 'conceptual']).pill} />
-            <T style={{ marginTop: 8 }}>{(FORMAT_LINE[fmt] ?? KIND[q.kind ?? 'conceptual']).line}</T>
+            {marked && <T style={{ marginTop: 8 }}>{FORMAT_LINE[fmt]?.line}</T>}
           </Enter>
         )}
 
@@ -281,19 +293,18 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
         {/* 2 · the answer: written */}
         {!grade && !marked && (
           <View style={{ backgroundColor: C.white, borderRadius: 20, borderWidth: 1, borderColor: C.lineStrong, padding: 12, gap: 8 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={{ fontFamily: F.bold, fontSize: 10, letterSpacing: 0.5, color: C.goldInk }}>{fmt === 'work' ? 'YOUR WORKING' : 'YOUR ANSWER'}</Text>
-              <Text style={{ fontFamily: F.bold, fontSize: 10, color: voice.state === 'recording' ? C.red : C.leaf }}>
-                {voice.state === 'recording' ? `● ${voice.seconds}s · tap ■ to stop` : voice.state === 'writing' ? 'Writing it down…' : '🎤 or just say it'}
+            {voice.state !== 'idle' && (
+              <Text style={{ fontFamily: F.bold, fontSize: 11, color: voice.state === 'recording' ? C.red : C.leaf }}>
+                {voice.state === 'recording' ? `● ${voice.seconds}s · tap ■ to stop` : 'Writing it down…'}
               </Text>
-            </View>
+            )}
             <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-end' }}>
               <TextInput
                 ref={answerInput}
                 value={withLive(answer, voice.live)}
                 onChangeText={(t) => voice.state !== 'recording' && setAnswer(t)}
                 multiline
-                placeholder={fmt === 'work' ? 'Write your working, line by line…' : KIND[q.kind ?? 'conceptual'].placeholder}
+                placeholder={fmt === 'work' ? 'Write your working, line by line…' : `${KIND[q.kind ?? 'conceptual'].placeholder}  (or tap the mic)`}
                 placeholderTextColor="#A69A8A"
                 style={{ flex: 1, minHeight: fmt === 'work' ? 150 : 90, fontFamily: F.medium, fontSize: 15, lineHeight: 22, color: C.ink, textAlignVertical: 'top' }}
               />
@@ -321,53 +332,37 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
 
         {grade && tone && res && (
           <Enter style={{ gap: 12 }}>
-            {/* 3 · how it went */}
+            {/* 3 · how it went (and the right answer, only when it was missed) */}
             <View style={{ backgroundColor: tone.bg, borderRadius: 20, borderWidth: 2, borderColor: tone.border, padding: 16, gap: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Ionicons name={tone.icon} size={24} color={tone.color} />
                 <Text style={{ fontFamily: F.bold, fontSize: 17, color: tone.text }}>{tone.title}</Text>
               </View>
               <Text style={{ fontFamily: F.medium, fontSize: 14, lineHeight: 21, color: C.ink }}>{grade.feedback}</Text>
+              {!grade.correct && (
+                <View style={{ borderTopWidth: 1, borderColor: tone.border, paddingTop: 8, gap: 2 }}>
+                  <Text style={{ fontFamily: F.bold, fontSize: 11, color: tone.text }}>The answer</Text>
+                  <Text style={{ fontFamily: F.semi, fontSize: 14, lineHeight: 20, color: C.ink }}>{solution(q)}</Text>
+                </View>
+              )}
             </View>
 
-            {/* what the student answered (a drag/tap answer marked just now is still on screen above) */}
-            {(!marked || !marks) && !!res.answer && (
-              <View style={{ backgroundColor: C.white, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 14, gap: 4 }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 10, letterSpacing: 0.5, color: C.muted }}>YOUR ANSWER</Text>
-                <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.body }}>{res.answer}</Text>
-              </View>
-            )}
-
-            <View style={{ backgroundColor: C.white, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 14, gap: 4 }}>
-              <Text style={{ fontFamily: F.bold, fontSize: 10, letterSpacing: 0.5, color: C.muted }}>MODEL ANSWER</Text>
-              <Text style={{ fontFamily: F.medium, fontSize: 14, lineHeight: 20, color: C.ink }}>{q.ideal}</Text>
-              {fmt === 'order' && !!q.steps && <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.steps.map((x, k) => `${k + 1}. ${x}`).join('\n')}</Text>}
-              {fmt === 'blank' && !!q.text && <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.text.replace(/\[\[(.+?)\]\]/g, '$1')}</Text>}
-              {fmt === 'match' && !!q.pairs && <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.pairs.map((p) => `${p.left}  =  ${p.right}`).join('\n')}</Text>}
-              {fmt === 'sort' && !!q.buckets && <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.buckets.map((b) => `${b.name}: ${b.items.join(', ')}`).join('\n')}</Text>}
-            </View>
-
-            {/* 4 · still unsure? Ask Coco: opens its own page, so it's never mixed up with moving on */}
-            <Pressable
-              onPress={() => (tap('select'), setAsk({}))}
-              accessibilityRole="button"
-              accessibilityLabel={talks ? 'Continue the chat with Coco about this question' : 'Ask Coco about this question'}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#F0F8E6', borderRadius: 20, borderWidth: 1.5, borderColor: C.mintBorder, padding: 12 }}>
-              <Coco src={COCO.stand} size={44} bob={false} />
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.mossDark }}>{talks ? 'Your chat with Coco' : 'Still not clear? Ask Coco'}</Text>
-                <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.moss }}>
-                  {talks ? `${talks} ${talks === 1 ? 'question' : 'questions'} asked · tap to continue` : 'Type your question, or say it with the mic'}
-                </Text>
-              </View>
+            {/* 4 · still unsure: Ask Coco opens its own page, so it's never mixed up with moving on */}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable
+                onPress={() => (tap('select'), setAsk({}))}
+                accessibilityRole="button"
+                style={{ flex: 1, height: 48, borderRadius: 24, borderWidth: 1.5, borderColor: C.teal, backgroundColor: C.white, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <Ionicons name="chatbubble-ellipses-outline" size={18} color={C.teal} />
+                <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.teal }}>{talks ? 'Continue with Coco' : 'Ask Coco'}</Text>
+              </Pressable>
               <Pressable
                 accessibilityLabel="Ask Coco by voice"
                 onPress={() => (tap('select'), setAsk({ voice: true }))}
-                hitSlop={6}
-                style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: C.teal, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 3, borderColor: C.shadow }}>
-                <Ionicons name="mic" size={20} color={C.white} />
+                style={{ width: 48, height: 48, borderRadius: 24, borderWidth: 1.5, borderColor: C.teal, backgroundColor: C.white, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="mic-outline" size={20} color={C.teal} />
               </Pressable>
-            </Pressable>
+            </View>
 
             <Pressable onPress={openHook} style={{ alignSelf: 'center', flexDirection: 'row', gap: 6, alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6 }}>
               <Ionicons name="bulb-outline" size={15} color={C.goldInk} />
@@ -395,7 +390,7 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
             )}
           </>
         ) : (
-          <Btn title={last ? 'Lock it in' : `Next question (${i + 2} of ${n})`} icon="arrow-forward" kind="teal" pill onPress={onNext} />
+          <Btn title={last ? 'Lock it in' : 'Next question'} icon="arrow-forward" kind="teal" pill onPress={onNext} />
         )}
       </View>
       <HookSheet card={hook} onClose={() => setHook(undefined)} />

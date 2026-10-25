@@ -41,6 +41,18 @@ async function pdfPages(uri: string): Promise<number | undefined> {
   }
 }
 
+/** How many pages a lecture file has (slides for a PowerPoint, counted the way readSlides numbers them). */
+export async function fileLength(m: { uri: string; name?: string | null; mime?: string | null }): Promise<number | undefined> {
+  if (isSlides(m)) {
+    try {
+      return countSlides(await readFileBase64(m.uri));
+    } catch {
+      return undefined;
+    }
+  }
+  return pdfPages(m.uri);
+}
+
 /** A slide holds far less than a PDF page, so a deck may have more slides than a PDF has pages. */
 export const SLIDE_LIMITS = { maxMB: 40, freeSlides: 80, proSlides: 300 };
 
