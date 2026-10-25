@@ -89,7 +89,20 @@ export type SessionDraft = {
   gapCards?: { q: string; a: string }[]; // from active learning: one card per thing the student didn't get
   startedAt: number;
   correct: number;
+  qIndex?: number; // the question the student is on: leaving and coming back opens this one again
+  results?: (QResult | null)[]; // one per question (null = not answered yet): answers, counts and gap cards come from these
   result?: { xp: number; minutes: number; accuracy: number }; // set once scored, so it's never counted twice
+};
+
+/** A message in "Ask Coco" about one question. `voice`: it was said, not typed. */
+export type ChatMsg = { role: 'user' | 'assistant'; text: string; voice?: boolean };
+/** One answered question: kept so the student can go back to it and keep asking Coco about it. */
+export type QResult = {
+  answer: string; // what the student answered, readable (an order / sort / match / blank answer written out)
+  summary: string; // as counted in `answers`
+  grade: { correct: boolean; close?: boolean; feedback: string };
+  gap?: { q: string; a: string }; // the flashcard made from what they didn't get
+  thread?: ChatMsg[];
 };
 
 export type Together = {
@@ -334,7 +347,8 @@ export const useApp = create<State>()(
         const st = get().stats;
         if (!s) return { xp: 0, minutes: 0, accuracy: 0 };
         if (s.result) return s.result; // already scored (e.g. the Done screen was opened again)
-        const minutes = Math.max(1, Math.round((Date.now() - s.startedAt) / 60_000));
+        // a session can be left and picked up later, so the time between doesn't all count as study time
+        const minutes = Math.min(90, Math.max(1, Math.round((Date.now() - s.startedAt) / 60_000)));
         const total = s.questions?.length ?? 0;
         const accuracy = total ? Math.round((s.correct / total) * 100) : 100;
         const xp = Math.round(10 + s.correct * 5 + (s.analysis?.nailed.length ?? 0) * 2);

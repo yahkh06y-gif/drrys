@@ -65,7 +65,7 @@ export default function Analyze() {
         setDone(steps.length);
         // a fresh set of questions: forget any answers / cards from an earlier attempt
         const st1 = useApp.getState().session!;
-        patchSession({ analysis, analyzedFor: `${st1.recall}|${st1.materialId ?? ''}|${st1.fromPage}-${st1.toPage}`, questions, draftCards: cards, answers: [], correct: 0, newCardIds: [], gapCards: [] });
+        patchSession({ analysis, analyzedFor: `${st1.recall}|${st1.materialId ?? ''}|${st1.fromPage}-${st1.toPage}`, questions, draftCards: cards, answers: [], correct: 0, newCardIds: [], gapCards: [], results: [], qIndex: 0 });
         play('success');
         haptic('success');
         timers.push(setTimeout(() => alive && router.replace('/session/review'), 450));

@@ -1,4 +1,6 @@
 // Session step 4 — Active learning: "One idea at a time". Student explains, Coco grades (elaboration + self-explanation).
+// Every answer is kept on its question, so the student can step back to an earlier question (and keep asking Coco
+// about it), and leaving the session and coming back opens the same question again.
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -6,9 +8,10 @@ import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COCO } from '@/art';
-import { Btn, Coco, Confirm, Enter, Pill, SessionHeader, T } from '@/components/ui';
+import { AskCoco } from '@/components/AskCoco';
+import { Btn, Coco, Enter, Pill, SessionHeader, T } from '@/components/ui';
 import { MicButton, useVoice, withLive } from '@/components/Voice';
-import { discussAnswer, gradeAnswer, type Grade, type QFormat, type QKind } from '@/lib/ai';
+import { gradeAnswer, type ActiveQuestion, type Grade, type QFormat, type QKind } from '@/lib/ai';
 import { HookSheet, type HookTarget } from '@/components/HookSheet';
 import { SketchPad, type SketchHandle } from '@/components/SketchPad';
 import { BlankQ } from '@/components/questions/Blank';
@@ -18,8 +21,8 @@ import { SortQ } from '@/components/questions/Sort';
 import { gradeBlank, gradeMatch, gradeOrder, gradeSort } from '@/lib/grade';
 import { haptic, play, tap } from '@/lib/feedback';
 import { onSample, sampleAnswer, typeOut } from '@/lib/sample';
-import { missedIdeas, ORGANIZE_MIN, sessionContext } from '@/lib/session';
-import { useApp } from '@/store';
+import { firstOpen, missedIdeas, ORGANIZE_MIN, saveResult, sessionContext } from '@/lib/session';
+import { useApp, type QResult } from '@/store';
 import { C, F } from '@/theme';
 
 // How each kind of idea is practised (PACER): the question type decides what the student is asked to do.
@@ -39,35 +42,130 @@ const FORMAT_LINE: Partial<Record<QFormat, { pill: string; line: string }>> = {
   work: { pill: 'WORK IT OUT', line: 'Solve it below. Type your working.' },
 };
 
+// right = green, almost (on the right track) = orange, not yet = red
+const toneOf = (g: QResult['grade']) =>
+  g.correct
+    ? { bg: '#F0F8E6', border: C.mintBorder, icon: 'checkmark-circle' as const, color: C.leaf, text: C.moss, title: 'Nailed it!' }
+    : g.close
+      ? { bg: '#FFF3DC', border: '#F0A63A', icon: 'alert-circle' as const, color: '#E08A00', text: '#B86A00', title: 'Almost there' }
+      : { bg: '#FDECEA', border: '#E8998B', icon: 'close-circle' as const, color: '#D9573B', text: '#C2452B', title: 'Not yet' };
+
 export default function Active() {
   const qs = useApp((s) => s.session?.questions ?? []);
+  const results = useApp((s) => s.session?.results);
+  const saved = useApp((s) => s.session?.qIndex);
   const patchSession = useApp((s) => s.patchSession);
+  const open = firstOpen(useApp.getState().session); // the furthest the student can go: the first unanswered question
+  const i = Math.max(0, Math.min(saved ?? open, qs.length - 1));
+  const q = qs[i];
+  // no questions this time: go straight on to the flashcards instead of a blank screen
+  useEffect(() => {
+    if (!q) router.replace('/session/cards');
+  }, [q]);
+
+  const go = (k: number) => {
+    play('flip');
+    patchSession({ qIndex: k });
+  };
+  // back from the first question: one step back, the organize step (when there were enough missed ideas) or the
+  // review. The answers are kept: coming forward again opens the questions where the student left them.
+  const goBack = () => {
+    const st = useApp.getState().session;
+    router.replace(missedIdeas(st?.analysis).length >= ORGANIZE_MIN ? '/session/group' : '/session/review');
+  };
+  const onBack = () => (i > 0 ? go(i - 1) : goBack());
+  const next = () => {
+    if (i + 1 < qs.length) return go(i + 1);
+    const o = firstOpen(useApp.getState().session);
+    if (o < qs.length) go(o); // a question was skipped over somehow: answer it first
+    else router.replace('/session/cards');
+  };
+  if (!q) return null;
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
+      <SessionHeader
+        step={5}
+        title="Active learning"
+        onBack={onBack}
+        leaveBody="Your tree won’t be watered yet, but your answers are saved. Next time you open today’s session, you’ll pick up at this question."
+      />
+      <QuestionNav i={i} n={qs.length} open={open} results={results} onGo={go} />
+      <QuestionView key={i} i={i} n={qs.length} q={q} res={results?.[i] ?? undefined} onNext={next} />
+    </SafeAreaView>
+  );
+}
+
+/** ‹ Question 3 of 7 › with one dot per question (coloured once answered). Answered questions can be opened again. */
+function QuestionNav({ i, n, open, results, onGo }: { i: number; n: number; open: number; results?: (QResult | null)[]; onGo: (k: number) => void }) {
+  const canNext = i < Math.min(open, n - 1);
+  const arrow = (name: 'chevron-back' | 'chevron-forward', on: boolean, k: number, label: string) => (
+    <Pressable
+      accessibilityLabel={label}
+      disabled={!on}
+      onPress={() => (tap(), onGo(k))}
+      hitSlop={8}
+      style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: on ? C.sand : 'transparent', alignItems: 'center', justifyContent: 'center', opacity: on ? 1 : 0.3 }}>
+      <Ionicons name={name} size={18} color={C.teal} />
+    </Pressable>
+  );
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}>
+      {arrow('chevron-back', i > 0, i - 1, 'Previous question')}
+      <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
+        <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.teal }}>
+          Question {i + 1} of {n}
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 5 }}>
+          {Array.from({ length: n }, (_, k) => {
+            const g = results?.[k]?.grade;
+            const color = g ? toneOf(g).color : C.track;
+            const reachable = k <= open;
+            return (
+              <Pressable
+                key={k}
+                accessibilityLabel={`Question ${k + 1}`}
+                disabled={!reachable || k === i}
+                onPress={() => (tap(), onGo(k))}
+                hitSlop={4}
+                style={{ width: k === i ? 18 : 8, height: 8, borderRadius: 4, backgroundColor: k === i && !g ? C.teal : color, borderWidth: k === i && g ? 1.5 : 0, borderColor: C.teal }}
+              />
+            );
+          })}
+        </View>
+      </View>
+      {arrow('chevron-forward', canNext, i + 1, 'Next question')}
+    </View>
+  );
+}
+
+/** One question. Keyed by the question, so everything typed here starts fresh on the next one. */
+function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: ActiveQuestion; res?: QResult; onNext: () => void }) {
   // a memory hook for this question: it lives on a flashcard made from it (made when the hook is saved)
   const [hook, setHook] = useState<HookTarget>();
   const cards = useApp((s) => s.cards);
   const sess = useApp((s) => s.session);
-  const [i, setI] = useState(0);
-  const [askBack, setAskBack] = useState(false); // "go back a step?": the answers so far would be cleared
   const [answer, setAnswer] = useState('');
   const [hint, setHint] = useState(false);
-  const [grade, setGrade] = useState<Grade>();
   const [busy, setBusy] = useState(false);
-  // after the grade the student can talk it through with Coco (push back, ask why, try again)
-  const [thread, setThread] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
-  const [reply, setReply] = useState('');
-  const [talking, setTalking] = useState(false);
+  const [err, setErr] = useState<string>();
+  // "Ask Coco" opens as its own page; `voice`: opened from the mic, so it starts listening
+  const [ask, setAsk] = useState<{ voice?: boolean }>();
   // answers for the formats the app marks itself
   const [order, setOrder] = useState<string[]>([]);
   const [assigned, setAssigned] = useState<Record<string, string>>({});
   const [matched, setMatched] = useState<Record<string, string>>({});
   const [gapWords, setGapWords] = useState<string[]>([]);
   const [ready, setReady] = useState(false); // the sort / match is filled in
-  const [marks, setMarks] = useState<{ order?: boolean[]; map?: Record<string, boolean>; gaps?: boolean[] }>({});
+  // set when marked here and now: the drag/tap answer is still on screen with its ticks. Opened again later, the
+  // answer is shown written out instead.
+  const [marks, setMarks] = useState<{ order?: boolean[]; map?: Record<string, boolean>; gaps?: boolean[] }>();
   const [sketching, setSketching] = useState(false); // the sketch pad is open (work questions)
   const [ink, setInk] = useState(false);
   const [drawing, setDrawing] = useState(false);
   const pad = useRef<SketchHandle>(null);
   const answerInput = useRef<TextInput>(null);
+  const scroll = useRef<ScrollView>(null);
   const sample = useApp(onSample); // the sample lecture: "Fill sample answer" types a ready-made (imperfect) answer
   const stopTyping = useRef<() => void>(undefined);
   useEffect(() => () => stopTyping.current?.(), []);
@@ -75,52 +173,26 @@ export default function Active() {
     useCallback((t: string) => setAnswer((a) => (a.trim() ? `${a.trim()} ${t}` : t)), []),
     () => answerInput.current?.focus(),
   );
-  // one step back: the organize step (when there were enough missed ideas) or the review. The questions start again,
-  // so the answers given so far are cleared (they would be counted twice otherwise).
-  const goBack = () => {
-    const st = useApp.getState().session;
-    patchSession({ answers: [], correct: 0, gapCards: [] });
-    router.replace(missedIdeas(st?.analysis).length >= ORGANIZE_MIN ? '/session/group' : '/session/review');
-  };
-  const onBack = () => ((useApp.getState().session?.answers.length ?? 0) > 0 ? setAskBack(true) : goBack());
-  const q = qs[i];
-  // no questions this time: go straight on to the flashcards instead of a blank screen
-  useEffect(() => {
-    if (!q) router.replace('/session/cards');
-  }, [q]);
-  // a reply that lands after moving to the next question must not end up in its chat
-  const qRef = useRef(i);
-  qRef.current = i;
-  if (!q) return null;
 
   const fmt: QFormat = q.format ?? 'explain';
-  // right = green, almost (on the right track) = orange, not yet = red
-  const tone = !grade
-    ? { bg: '', border: '', icon: 'checkmark-circle' as const, color: '', text: '', title: '' }
-    : grade.correct
-      ? { bg: '#F0F8E6', border: C.mintBorder, icon: 'checkmark-circle' as const, color: C.leaf, text: C.moss, title: 'Nailed it!' }
-      : grade.close
-        ? { bg: '#FFF3DC', border: '#F0A63A', icon: 'alert-circle' as const, color: '#E08A00', text: '#B86A00', title: 'Almost there' }
-        : { bg: '#FDECEA', border: '#E8998B', icon: 'close-circle' as const, color: '#D9573B', text: '#C2452B', title: 'Not yet' };
   const marked = fmt === 'order' || fmt === 'sort' || fmt === 'match' || fmt === 'blank'; // the app marks these itself
+  const grade = res?.grade;
+  const tone = grade ? toneOf(grade) : undefined;
+  const live = !grade || !!marks; // the drag/tap answer is on screen (not answered yet, or marked just now)
+  const talks = res?.thread?.filter((m) => m.role === 'user').length ?? 0;
+  const last = i + 1 >= n;
 
-  const existing = cards.find((c) => c.subjectId === sess?.subjectId && c.chapterId === sess?.chapterId && c.q === q?.q);
+  const existing = cards.find((c) => c.subjectId === sess?.subjectId && c.chapterId === sess?.chapterId && c.q === q.q);
   const openHook = () => {
-    if (!sess || !q) return;
+    if (!sess) return;
     tap('select');
     setHook(existing ?? { subjectId: sess.subjectId, chapterId: sess.chapterId, q: q.q, a: q.ideal });
   };
 
-  // keep the grade, count it, and turn a gap into a flashcard (added to the deck at the end of the session)
-  const record = (g: Grade, summary: string) => {
-    setGrade(g);
-    const st = useApp.getState().session!;
+  // keep the grade on this question, count it, and turn a gap into a flashcard (added to the deck at the end)
+  const record = (g: Grade, summary: string, shown: string) => {
     const gap = g.card?.q && g.card?.a ? g.card : !g.correct ? { q: q.q, a: q.ideal } : undefined;
-    patchSession({
-      answers: [...st.answers, summary],
-      correct: st.correct + (g.correct ? 1 : g.close ? 0.5 : 0), // "almost" counts as half
-      ...(gap ? { gapCards: [...(st.gapCards ?? []), { q: gap.q, a: gap.a }] } : {}),
-    });
+    saveResult(i, { answer: shown, summary, grade: { correct: g.correct, close: g.close, feedback: g.feedback }, ...(gap ? { gap: { q: gap.q, a: gap.a } } : {}), thread: [] });
     if (g.correct) {
       play('right');
       haptic('success');
@@ -131,258 +203,203 @@ export default function Active() {
       play('miss');
       haptic('error');
     }
+    setTimeout(() => scroll.current?.scrollTo({ y: 0, animated: true }), 60);
   };
 
   const submit = async () => {
     setBusy(true);
+    setErr(undefined);
     try {
       if (fmt === 'order') {
         const r = gradeOrder(q, order);
         setMarks({ order: r.marks });
-        record(r, order.join(' → '));
+        record(r, order.join(' → '), order.map((x, k) => `${k + 1}. ${x}`).join('\n'));
       } else if (fmt === 'sort') {
         const r = gradeSort(q, assigned);
         setMarks({ map: r.marks });
-        record(r, JSON.stringify(assigned));
+        const shown = (q.buckets ?? []).map((b) => `${b.name}: ${Object.keys(assigned).filter((it) => assigned[it] === b.name).join(', ') || '—'}`).join('\n');
+        record(r, JSON.stringify(assigned), shown);
       } else if (fmt === 'blank') {
         const r = gradeBlank(q, gapWords);
         setMarks({ gaps: r.marks });
-        record(r, gapWords.join(' | '));
+        let k = 0;
+        record(r, gapWords.join(' | '), (q.text ?? '').replace(/\[\[(.+?)\]\]/g, () => `[${gapWords[k++] || '___'}]`));
       } else if (fmt === 'match') {
         const r = gradeMatch(q, matched);
         setMarks({ map: r.marks });
-        record(r, JSON.stringify(matched));
+        record(r, JSON.stringify(matched), Object.entries(matched).map(([l, rr]) => `${l}  =  ${rr}`).join('\n'));
       } else {
         const img = fmt === 'work' && ink ? await pad.current?.capture() : undefined;
-        record(await gradeAnswer(await sessionContext(false), q, answer, img), answer || (img ? '(sketch)' : ''));
+        const g = await gradeAnswer(await sessionContext(false), q, answer, img);
+        const said = answer || (img ? '(sketch)' : '');
+        record(g, said, said);
       }
     } catch {
-      setGrade({ correct: false, feedback: 'Coco lost connection — compare with the model answer below.' });
+      // nothing is counted: the answer stays, and checking again is one tap
+      setErr('Coco lost connection. Check your internet and tap check again.');
     }
     setBusy(false);
   };
 
-  const talk = async () => {
-    const text = reply.trim();
-    if (!text || !grade || talking) return;
-    const t = [...thread, { role: 'user' as const, text }];
-    setThread(t);
-    setReply('');
-    setTalking(true);
-    const at = i;
-    try {
-      const r = await discussAnswer(await sessionContext(false), q, answer, grade.feedback, t);
-      if (qRef.current === at) setThread([...t, { role: 'assistant', text: r.trim() }]);
-    } catch {
-      if (qRef.current === at) setThread([...t, { role: 'assistant', text: 'I lost the connection for a second — try again?' }]);
-    }
-    setTalking(false);
-  };
-
-  const next = () => {
-    if (i + 1 >= qs.length) router.replace('/session/cards');
-    else {
-      play('flip');
-      setI(i + 1);
-      setAnswer('');
-      setHint(false);
-      setGrade(undefined);
-      setThread([]);
-      setReply('');
-      setOrder([]);
-      setAssigned({});
-      setMatched({});
-      setGapWords([]);
-      setReady(false);
-      setMarks({});
-      setSketching(false);
-      setInk(false);
-    }
-  };
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
-      <SessionHeader step={5} title="Active learning" onBack={onBack} />
-      <Confirm visible={askBack} title="Go back a step?" body="Your answers to the questions so far will be cleared, and the questions start again." yes="Go back" no="Stay" onNo={() => setAskBack(false)} onYes={() => (setAskBack(false), goBack())} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-        <ScrollView key={i} scrollEnabled={!drawing} contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+      <ScrollView ref={scroll} scrollEnabled={!drawing} contentContainerStyle={{ padding: 20, paddingTop: 6, gap: 14 }} keyboardShouldPersistTaps="handled">
+        {!grade && (
           <Enter>
             <Pill text={(FORMAT_LINE[fmt] ?? KIND[q.kind ?? 'conceptual']).pill} />
-            <T v="h2" style={{ marginTop: 6 }}>
-              {fmt === 'explain' && i === qs.length - 1 ? 'Explain it your way' : 'One idea at a time'}
-            </T>
-            <T>{(FORMAT_LINE[fmt] ?? KIND[q.kind ?? 'conceptual']).line} Then talk it through with Coco.</T>
-            <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.leaf, marginTop: 4 }}>
-              Question {i + 1} of {qs.length}
-            </Text>
+            <T style={{ marginTop: 8 }}>{(FORMAT_LINE[fmt] ?? KIND[q.kind ?? 'conceptual']).line}</T>
           </Enter>
+        )}
 
-          <Enter delay={120}>
-            <View style={{ backgroundColor: C.white, borderRadius: 22, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, padding: 18 }}>
-              <Text style={{ fontFamily: F.bold, fontSize: 18, lineHeight: 26, color: C.teal, textAlign: 'center' }}>{q.q}</Text>
+        {/* 1 · the question */}
+        <Enter delay={grade ? 0 : 120}>
+          <View style={{ backgroundColor: C.white, borderRadius: 22, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, padding: 18 }}>
+            <Text style={{ fontFamily: F.bold, fontSize: grade ? 16 : 18, lineHeight: grade ? 23 : 26, color: C.teal, textAlign: 'center' }}>{q.q}</Text>
+          </View>
+        </Enter>
+
+        {!grade && fmt === 'explain' && <Coco src={last ? COCO.pointer : COCO.stand} size={130} />}
+
+        {hint && !grade && (
+          <Enter>
+            <View style={{ backgroundColor: '#FFF6E3', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.amber }}>
+              <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.goldInk }}>{q.hint}</Text>
             </View>
           </Enter>
+        )}
 
-          {!grade && fmt === 'explain' && <Coco src={i === qs.length - 1 ? COCO.pointer : COCO.stand} size={130} />}
+        {/* 2 · the answer: drag / tap formats */}
+        {live && fmt === 'order' && !!q.steps && <OrderQ steps={q.steps} locked={!!grade} marks={marks?.order} onChange={setOrder} />}
+        {live && fmt === 'sort' && !!q.buckets && (
+          <SortQ buckets={q.buckets} locked={!!grade} marks={marks?.map} onChange={(a, done) => (setAssigned(a), setReady(done))} />
+        )}
+        {live && fmt === 'blank' && !!q.text && <BlankQ text={q.text} extras={q.extras} locked={!!grade} marks={marks?.gaps} onChange={(w, done) => (setGapWords(w), setReady(done))} />}
+        {live && fmt === 'match' && !!q.pairs && (
+          <MatchQ pairs={q.pairs} locked={!!grade} marks={marks?.map} onChange={(m, done) => (setMatched(m), setReady(done))} />
+        )}
 
-          {hint && !grade && (
-            <Enter>
-              <View style={{ backgroundColor: '#FFF6E3', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.amber }}>
-                <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.goldInk }}>{q.hint}</Text>
+        {/* 2 · the answer: written */}
+        {!grade && !marked && (
+          <View style={{ backgroundColor: C.white, borderRadius: 20, borderWidth: 1, borderColor: C.lineStrong, padding: 12, gap: 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text style={{ fontFamily: F.bold, fontSize: 10, letterSpacing: 0.5, color: C.goldInk }}>{fmt === 'work' ? 'YOUR WORKING' : 'YOUR ANSWER'}</Text>
+              <Text style={{ fontFamily: F.bold, fontSize: 10, color: voice.state === 'recording' ? C.red : C.leaf }}>
+                {voice.state === 'recording' ? `● ${voice.seconds}s · tap ■ to stop` : voice.state === 'writing' ? 'Writing it down…' : '🎤 or just say it'}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-end' }}>
+              <TextInput
+                ref={answerInput}
+                value={withLive(answer, voice.live)}
+                onChangeText={(t) => voice.state !== 'recording' && setAnswer(t)}
+                multiline
+                placeholder={fmt === 'work' ? 'Write your working, line by line…' : KIND[q.kind ?? 'conceptual'].placeholder}
+                placeholderTextColor="#A69A8A"
+                style={{ flex: 1, minHeight: fmt === 'work' ? 150 : 90, fontFamily: F.medium, fontSize: 15, lineHeight: 22, color: C.ink, textAlignVertical: 'top' }}
+              />
+              <MicButton voice={voice} size={44} />
+            </View>
+            {sample && !answer && voice.state === 'idle' && (
+              <Pressable
+                onPress={() => (tap('select'), (stopTyping.current = typeOut(sampleAnswer(q, i), setAnswer)))}
+                style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.mint, borderWidth: 1, borderColor: C.mintBorder, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
+                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.mossDark }}>✨ Fill sample answer</Text>
+              </Pressable>
+            )}
+            {fmt === 'work' && (
+              <View style={{ gap: 8 }}>
+                <Pressable onPress={() => (tap('select'), setSketching((v) => !v))} style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: sketching ? C.teal : C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
+                  <Ionicons name="brush-outline" size={14} color={sketching ? C.white : C.body} />
+                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: sketching ? C.white : C.body }}>{sketching ? 'Hide the sketch pad' : 'Sketch or write by hand'}</Text>
+                </Pressable>
+                {sketching && <SketchPad ref={pad} height={260} onInk={setInk} onDrawing={setDrawing} />}
               </View>
-            </Enter>
-          )}
+            )}
+          </View>
+        )}
+        {!!err && <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#C2452B', textAlign: 'center' }}>{err}</Text>}
 
-          {fmt === 'order' && !!q.steps && <OrderQ steps={q.steps} locked={!!grade} marks={marks.order} onChange={setOrder} />}
-          {fmt === 'sort' && !!q.buckets && (
-            <SortQ
-              buckets={q.buckets}
-              locked={!!grade}
-              marks={marks.map}
-              onChange={(a, done) => (setAssigned(a), setReady(done))}
-            />
-          )}
-          {fmt === 'blank' && !!q.text && <BlankQ text={q.text} extras={q.extras} locked={!!grade} marks={marks.gaps} onChange={(w, done) => (setGapWords(w), setReady(done))} />}
-          {fmt === 'match' && !!q.pairs && (
-            <MatchQ
-              pairs={q.pairs}
-              locked={!!grade}
-              marks={marks.map}
-              onChange={(m, done) => (setMatched(m), setReady(done))}
-            />
-          )}
+        {grade && tone && res && (
+          <Enter style={{ gap: 12 }}>
+            {/* 3 · how it went */}
+            <View style={{ backgroundColor: tone.bg, borderRadius: 20, borderWidth: 2, borderColor: tone.border, padding: 16, gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name={tone.icon} size={24} color={tone.color} />
+                <Text style={{ fontFamily: F.bold, fontSize: 17, color: tone.text }}>{tone.title}</Text>
+              </View>
+              <Text style={{ fontFamily: F.medium, fontSize: 14, lineHeight: 21, color: C.ink }}>{grade.feedback}</Text>
+            </View>
 
-          {!grade && !marked ? (
-            <View style={{ backgroundColor: C.white, borderRadius: 20, borderWidth: 1, borderColor: C.lineStrong, padding: 12, gap: 8 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 10, letterSpacing: 0.5, color: C.goldInk }}>{fmt === 'work' ? 'YOUR WORKING' : 'YOU’RE EXPLAINING'}</Text>
-                <Text style={{ fontFamily: F.bold, fontSize: 10, color: voice.state === 'recording' ? C.red : C.leaf }}>
-                  {voice.state === 'recording' ? `● ${voice.seconds}s · tap ■ to stop` : voice.state === 'writing' ? 'Writing it down…' : '🎤 or just say it'}
+            {/* what the student answered (a drag/tap answer marked just now is still on screen above) */}
+            {(!marked || !marks) && !!res.answer && (
+              <View style={{ backgroundColor: C.white, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 14, gap: 4 }}>
+                <Text style={{ fontFamily: F.bold, fontSize: 10, letterSpacing: 0.5, color: C.muted }}>YOUR ANSWER</Text>
+                <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.body }}>{res.answer}</Text>
+              </View>
+            )}
+
+            <View style={{ backgroundColor: C.white, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 14, gap: 4 }}>
+              <Text style={{ fontFamily: F.bold, fontSize: 10, letterSpacing: 0.5, color: C.muted }}>MODEL ANSWER</Text>
+              <Text style={{ fontFamily: F.medium, fontSize: 14, lineHeight: 20, color: C.ink }}>{q.ideal}</Text>
+              {fmt === 'order' && !!q.steps && <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.steps.map((x, k) => `${k + 1}. ${x}`).join('\n')}</Text>}
+              {fmt === 'blank' && !!q.text && <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.text.replace(/\[\[(.+?)\]\]/g, '$1')}</Text>}
+              {fmt === 'match' && !!q.pairs && <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.pairs.map((p) => `${p.left}  =  ${p.right}`).join('\n')}</Text>}
+              {fmt === 'sort' && !!q.buckets && <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.buckets.map((b) => `${b.name}: ${b.items.join(', ')}`).join('\n')}</Text>}
+            </View>
+
+            {/* 4 · still unsure? Ask Coco: opens its own page, so it's never mixed up with moving on */}
+            <Pressable
+              onPress={() => (tap('select'), setAsk({}))}
+              accessibilityRole="button"
+              accessibilityLabel={talks ? 'Continue the chat with Coco about this question' : 'Ask Coco about this question'}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#F0F8E6', borderRadius: 20, borderWidth: 1.5, borderColor: C.mintBorder, padding: 12 }}>
+              <Coco src={COCO.stand} size={44} bob={false} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.mossDark }}>{talks ? 'Your chat with Coco' : 'Still not clear? Ask Coco'}</Text>
+                <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.moss }}>
+                  {talks ? `${talks} ${talks === 1 ? 'question' : 'questions'} asked · tap to continue` : 'Type your question, or say it with the mic'}
                 </Text>
               </View>
-              <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-end' }}>
-                <TextInput
-                  ref={answerInput}
-                  value={withLive(answer, voice.live)}
-                  onChangeText={(t) => voice.state !== 'recording' && setAnswer(t)}
-                  multiline
-                  placeholder={fmt === 'work' ? 'Write your working, line by line…' : KIND[q.kind ?? 'conceptual'].placeholder}
-                  placeholderTextColor="#A69A8A"
-                  style={{ flex: 1, minHeight: fmt === 'work' ? 150 : 90, fontFamily: F.medium, fontSize: 15, lineHeight: 22, color: C.ink, textAlignVertical: 'top' }}
-                />
-                <MicButton voice={voice} size={44} />
-              </View>
-              {sample && !answer && voice.state === 'idle' && (
-                <Pressable
-                  onPress={() => (tap('select'), (stopTyping.current = typeOut(sampleAnswer(q, i), setAnswer)))}
-                  style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.mint, borderWidth: 1, borderColor: C.mintBorder, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.mossDark }}>✨ Fill sample answer</Text>
-                </Pressable>
-              )}
-              {fmt === 'work' && (
-                <View style={{ gap: 8 }}>
-                  <Pressable onPress={() => (tap('select'), setSketching((v) => !v))} style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: sketching ? C.teal : C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
-                    <Ionicons name="brush-outline" size={14} color={sketching ? C.white : C.body} />
-                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: sketching ? C.white : C.body }}>{sketching ? 'Hide the sketch pad' : 'Sketch or write by hand'}</Text>
-                  </Pressable>
-                  {sketching && <SketchPad ref={pad} height={260} onInk={setInk} onDrawing={setDrawing} />}
-                </View>
-              )}
-            </View>
-          ) : !grade ? null : (
-            <Enter>
-              <View style={{ backgroundColor: tone.bg, borderRadius: 20, borderWidth: 2, borderColor: tone.border, padding: 16, gap: 10 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Ionicons name={tone.icon} size={24} color={tone.color} />
-                  <Text style={{ fontFamily: F.bold, fontSize: 16, color: tone.text }}>{tone.title}</Text>
-                </View>
-                <Text style={{ fontFamily: F.medium, fontSize: 14, lineHeight: 21, color: C.ink }}>{grade.feedback}</Text>
-                <View style={{ borderTopWidth: 1, borderColor: C.line, paddingTop: 8 }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.muted }}>MODEL ANSWER</Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.body, marginTop: 2 }}>{q.ideal}</Text>
-                  {fmt === 'order' && !!q.steps && (
-                    <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.steps.map((x, k) => `${k + 1}. ${x}`).join('\n')}</Text>
-                  )}
-                  {fmt === 'blank' && !!q.text && (
-                    <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.text.replace(/\[\[(.+?)\]\]/g, '$1')}</Text>
-                  )}
-                  {fmt === 'match' && !!q.pairs && (
-                    <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.pairs.map((p) => `${p.left}  =  ${p.right}`).join('\n')}</Text>
-                  )}
-                  {fmt === 'sort' && !!q.buckets && (
-                    <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 19, color: C.teal, marginTop: 6 }}>{q.buckets.map((b) => `${b.name}: ${b.items.join(', ')}`).join('\n')}</Text>
-                  )}
-                </View>
-              </View>
-
-              {/* talk it through */}
-              <View style={{ marginTop: 12, gap: 8 }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 10, letterSpacing: 0.5, color: C.goldInk }}>TALK IT THROUGH WITH COCO</Text>
-                {thread.map((m, k) => (
-                  <View
-                    key={k}
-                    style={{
-                      alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                      maxWidth: '85%',
-                      backgroundColor: m.role === 'user' ? C.teal : C.white,
-                      borderRadius: 16,
-                      borderWidth: m.role === 'user' ? 0 : 1,
-                      borderColor: C.line,
-                      paddingHorizontal: 12,
-                      paddingVertical: 8,
-                    }}>
-                    <Text style={{ fontFamily: F.medium, fontSize: 14, lineHeight: 20, color: m.role === 'user' ? C.white : C.ink }}>{m.text}</Text>
-                  </View>
-                ))}
-                {talking && <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>Coco is thinking…</Text>}
-                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-end' }}>
-                  <TextInput
-                    value={reply}
-                    onChangeText={setReply}
-                    multiline
-                    placeholder={grade.correct ? 'Ask why, or go deeper…' : 'Not sure? Ask Coco or try again…'}
-                    placeholderTextColor="#A69A8A"
-                    style={{ flex: 1, minHeight: 44, maxHeight: 110, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, fontFamily: F.medium, fontSize: 14, color: C.ink }}
-                  />
-                  <Pressable
-                    onPress={talk}
-                    disabled={!reply.trim() || talking}
-                    style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: reply.trim() && !talking ? C.teal : C.lineStrong, alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name="arrow-up" size={20} color={C.white} />
-                  </Pressable>
-                </View>
-              </View>
-            </Enter>
-          )}
-        </ScrollView>
-        <View style={{ padding: 20, gap: 10 }}>
-          {!grade ? (
-            <>
-              {/* shows up once there's an answer to send (like "continue" in onboarding) */}
-              {(marked ? fmt === 'order' || ready : (!!answer.trim() || (fmt === 'work' && ink)) && voice.state === 'idle') || busy ? (
-                <Enter key="finish">
-                  <Btn title={marked ? 'Check my answer' : fmt === 'work' ? 'Check my working' : 'Finish explanation'} iconLeft="checkmark-circle" kind="teal" pill loading={busy} onPress={submit} />
-                </Enter>
-              ) : null}
-              {!hint && (
-                <Pressable onPress={() => (tap(), setHint(true))} style={{ alignSelf: 'center', flexDirection: 'row', gap: 4, alignItems: 'center', backgroundColor: C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 6 }}>
-                  <Ionicons name="bulb-outline" size={14} color={C.body} />
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.body }}>Need a hint?</Text>
-                </Pressable>
-              )}
-            </>
-          ) : (
-            <>
-              <Pressable onPress={openHook} style={{ alignSelf: 'center', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.white, borderWidth: 1, borderColor: C.amber, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
-                <Ionicons name="bulb-outline" size={15} color={C.goldInk} />
-                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.goldInk }}>{existing?.mnemonic ? 'My memory hook' : 'Make a memory hook'}</Text>
+              <Pressable
+                accessibilityLabel="Ask Coco by voice"
+                onPress={() => (tap('select'), setAsk({ voice: true }))}
+                hitSlop={6}
+                style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: C.teal, alignItems: 'center', justifyContent: 'center', borderBottomWidth: 3, borderColor: C.shadow }}>
+                <Ionicons name="mic" size={20} color={C.white} />
               </Pressable>
-              <Btn title={i + 1 >= qs.length ? 'Lock it in' : 'Next question'} icon="arrow-forward" kind="teal" pill onPress={next} />
-            </>
-          )}
-        </View>
-        <HookSheet card={hook} onClose={() => setHook(undefined)} />
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+            </Pressable>
+
+            <Pressable onPress={openHook} style={{ alignSelf: 'center', flexDirection: 'row', gap: 6, alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6 }}>
+              <Ionicons name="bulb-outline" size={15} color={C.goldInk} />
+              <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.goldInk }}>{existing?.mnemonic ? 'My memory hook' : 'Make a memory hook'}</Text>
+            </Pressable>
+          </Enter>
+        )}
+      </ScrollView>
+
+      {/* the one main action of the screen, always in the same place */}
+      <View style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20, gap: 10, borderTopWidth: grade ? 1 : 0, borderColor: C.line }}>
+        {!grade ? (
+          <>
+            {/* shows up once there's an answer to send (like "continue" in onboarding) */}
+            {(marked ? fmt === 'order' || ready : (!!answer.trim() || (fmt === 'work' && ink)) && voice.state === 'idle') || busy ? (
+              <Enter key="finish">
+                <Btn title={marked ? 'Check my answer' : fmt === 'work' ? 'Check my working' : 'Check my answer'} iconLeft="checkmark-circle" kind="teal" pill loading={busy} onPress={submit} />
+              </Enter>
+            ) : null}
+            {!hint && (
+              <Pressable onPress={() => (tap(), setHint(true))} style={{ alignSelf: 'center', flexDirection: 'row', gap: 4, alignItems: 'center', backgroundColor: C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 6 }}>
+                <Ionicons name="bulb-outline" size={14} color={C.body} />
+                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.body }}>Need a hint?</Text>
+              </Pressable>
+            )}
+          </>
+        ) : (
+          <Btn title={last ? 'Lock it in' : `Next question (${i + 2} of ${n})`} icon="arrow-forward" kind="teal" pill onPress={onNext} />
+        )}
+      </View>
+      <HookSheet card={hook} onClose={() => setHook(undefined)} />
+      {!!res && <AskCoco index={i} q={q} open={!!ask} withVoice={ask?.voice} onClose={() => setAsk(undefined)} />}
+    </KeyboardAvoidingView>
   );
 }

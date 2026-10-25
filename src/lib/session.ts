@@ -5,7 +5,7 @@ import { Platform } from 'react-native';
 import { readFileBase64 } from '@/lib/readfile';
 import { countSlides, isOldPpt, isSlides, readSlides, type Slide } from '@/lib/slides';
 import type { Analysis, Context } from '@/lib/ai';
-import { useApp } from '@/store';
+import { useApp, type QResult, type SessionDraft } from '@/store';
 
 /** A picked file lives in the cache, which Android may clear: copy it into the app's own documents
  *  so Coco can still read the lecture weeks later. Falls back to the picked copy if anything fails.
@@ -208,4 +208,40 @@ export function missedIdeas(a?: Analysis): { id: string; title: string; detail: 
     .filter((x) => x.title && !seen.has(x.title.toLowerCase()) && !!seen.add(x.title.toLowerCase()))
     .slice(0, 8)
     .map((x, i) => ({ id: String(i), ...x }));
+}
+
+/** Keep the result of question `i`. The answers, the score and the gap cards are worked out again from all results,
+ *  so a question answered, left and come back to is never counted twice. */
+export function saveResult(i: number, r: QResult | ((old: QResult) => QResult)) {
+  const st = useApp.getState().session;
+  if (!st) return;
+  const results = [...(st.results ?? [])];
+  while (results.length <= i) results.push(null);
+  const prev = results[i];
+  if (typeof r === 'function') {
+    if (!prev) return;
+    results[i] = r(prev);
+  } else results[i] = r;
+  const done = results.filter((x): x is QResult => !!x);
+  useApp.getState().patchSession({
+    results,
+    answers: done.map((x) => x.summary),
+    correct: done.reduce((n, x) => n + (x.grade.correct ? 1 : x.grade.close ? 0.5 : 0), 0), // "almost" counts as half
+    gapCards: done.flatMap((x) => (x.gap ? [x.gap] : [])),
+  });
+}
+
+/** The first question not answered yet (= the number of questions when all are answered). */
+export const firstOpen = (s?: SessionDraft) => {
+  const n = s?.questions?.length ?? 0;
+  for (let k = 0; k < n; k++) if (!s?.results?.[k]) return k;
+  return n;
+};
+
+const RESUME_MS = 3 * 86_400_000;
+/** An unfinished session on this chapter that already reached the questions: the question to open again, or undefined. */
+export function resumeAt(s: SessionDraft | undefined, subjectId: string, chapterId: string): number | undefined {
+  if (!s || s.result || s.subjectId !== subjectId || s.chapterId !== chapterId || !s.questions?.length) return undefined;
+  if (Date.now() - s.startedAt > RESUME_MS) return undefined;
+  return Math.min(s.qIndex ?? firstOpen(s), s.questions.length - 1);
 }

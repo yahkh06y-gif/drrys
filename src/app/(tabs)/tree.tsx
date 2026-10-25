@@ -18,7 +18,7 @@ import { Btn, Coco, Enter, Pill, T } from '@/components/ui';
 import { haptic, play, tap } from '@/lib/feedback';
 import { isResting, LIMITS } from '@/lib/purchases';
 import { makeSampleLecture, SAMPLE_PAGES, SAMPLE_TITLE } from '@/lib/sample';
-import { checkPdf, keepFile } from '@/lib/session';
+import { checkPdf, keepFile, resumeAt } from '@/lib/session';
 import { LECTURE_TYPES } from '@/lib/slides';
 import { activeSubject, EMPTY_STATS, isDue, streak, today, uid, useApp, type Chapter, type Material, type Subject } from '@/store';
 import { C, F } from '@/theme';
@@ -367,8 +367,12 @@ function TodayCard({ subject, chapter, due, onInsights }: { subject: Subject; ch
   const next = nextLecture === undefined ? 'Next: flashcards tomorrow' : nextLecture === (dow + 1) % 7 ? 'Next: full session tomorrow' : `Next: full session on ${WEEKDAYS[nextLecture]}`;
 
   const resting = useApp((s) => isResting(s.subjects.findIndex((x) => x.id === subject.id), subject.chapters.indexOf(chapter), s.isPro, s.together));
+  // an unfinished session on this chapter that reached the questions: open it again at the same question
+  const resume = useApp((s) => resumeAt(s.session, subject.id, chapter.id));
+  const total = useApp((s) => s.session?.questions?.length ?? 0);
   const fullSession = () => {
     if (resting) return router.push('/paywall');
+    if (resume !== undefined) return router.push('/session/active');
     startSession(subject.id, chapter.id);
     router.push('/session/choose');
   };
@@ -397,7 +401,7 @@ function TodayCard({ subject, chapter, due, onInsights }: { subject: Subject; ch
     action = resting ? (
       <Btn title="Resting · renew Pro" icon="lock-closed" kind="light" height={46} onPress={fullSession} />
     ) : (
-      <Btn title="Start session" icon="arrow-forward" kind="leaf" height={46} onPress={fullSession} />
+      <Btn title={resume !== undefined ? `Continue · question ${resume + 1} of ${total}` : 'Start session'} icon="arrow-forward" kind="leaf" height={46} onPress={fullSession} />
     );
     if (due > 0) side = <DueBadge count={due} label={cardsLabel} onPress={flashcards} />;
   } else if (due > 0) {
@@ -408,7 +412,7 @@ function TodayCard({ subject, chapter, due, onInsights }: { subject: Subject; ch
   } else {
     title = 'Nothing due today';
     pill = 'Rest day';
-    action = <Btn title={resting ? 'Resting · renew Pro' : 'Study ahead anyway'} icon={resting ? 'lock-closed' : 'arrow-forward'} kind="light" height={46} onPress={fullSession} />;
+    action = <Btn title={resting ? 'Resting · renew Pro' : resume !== undefined ? `Continue · question ${resume + 1} of ${total}` : 'Study ahead anyway'} icon={resting ? 'lock-closed' : 'arrow-forward'} kind="light" height={46} onPress={fullSession} />;
   }
 
   return (

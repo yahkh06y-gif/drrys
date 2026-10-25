@@ -9,7 +9,7 @@ import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } f
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { HookSheet } from '@/components/HookSheet';
-import { Confirm, Enter, IconBtn, Pill, SessionHeader, T } from '@/components/ui';
+import { Enter, IconBtn, Pill, SessionHeader, T } from '@/components/ui';
 import { askAboutCard, levelUp, makeCards } from '@/lib/ai';
 import { haptic, play, tap } from '@/lib/feedback';
 import { cardContext, sessionContext } from '@/lib/session';
@@ -46,7 +46,6 @@ export default function Cards() {
   // a card that slipped 3 times in a row offers a memory hook (the student's choice); `go` carries on afterwards
   const [hook, setHook] = useState<{ card: Card; go: () => void; auto?: boolean }>();
   const [toast, setToast] = useState<string>();
-  const [askBack, setAskBack] = useState(false); // "go back to the questions?" (they start again)
 
   useEffect(() => {
     if (!loading || !session?.analysis) return;
@@ -139,16 +138,8 @@ export default function Cards() {
         </View>
       ) : (
         <>
-          <SessionHeader step={6} title="Lock it in" onBack={() => ((session?.answers.length ?? 0) > 0 ? setAskBack(true) : router.replace('/session/active'))} />
-          <Confirm
-            visible={askBack}
-            title="Back to the questions?"
-            body="Your answers so far will be cleared, and the questions start again. The flashcards made today are kept."
-            yes="Go back"
-            no="Stay"
-            onNo={() => setAskBack(false)}
-            onYes={() => (setAskBack(false), patchSession({ answers: [], correct: 0, gapCards: [] }), router.replace('/session/active'))}
-          />
+          {/* back to the questions: the answers are kept, and it opens on the last question */}
+          <SessionHeader step={6} title="Lock it in" onBack={() => router.replace('/session/active')} />
         </>
       )}
       <View style={{ flex: 1, padding: 20, gap: 14 }}>

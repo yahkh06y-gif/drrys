@@ -241,7 +241,19 @@ export function Screen({
 /* ---------- Session header ("session setup • 2 of 5") ---------- */
 export const SESSION_STEPS = 6; // setup · recall · analyze · organize (only with 4+ missed ideas) · explain · cards
 
-export function SessionHeader({ step, title, onClose, onBack }: { step: number; title: string; onClose?: () => void; onBack?: () => void }) {
+export function SessionHeader({
+  step,
+  title,
+  onClose,
+  onBack,
+  leaveBody = 'Your tree won’t be watered, and you’ll start this session over next time.',
+}: {
+  step: number;
+  title: string;
+  onClose?: () => void;
+  onBack?: () => void;
+  leaveBody?: string; // what "Leave this session?" says happens (on the questions, the answers are kept)
+}) {
   // a stray tap on ✕ shouldn't throw a session away: ask first
   const [asking, setAsking] = useState(false);
   // Android back goes one step back (when there is a step to go back to); on the first step it asks about leaving
@@ -264,7 +276,7 @@ export function SessionHeader({ step, title, onClose, onBack }: { step: number; 
       <Confirm
         visible={asking}
         title="Leave this session?"
-        body="Your tree won’t be watered, and you’ll start this session over next time."
+        body={leaveBody}
         yes="Leave"
         no="Keep studying"
         onNo={() => setAsking(false)}
