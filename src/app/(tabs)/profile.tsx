@@ -153,15 +153,9 @@ export default function Profile() {
             icon="school-outline"
             label="Studying"
             value={[profile.field, profile.subfield].filter(Boolean).join(' • ') || 'Add'}
-            onPress={() => router.push({ pathname: '/about/[step]', params: { step: '0' } })}
+            onPress={() => router.push({ pathname: '/about/[step]', params: { step: 'study' } })}
           />
-          <Row
-            icon="flag-outline"
-            label="Goal"
-            value={short([profile.goal ?? []].flat())}
-            onPress={() => router.push({ pathname: '/about/[step]', params: { step: '2' } })}
-          />
-          <Row icon="football-outline" label="Interests" value={short(profile.interests)} onPress={() => router.push({ pathname: '/about/[step]', params: { step: '3' } })} last />
+          <Row icon="football-outline" label="Interests" value={short(profile.interests)} onPress={() => router.push({ pathname: '/about/[step]', params: { step: 'world' } })} last />
         </Section>
 
         <Section title="COCO">

@@ -1,9 +1,13 @@
-// Profile → About you: the onboarding questions (studying, goal, interests) in edit mode.
+// Profile → About you: the same screens onboarding uses, in edit mode (save goes back).
+// "study": field + speciality (onboarding/study); "world": interests (onboarding/world).
+// The old numbered steps still land on the right screen.
 import { useLocalSearchParams } from 'expo-router';
 
-import { QuestionView } from '../onboarding/q/[step]';
+import { StudyView } from '../onboarding/study';
+import { WorldView } from '../onboarding/world';
 
 export default function About() {
   const { step } = useLocalSearchParams<{ step: string }>();
-  return <QuestionView n={Number(step ?? 3)} editing />;
+  if (step === 'world' || step === '3') return <WorldView editing />;
+  return <StudyView editing />;
 }

@@ -1,5 +1,6 @@
 // "What do you study?" — field and speciality on one screen: the specialities slide in under the field
-// that was picked, and "continue" shows up once both are chosen.
+// that was picked, and "continue" shows up once both are chosen. Profile → About you → Studying opens this same
+// screen (`editing`): it saves and goes back instead of going on.
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
@@ -12,6 +13,10 @@ import { useApp } from '@/store';
 import { C, F } from '@/theme';
 
 export default function Study() {
+  return <StudyView />;
+}
+
+export function StudyView({ editing = false }: { editing?: boolean }) {
   const profile = useApp((s) => s.profile);
   const setProfile = useApp((s) => s.setProfile);
   const [field, setField] = useState(profile.field);
@@ -28,13 +33,14 @@ export default function Study() {
 
   const next = () => {
     setProfile({ field, subfield: sub });
+    if (editing) return router.back();
     router.push('/onboarding/world');
   };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.cream }}>
       <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
-        <OnbBar value={progressOf('study')} />
+        <OnbBar value={editing ? 1 : progressOf('study')} />
       </View>
       <ScrollView ref={scroller} contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <Enter>
@@ -69,7 +75,7 @@ export default function Study() {
       </ScrollView>
       {!!field && !!sub && (
         <Enter key="go" style={{ paddingHorizontal: 20, paddingBottom: 12, paddingTop: 8 }}>
-          <Btn title="continue" mono onPress={next} />
+          <Btn title={editing ? 'save' : 'continue'} mono onPress={next} />
         </Enter>
       )}
     </SafeAreaView>

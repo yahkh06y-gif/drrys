@@ -11,6 +11,8 @@
 // The tray at the bottom always shows what's picked: tap one to take it out, wherever it came from.
 // An area's niches start loading the moment it's picked (and a niche's things too), so the next step is
 // usually ready on arrival.
+// Profile → About you → Interests opens this same screen (`editing`): the saved picks are already in the tray and
+// their areas already chosen, and "save" goes back instead of going on.
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
@@ -27,7 +29,7 @@ import { useBack } from '@/lib/back';
 import { tap } from '@/lib/feedback';
 import { progressOf } from '@/lib/onboarding';
 import { prepareFirst } from '@/lib/first';
-import { CATEGORIES, cocoComment, nichesFor, relatedTo, rowOf, searchWorld, SECTION_ICON, SECTION_LABEL, sectionOf, shelfOf, TYPE_EMOJI, TYPE_ICON, type CategoryKey, type Niche, type Row, type Section } from '@/lib/qloo';
+import { AREA_TYPE, CATEGORIES, cocoComment, nichesFor, relatedTo, rowOf, searchWorld, SECTION_ICON, SECTION_LABEL, sectionOf, shelfOf, TYPE_EMOJI, TYPE_ICON, type CategoryKey, type Niche, type Row, type Section } from '@/lib/qloo';
 import { useApp, type WorldItem } from '@/store';
 import { C, F } from '@/theme';
 
@@ -42,17 +44,28 @@ type Load<T> = T | 'loading' | 'error';
 const TITLE: Record<Step, string> = { areas: 'Show Coco your world', niches: 'Narrow it down', things: 'Your favourites' };
 const SECTION_EMOJI: Record<Section, string> = { sports: '⚽', stories: '🎬', history: '🏛️' };
 
+/** The area a saved pick came from (for opening the screen again with it). */
+const areaOf = (x: WorldItem): CategoryKey | undefined =>
+  x.type === 'person' ? 'sports' : x.type === 'history' ? 'history' : CATEGORIES.find((c) => AREA_TYPE[c.key] === x.type)?.key;
+
 export default function World() {
+  return <WorldView />;
+}
+
+export function WorldView({ editing = false }: { editing?: boolean }) {
   const setProfile = useApp((s) => s.setProfile);
   const set = useApp((s) => s.set);
+  const saved = useApp((s) => s.world);
   const { width } = useWindowDimensions();
   const [step, setStep] = useState<Step>('areas');
-  const [areas, setAreas] = useState<CategoryKey[]>([]);
+  const [areas, setAreas] = useState<CategoryKey[]>(() =>
+    editing ? CATEGORIES.map((c) => c.key).filter((a) => saved.picks.some((x) => areaOf(x) === a)) : [],
+  );
   const [nichesBy, setNichesBy] = useState<Partial<Record<Section, Load<Niche[]>>>>({});
   const [chosen, setChosen] = useState<string[]>([]); // niche keys
   const [shelves, setShelves] = useState<Record<string, Load<WorldItem[]>>>({});
   const [tab, setTab] = useState<CategoryKey | ''>('');
-  const [picked, setPicked] = useState<WorldItem[]>([]);
+  const [picked, setPicked] = useState<WorldItem[]>(() => (editing ? saved.picks.slice(0, MAX) : []));
   const [fresh, setFresh] = useState<Set<string>>(new Set()); // things the list just learned
   const [line, setLine] = useState('What do you love?');
   const [query, setQuery] = useState('');
@@ -97,6 +110,12 @@ export default function World() {
       .catch(() => setShelves((m) => ({ ...m, [r.key]: 'error' })));
   }, []);
   const needs = (key: string) => shelves[key] === undefined || shelves[key] === 'error';
+
+  // editing: the areas that are already chosen start loading their niches
+  useEffect(() => {
+    if (editing) [...new Set(areas.map(sectionOf))].forEach(loadNiches);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const pickArea = (a: CategoryKey) => {
     setAreas((x) => toggleIn(x, a));
@@ -197,6 +216,7 @@ export default function World() {
   const next = () => {
     set({ world: { picks: picked, because: [], tags: [] } });
     setProfile({ interests: picked.map((x) => x.name) });
+    if (editing) return router.back();
     // Coco's first explanation starts now, and is made while the student sets up their plan
     prepareFirst();
     router.push('/onboarding/plan');
@@ -210,12 +230,12 @@ export default function World() {
       ? { title: 'continue', ok: areas.length > 0, go: toNiches }
       : step === 'niches'
         ? { title: 'continue', ok: picks.length > 0, go: toThings }
-        : { title: left > 0 ? `pick ${left} more` : 'continue', ok: left <= 0, go: next };
+        : { title: left > 0 ? `pick ${left} more` : editing ? 'save' : 'continue', ok: left <= 0, go: next };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.cream }}>
       <View style={{ paddingHorizontal: 20, paddingTop: 20, gap: 14 }}>
-        <OnbBar value={progressOf('world')} onBack={() => back() || (router.canGoBack() && router.back())} />
+        <OnbBar value={editing ? 1 : progressOf('world')} onBack={() => back() || (router.canGoBack() && router.back())} />
         {/* Coco in the corner, reacting to every pick */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <Image source={COCO.classic} style={{ width: 44, height: 54 }} contentFit="contain" />
