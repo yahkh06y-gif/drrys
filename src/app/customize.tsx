@@ -1,4 +1,4 @@
-// Coco's settings — the one page for everything about Coco, opened from the Coco tab header and Profile → Look & style.
+// Coco settings — the one page for everything about Coco, opened from the ⚙ on the Coco tab and Profile → Look & style.
 // Layout: preview → Look (closet, paid with XP) → How Coco talks (style, answer length, examples). Changes save right away.
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
@@ -60,14 +60,14 @@ export default function Customize() {
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8 }}>
         <IconBtn name="arrow-back" onPress={() => router.back()} />
         <Text accessibilityRole="header" style={{ flex: 1, textAlign: 'center', fontFamily: F.bold, fontSize: 17, color: C.ink, marginRight: 40 }}>
-          Coco
+          Coco settings
         </Text>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 48, gap: 28 }} showsVerticalScrollIndicator={false}>
         {/* preview: what Coco looks like right now */}
         <View style={{ backgroundColor: C.mint, borderRadius: 24, paddingTop: 12, paddingBottom: 14, alignItems: 'center', gap: 4 }}>
-          <Coco src={COCO[coco.outfit] ?? COCO.classic} size={130} />
+          <Coco src={COCO[coco.outfit] ?? COCO.classic} size={110} />
           <Text style={{ fontFamily: F.semi, fontSize: 14, color: C.mossDark }}>Wearing {wearing}</Text>
         </View>
 

@@ -1,8 +1,10 @@
 // Coco tab — talk to your learning companion.
-// Layout: header (who you're talking to + how Coco talks; one tap opens Coco's settings) → the chat → one message bar.
-// Before the first message the page shows Coco and three ways to start, so it never opens on an empty box.
+// Layout, top to bottom:
+//   1. title row: "Coco" + two icons (new chat, Coco's settings)
+//   2. what you're talking about: General or one of your trees (one tap switches; each keeps its own chat)
+//   3. the chat (before the first message: Coco says hi in the middle, a few ready questions sit above the bar)
+//   4. one message bar: type, or tap the mic and talk
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
@@ -17,57 +19,66 @@ import { play, tap } from '@/lib/feedback';
 import { activeSubject, useApp } from '@/store';
 import { C, F } from '@/theme';
 
-// failed: Coco couldn't be reached; the student can send the same message again
+// failed: Coco couldn't be reached; tapping the line sends the message before it again
 type Msg = { role: 'user' | 'assistant'; text: string; voice?: boolean; failed?: boolean; why?: string };
 const STYLE_LABEL = { friendly: 'Friendly coach', calm: 'Calm tutor', direct: 'Direct & focused', playful: 'Playful buddy' };
+const GENERAL = 'general';
+const NONE: Msg[] = [];
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 export default function CocoTab() {
   const coco = useApp((s) => s.coco);
   const name = useApp((s) => s.profile.name);
   const interests = useApp((s) => (s.coco.memory ? s.profile.interests : []));
-  const subject = useApp(activeSubject);
-  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const subjects = useApp((s) => s.subjects);
+  const current = useApp(activeSubject);
+  // what the chat is about: a tree (its id) or General. Starts on the tree you were last on.
+  const [picked, setPicked] = useState<string>(current?.id ?? GENERAL);
+  const subject = subjects.find((x) => x.id === picked);
+  const topic = subject ? subject.id : GENERAL; // a tree that was cut down falls back to General
+  // one conversation per topic, so switching never loses what you said
+  const [threads, setThreads] = useState<Record<string, Msg[]>>({});
+  const [busy, setBusy] = useState<string | null>(null); // the topic Coco is answering right now
   const [text, setText] = useState('');
-  const [waiting, setWaiting] = useState(false);
   const input = useRef<TextInput>(null);
   const scroll = useRef<ScrollView>(null);
 
-  const subjectName = subject?.name ?? '';
-  const chapter = subject?.chapters[0]?.title ?? '';
+  const msgs = threads[topic] ?? NONE;
   const first = name.trim().split(' ')[0];
 
   const send = useCallback(
-    async (raw: string, voice?: boolean, before: Msg[] = msgs) => {
+    async (raw: string, voice?: boolean, before?: Msg[]) => {
       const said = raw.trim();
-      if (!said || waiting) return;
+      if (!said || busy) return;
       tap('select');
+      const key = topic;
       // what Coco sees: the conversation without the "couldn't reach Coco" lines
-      const next: Msg[] = [...before.filter((m) => !m.failed), { role: 'user', text: said, ...(voice ? { voice: true } : {}) }];
-      setMsgs(next);
+      const next: Msg[] = [...(before ?? msgs).filter((m) => !m.failed), { role: 'user', text: said, ...(voice ? { voice: true } : {}) }];
+      const put = (f: (m: Msg[]) => Msg[]) => setThreads((t) => ({ ...t, [key]: f(t[key] ?? []) }));
+      put(() => next);
       setText('');
-      setWaiting(true);
+      setBusy(key);
       try {
         const reply = await chatCoco(
           {
-            subject: subjectName || 'General',
-            chapter,
+            subject: subject?.name ?? 'General (any subject the student asks about)',
+            chapter: subject ? subject.chapters.map((c) => c.title).filter(Boolean).join(', ') : '',
             interests,
             style: STYLE_LABEL[coco.style],
             depth: coco.depth,
           },
           next.map(({ role, text: t }) => ({ role, text: t })),
         );
-        setMsgs((m) => [...m, { role: 'assistant', text: reply.trim() }]);
+        put((m) => [...m, { role: 'assistant', text: reply.trim() }]);
         play('select');
       } catch (e) {
         // while developing, show the real reason (bad key, model name, region, rate limit…)
         const why = __DEV__ ? String((e as Error)?.message ?? e).slice(0, 220) : undefined;
-        setMsgs((m) => [...m, { role: 'assistant', text: '', failed: true, why }]);
+        put((m) => [...m, { role: 'assistant', text: '', failed: true, why }]);
       }
-      setWaiting(false);
+      setBusy(null);
     },
-    [msgs, waiting, subjectName, chapter, interests, coco.style, coco.depth],
+    [busy, topic, msgs, subject, interests, coco.style, coco.depth],
   );
 
   // a voice message is sent as soon as it's written down (same as Ask Coco); without voice the keyboard's mic is used
@@ -78,9 +89,8 @@ export default function CocoTab() {
 
   useEffect(() => {
     if (msgs.length) setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 60);
-  }, [msgs.length, waiting]);
+  }, [msgs.length, busy, topic]);
 
-  // a failed line comes right after the message that didn't get through: trying again sends that message once more
   const retry = (k: number) => {
     const sent = msgs[k - 1];
     if (sent?.role === 'user') send(sent.text, sent.voice, msgs.slice(0, k - 1));
@@ -88,88 +98,88 @@ export default function CocoTab() {
 
   const newChat = () => {
     if (voice.state === 'recording') voice.toggle();
-    setMsgs([]);
+    setThreads((t) => ({ ...t, [topic]: [] }));
     setText('');
   };
 
-  const starters: { icon: keyof typeof Ionicons.glyphMap; text: string }[] = [
-    { icon: 'bulb-outline', text: chapter ? `Explain ${chapter} simply` : subjectName ? `Explain ${subjectName} simply` : 'Explain something simply' },
-    { icon: 'help-circle-outline', text: subjectName ? `Quiz me on ${subjectName}` : 'Quiz me on what I’m studying' },
-    { icon: 'calendar-outline', text: 'Help me plan today’s study' },
-  ];
+  const pick = (id: string) => {
+    if (id === topic) return;
+    tap('select');
+    if (voice.state === 'recording') voice.toggle();
+    setPicked(id);
+  };
+
+  const chapter = subject?.chapters[0]?.title;
+  const starters: { icon: keyof typeof Ionicons.glyphMap; text: string }[] = subject
+    ? [
+        { icon: 'bulb-outline', text: chapter ? `Explain ${chapter} simply` : `Explain the basics of ${subject.name}` },
+        { icon: 'help-circle-outline', text: `Quiz me on ${subject.name}` },
+        { icon: 'list-outline', text: `What should I review in ${subject.name}?` },
+      ]
+    : [
+        { icon: 'calendar-outline', text: 'Help me plan today’s study' },
+        { icon: 'sparkles-outline', text: 'How do I remember things for longer?' },
+        { icon: 'bulb-outline', text: 'Explain something I don’t get' },
+      ];
 
   const recording = voice.state === 'recording';
   const busyVoice = voice.state !== 'idle';
   const typed = !!text.trim();
+  const waiting = busy === topic;
   const empty = msgs.length === 0 && !waiting;
-  const mode = [STYLE_LABEL[coco.style], subjectName].filter(Boolean).join(' · ');
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: C.paper }}>
-      {/* header: Coco + how Coco talks right now. Tapping it is the one way into Coco's settings. */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderColor: C.line }}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Coco, ${mode}. Open Coco's settings`}
-          onPress={() => (tap(), router.push('/customize'))}
-          style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 6, paddingVertical: 4, borderRadius: 16, backgroundColor: pressed ? C.sand : 'transparent' })}>
-          <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'flex-end', overflow: 'hidden' }}>
-            <Image source={COCO[coco.outfit] ?? COCO.classic} style={{ width: 38, height: 44, marginBottom: -4 }} contentFit="contain" />
-          </View>
-          <View style={{ flexShrink: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text accessibilityRole="header" style={{ fontFamily: F.bold, fontSize: 18, color: C.ink }}>
-                Coco
-              </Text>
-              <Ionicons name="chevron-down" size={16} color={C.muted} />
-            </View>
-            <Text numberOfLines={1} style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>
-              {mode}
-            </Text>
-          </View>
-        </Pressable>
-        {!empty && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="New chat"
-            onPress={() => (tap(), newChat())}
-            hitSlop={8}
-            style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? C.sand : 'transparent' })}>
-            <Ionicons name="create-outline" size={22} color={C.teal} />
-          </Pressable>
-        )}
+      {/* 1. title row — same large title as Profile, actions on the right */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 20, paddingRight: 12, paddingTop: 8, height: 56 }}>
+        <Text accessibilityRole="header" style={{ flex: 1, fontFamily: F.bold, fontSize: 30, lineHeight: 36, color: C.teal, letterSpacing: -0.6 }}>
+          Coco
+        </Text>
+        {!empty && <HeaderIcon name="create-outline" label="New chat" onPress={newChat} />}
+        <HeaderIcon name="options-outline" label="Coco settings" onPress={() => router.push('/customize')} />
+      </View>
+
+      {/* 2. what we're talking about */}
+      <View style={{ paddingTop: 6, paddingBottom: 12, borderBottomWidth: 1, borderColor: C.line }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }} accessibilityRole="tablist">
+          <Topic label="General" icon="chatbubbles-outline" on={topic === GENERAL} onPress={() => pick(GENERAL)} />
+          {subjects.map((s) => (
+            <Topic key={s.id} label={s.name} icon="leaf-outline" on={topic === s.id} onPress={() => pick(s.id)} />
+          ))}
+        </ScrollView>
       </View>
 
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+        {/* 3. the chat */}
         <ScrollView
           ref={scroll}
-          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingVertical: 16, gap: 14 }}
+          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12, gap: 18 }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           showsVerticalScrollIndicator={false}>
           {empty ? (
-            <View style={{ flex: 1, justifyContent: 'center', gap: 20 }}>
-              <View style={{ alignItems: 'center', gap: 6 }}>
-                <Coco src={COCO[coco.outfit] ?? COCO.classic} size={120} />
-                <Text style={{ fontFamily: F.bold, fontSize: 22, lineHeight: 28, color: C.teal, textAlign: 'center', letterSpacing: -0.4 }}>
-                  {first ? `Hi ${first}! What are we learning?` : 'Hi! What are we learning?'}
+            <View style={{ flex: 1, justifyContent: 'space-between', gap: 24 }}>
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <Coco src={COCO[coco.outfit] ?? COCO.classic} size={96} />
+                <Text style={{ fontFamily: F.bold, fontSize: 20, lineHeight: 26, color: C.ink, textAlign: 'center' }}>
+                  {first ? `Hi ${first}, what’s on your mind?` : 'Hi, what’s on your mind?'}
                 </Text>
-                <Text style={{ fontFamily: F.medium, fontSize: 15, lineHeight: 21, color: C.muted, textAlign: 'center' }}>
-                  Ask me anything, or start with one of these.
+                <Text style={{ fontFamily: F.medium, fontSize: 15, lineHeight: 21, color: C.muted, textAlign: 'center', maxWidth: 300 }}>
+                  {subject ? `Ask me anything about ${subject.name}.` : 'Ask about any subject, or how to study.'}
                 </Text>
               </View>
+              {/* ready questions sit right above the bar, where your thumb already is */}
               <View style={{ gap: 8 }}>
                 {starters.map((s, i) => (
-                  <Enter key={s.text} delay={80 * i}>
+                  <Enter key={`${topic}-${i}`} delay={60 * i}>
                     <Pressable
                       accessibilityRole="button"
                       onPress={() => send(s.text)}
-                      style={({ pressed }) => ({ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 16, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 3, backgroundColor: pressed ? C.sand : C.white })}>
-                      <Ionicons name={s.icon} size={20} color={C.teal} />
-                      <Text numberOfLines={2} style={{ flex: 1, fontFamily: F.semi, fontSize: 15, color: C.ink }}>
+                      style={({ pressed }) => ({ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: pressed ? C.sand : C.white })}>
+                      <Ionicons name={s.icon} size={18} color={C.teal} />
+                      <Text numberOfLines={2} style={{ flex: 1, fontFamily: F.medium, fontSize: 15, color: C.ink }}>
                         {s.text}
                       </Text>
-                      <Ionicons name="arrow-up" size={16} color={C.mutedLight} />
                     </Pressable>
                   </Enter>
                 ))}
@@ -205,8 +215,8 @@ export default function CocoTab() {
           {waiting && <Typing />}
         </ScrollView>
 
-        {/* message bar: type, or tap the mic and talk. While recording it turns into a recording bar. */}
-        <View style={{ paddingHorizontal: 12, paddingTop: 6, paddingBottom: 10 }}>
+        {/* 4. message bar: while recording it turns into a recording bar */}
+        <View style={{ paddingHorizontal: 12, paddingTop: 4, paddingBottom: 10 }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, backgroundColor: C.white, borderWidth: 1, borderColor: recording ? C.red : C.lineStrong, borderRadius: 26, paddingLeft: 16, paddingRight: 5, paddingVertical: 5, minHeight: 52 }}>
             {busyVoice ? (
               <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, height: 42 }}>
@@ -231,7 +241,7 @@ export default function CocoTab() {
                 value={withLive(text, voice.live)}
                 onChangeText={setText}
                 multiline
-                placeholder="Message Coco"
+                placeholder={subject ? `Ask about ${subject.name}` : 'Message Coco'}
                 placeholderTextColor="#A69A8A"
                 style={{ flex: 1, maxHeight: 120, paddingTop: 11, paddingBottom: 11, fontFamily: F.medium, fontSize: 16, color: C.ink }}
               />
@@ -241,8 +251,8 @@ export default function CocoTab() {
                 accessibilityRole="button"
                 accessibilityLabel="Send"
                 onPress={() => send(text)}
-                disabled={waiting}
-                style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: waiting ? C.lineStrong : C.teal, alignItems: 'center', justifyContent: 'center' }}>
+                disabled={!!busy}
+                style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: busy ? C.lineStrong : C.teal, alignItems: 'center', justifyContent: 'center' }}>
                 <Ionicons name="arrow-up" size={22} color={C.white} />
               </Pressable>
             ) : (
@@ -250,8 +260,8 @@ export default function CocoTab() {
                 accessibilityRole="button"
                 accessibilityLabel={recording ? 'Send voice message' : 'Talk to Coco'}
                 onPress={voice.toggle}
-                disabled={voice.state === 'writing' || waiting}
-                style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: recording ? C.red : C.sand, alignItems: 'center', justifyContent: 'center', opacity: voice.state === 'writing' || waiting ? 0.4 : 1 }}>
+                disabled={voice.state === 'writing' || !!busy}
+                style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: recording ? C.red : C.sand, alignItems: 'center', justifyContent: 'center', opacity: voice.state === 'writing' || busy ? 0.4 : 1 }}>
                 <Ionicons name={recording ? 'arrow-up' : 'mic'} size={22} color={recording ? C.white : C.teal} />
               </Pressable>
             )}
@@ -259,6 +269,47 @@ export default function CocoTab() {
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+/* ---------- pieces ---------- */
+
+function HeaderIcon({ name, label, onPress }: { name: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={() => (tap(), onPress())}
+      hitSlop={4}
+      style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? C.sand : 'transparent' })}>
+      <Ionicons name={name} size={24} color={C.teal} />
+    </Pressable>
+  );
+}
+
+/** One topic chip: General or a tree. The chosen one is filled. */
+function Topic({ label, icon, on, onPress }: { label: string; icon: keyof typeof Ionicons.glyphMap; on: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityState={{ selected: on }}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        height: 36,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 14,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: on ? C.teal : C.lineStrong,
+        backgroundColor: on ? C.teal : pressed ? C.sand : C.white,
+      })}>
+      <Ionicons name={icon} size={15} color={on ? C.white : C.teal} />
+      <Text numberOfLines={1} style={{ maxWidth: 160, fontFamily: F.semi, fontSize: 14, color: on ? C.white : C.ink }}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
