@@ -71,12 +71,13 @@ Around that: a week view per subject, streaks, stats per tree, and daily reminde
 
 ```bash
 npm install
-cp .env.example .env   # add an AI key (Claude or Gemini), and optionally a YouCam key
+cp .env.example .env   # no secret keys here: only which AI Coco uses
 npx expo start
 ```
 
 - Qloo (server side): `npx supabase functions deploy qloo --no-verify-jwt`, then `npx supabase secrets set QLOO_API_KEY=your-key`.
-- Without an AI key, Coco runs a built-in demo session so every screen can still be tried.
+- AI (server side): `npx supabase secrets set GEMINI_API_KEY=your-key YOUCAM_API_KEY=your-key` (and `ANTHROPIC_API_KEY` for Claude), then `npx supabase functions deploy ai --no-verify-jwt`.
+- With `EXPO_PUBLIC_COCO_AI=demo`, Coco runs a built-in demo session so every screen can still be tried.
 - Android APK: `npx eas-cli build -p android --profile preview`.
 
 ## Project layout
@@ -97,11 +98,14 @@ src/
     cloud.ts        accounts and backup
     notify.ts       daily reminders
   store.ts          app state and the flashcard scheduler
+supabase/functions/
+  ai/               holds the AI keys: Claude, Gemini and YouCam calls go through it
+  qloo/             holds the Qloo key: taste data for the onboarding
 ```
 
 ## Known limits
 
-- The AI key ships inside the build. For a real release the AI calls will move behind a server (a Supabase Edge Function).
+- The AI keys stay on the server (`supabase/functions/ai`), but that function is open to anyone who has the app's public Supabase key. Before a big release it should also check that the student is signed in and limit how many requests one student can send.
 - The app's screens are in English for now. Voice recall and Coco's chat already understand many languages, including Arabic.
 - Android only so far.
 - The AI memory-hook picture and some drag interactions were tested mainly in the browser; we are still testing them on more phones.

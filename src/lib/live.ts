@@ -2,12 +2,12 @@
  * Writing by voice, live: the student talks and the words appear on the screen while they talk (Gemini Live
  * transcription model, WebSocket). Web only for now. Coco never speaks: this is only the student's voice → text.
  *
- * Key: EXPO_PUBLIC_GEMINI_API_KEY (the same key the rest of the app uses). In a public release the key must not sit
- * in the app: use a server that hands out short-lived "ephemeral tokens" instead.
+ * OFF for now: it needs the Gemini key in the app, and the key now lives only on the server (supabase/functions/ai).
+ * To bring it back, the server should hand out short-lived "ephemeral tokens" and the socket should use one.
  */
 import { Platform } from 'react-native';
 
-const KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
+const KEY = ''; // no key in the app any more (see above)
 const WS_URL = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${KEY}`;
 
 export const liveEnabled = Platform.OS === 'web' && KEY.length > 10;

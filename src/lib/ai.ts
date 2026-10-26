@@ -1,24 +1,23 @@
 /**
  * Coco's brain — one thin client, two providers:
- *   - Claude (EXPO_PUBLIC_ANTHROPIC_API_KEY) — used when its key is set
- *   - Google Gemini (EXPO_PUBLIC_GEMINI_API_KEY) — the free-tier option, used otherwise
- * Both read the lecture PDF natively; a PowerPoint is opened in the app first (lib/slides) and sent as text + pictures. With no key at all, every call falls back to a
- * hand-written demo session so the app is still fully explorable (e.g. by judges).
+ *   - Google Gemini — the free-tier option, used by default
+ *   - Claude — used when EXPO_PUBLIC_COCO_AI=claude
+ * Both read the lecture PDF natively; a PowerPoint is opened in the app first (lib/slides) and sent as text + pictures.
+ * With EXPO_PUBLIC_COCO_AI=demo (or no server), every call falls back to a hand-written demo session so the app is
+ * still fully explorable (e.g. by judges).
  *
- * NOTE: calling the API straight from the app is fine for a prototype / competition build.
- * In production the key must live behind a small server proxy.
+ * The AI keys never ship in the app: every call goes through Drrys' server function (supabase/functions/ai),
+ * which holds the keys as Supabase secrets.
  */
-import { Platform } from 'react-native';
-
+import { cloudEnabled, fetchFunction } from './cloud';
 import { DEMO } from './demo';
 import type { Slide } from './slides';
 
-const KEY = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY ?? '';
 const MODEL = process.env.EXPO_PUBLIC_CLAUDE_MODEL || 'claude-sonnet-5-5';
-const GEMINI_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY ?? '';
 const GEMINI_MODEL = process.env.EXPO_PUBLIC_GEMINI_MODEL || 'gemini-3.8-flash';
+const CHOICE = (process.env.EXPO_PUBLIC_COCO_AI || 'gemini').toLowerCase();
 
-export const aiProvider: 'claude' | 'gemini' | null = KEY.length > 10 ? 'claude' : GEMINI_KEY.length > 10 ? 'gemini' : null;
+export const aiProvider: 'claude' | 'gemini' | null = !cloudEnabled || CHOICE === 'demo' ? null : CHOICE === 'claude' ? 'claude' : 'gemini';
 export const aiEnabled = aiProvider !== null;
 /** Shown in Profile → "Coco's brain". */
 export const aiLabel = aiProvider === 'claude' ? 'Claude AI · live' : aiProvider === 'gemini' ? 'Gemini AI · live' : 'Demo mode';
@@ -81,16 +80,7 @@ async function call(system: string, content: Block[], maxTokens = 2000): Promise
 }
 
 async function callClaude(system: string, content: Block[], maxTokens: number): Promise<string> {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': KEY,
-      'anthropic-version': '2023-06-01',
-      ...(Platform.OS === 'web' ? { 'anthropic-dangerous-direct-browser-access': 'true' } : {}),
-    },
-    body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system, messages: [{ role: 'user', content }] }),
-  });
+  const res = await fetchFunction('ai', { action: 'claude', model: MODEL, max_tokens: maxTokens, system, content });
   if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const json = await res.json();
   return (json.content ?? []).filter((b: { type: string }) => b.type === 'text').map((b: { text: string }) => b.text).join('');
@@ -126,8 +116,10 @@ async function callGemini(system: string, content: Block[], maxTokens: number, o
         ? { inline_data: { mime_type: b.mime, data: b.data } }
         : { inline_data: { mime_type: b.source.media_type, data: b.source.data } },
   );
-  const bodyFor = (model: string) =>
-    JSON.stringify({
+  const bodyFor = (model: string) => ({
+    action: 'gemini',
+    model,
+    request: {
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts }],
       generationConfig: {
@@ -135,7 +127,8 @@ async function callGemini(system: string, content: Block[], maxTokens: number, o
         temperature: opts.temperature ?? 0.6,
         ...(noThinking.has(model) ? {} : { thinkingConfig: { thinkingLevel: opts.thinking ?? 'low' } }),
       },
-    });
+    },
+  });
   const now = Date.now();
   const chain = opts.chain ?? GEMINI_CHAIN;
   const first = opts.chain ? lastVoiceGood : lastGood;
@@ -151,12 +144,7 @@ async function callGemini(system: string, content: Block[], maxTokens: number, o
       // the full-session request (PDF in, analysis + questions + cards out) legitimately takes a while
       const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? (hasPdf ? 120000 : hasAudio ? 45000 : 30000));
       try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-goog-api-key': GEMINI_KEY },
-          body: bodyFor(model),
-          signal: ctrl.signal,
-        });
+        const res = await fetchFunction('ai', bodyFor(model), ctrl.signal);
         if (res.ok) {
           const json = await res.json();
           const out = json.candidates?.[0]?.content?.parts ?? [];
@@ -504,8 +492,9 @@ export async function askAboutCard(
   );
 }
 
-/** Voice → text needs Gemini (Claude doesn't take audio). With a Claude-only setup the keyboard mic still works. */
-export const voiceEnabled = GEMINI_KEY.length > 10;
+/** Voice → text needs Gemini on the server (Claude doesn't take audio). EXPO_PUBLIC_VOICE=0 turns it off (e.g. a
+ *  Claude-only server): the keyboard mic still works then. */
+export const voiceEnabled = aiEnabled && process.env.EXPO_PUBLIC_VOICE !== '0';
 
 /**
  * Turn a spoken recording into text, word for word, in whatever language(s) the student used.

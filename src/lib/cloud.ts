@@ -20,19 +20,25 @@ const URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://jvoqecqeldykhysaqkk
 const KEY = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable__y4DT3FHtXGy3SG-66Rp4g_X1czO-Le';
 export const cloudEnabled = /^https:\/\//.test(URL) && KEY.length > 10;
 
+/** POST to one of Drrys' server functions and get its raw answer (status and body as the server sent them). */
+export function fetchFunction(name: string, body: unknown, signal?: AbortSignal): Promise<Response> {
+  if (!cloudEnabled) return Promise.reject(new Error('No server configured'));
+  return fetch(`${URL}/functions/v1/${name}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', apikey: KEY },
+    body: JSON.stringify(body),
+    signal,
+  });
+}
+
 /** Call one of Drrys' server functions (supabase/functions). The publishable key only says "this is the
- *  Drrys app"; secret keys (like Qloo's) stay on the server. */
+ *  Drrys app"; secret keys (like Qloo's and the AI keys) stay on the server. */
 export async function callFunction<T>(name: string, body: unknown, timeoutMs = 15000): Promise<T> {
   if (!cloudEnabled) throw new Error('No server configured');
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(`${URL}/functions/v1/${name}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', apikey: KEY },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
+    const res = await fetchFunction(name, body, ctrl.signal);
     if (!res.ok) throw new Error(`${name} ${res.status}`);
     return (await res.json()) as T;
   } finally {

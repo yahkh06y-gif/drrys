@@ -4,16 +4,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CocoChatSheet } from '@/components/AskCoco';
 import { HookSheet } from '@/components/HookSheet';
 import { Enter, IconBtn, Pill, SessionHeader, T } from '@/components/ui';
 import { askAboutCard, levelUp, makeCards } from '@/lib/ai';
 import { haptic, play, tap } from '@/lib/feedback';
 import { cardContext, sessionContext } from '@/lib/session';
-import { isDue, useApp, type Card, type Rating } from '@/store';
+import { isDue, useApp, type Card, type ChatMsg, type Rating } from '@/store';
 import { C, F } from '@/theme';
 
 // clay icons: refresh = forgot, dumbbell = hard, thumbs up = good, lightning = easy
@@ -113,8 +114,9 @@ export default function Cards() {
   const rate = (r: Rating) => {
     if (!card) return;
     const res = rateCard(card.id, r);
-    play(r === 'forgot' ? 'wrong' : 'select');
-    haptic(r === 'forgot' ? 'error' : 'light');
+    // every rating has its sound: easy / good = right, hard = half right, forgot = wrong
+    play(r === 'forgot' ? 'wrong' : r === 'hard' ? 'half' : 'right');
+    haptic(r === 'forgot' ? 'error' : r === 'hard' ? 'light' : 'success');
     const advance = () => {
       if (i + 1 >= cards.length) return finish();
       flip.value = 0;
@@ -244,24 +246,23 @@ export default function Cards() {
   );
 }
 
-// A small chat about the current flashcard (opened after the answer is revealed).
+// A small chat about the current flashcard (opened after the answer is revealed), in the same sheet as everywhere else.
 function AskCard({ visible, card, subjectId, onClose }: { visible: boolean; card: { q: string; a: string }; subjectId: string; onClose: () => void }) {
-  const [thread, setThread] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
-  const [text, setText] = useState('');
+  const [thread, setThread] = useState<ChatMsg[]>([]);
   const [busy, setBusy] = useState(false);
   const cardRef = useRef(card.q); // replies for a card you've moved past are dropped
   cardRef.current = card.q;
-  useEffect(() => {
+  const [forCard, setForCard] = useState(card.q);
+  if (forCard !== card.q) {
+    // a new card: a new chat
+    setForCard(card.q);
     setThread([]);
-    setText('');
     setBusy(false);
-  }, [card.q]);
-  const send = async () => {
-    const t = text.trim();
-    if (!t || busy) return;
-    const next = [...thread, { role: 'user' as const, text: t }];
+  }
+  const send = async (t: string, voice?: boolean) => {
+    if (busy) return;
+    const next: ChatMsg[] = [...thread, { role: 'user', text: t, ...(voice ? { voice: true } : {}) }];
     setThread(next);
-    setText('');
     setBusy(true);
     const at = card.q;
     try {
@@ -280,49 +281,20 @@ function AskCard({ visible, card, subjectId, onClose }: { visible: boolean; card
       );
       if (cardRef.current === at) setThread([...next, { role: 'assistant', text: reply.trim() }]);
     } catch {
-      if (cardRef.current === at) setThread([...next, { role: 'assistant', text: 'I lost the connection for a second — try again?' }]);
+      if (cardRef.current === at) setThread([...next, { role: 'assistant', text: 'I lost the connection for a second. Try again?' }]);
     }
     if (cardRef.current === at) setBusy(false);
   };
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,36,28,0.35)' }}>
-        <View style={{ backgroundColor: C.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 18, gap: 10, maxHeight: '80%' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.teal }}>Ask Coco</Text>
-            <Pressable hitSlop={10} onPress={onClose}>
-              <Ionicons name="close" size={22} color={C.muted} />
-            </Pressable>
-          </View>
-          <View style={{ backgroundColor: '#F0F8E6', borderRadius: 14, borderWidth: 1, borderColor: C.mintBorder, padding: 12 }}>
-            <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.ink }}>{card.q}</Text>
-            <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.teal, marginTop: 4 }}>{card.a}</Text>
-          </View>
-          <ScrollView style={{ maxHeight: 280 }} contentContainerStyle={{ gap: 8 }}>
-            {!thread.length && <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>Why is this the answer? Want an example? Ask anything about this card.</Text>}
-            {thread.map((m, k) => (
-              <View key={k} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%', backgroundColor: m.role === 'user' ? C.teal : C.white, borderRadius: 16, borderWidth: m.role === 'user' ? 0 : 1, borderColor: C.line, paddingHorizontal: 12, paddingVertical: 8 }}>
-                <Text style={{ fontFamily: F.medium, fontSize: 14, lineHeight: 20, color: m.role === 'user' ? C.white : C.ink }}>{m.text}</Text>
-              </View>
-            ))}
-            {busy && <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>Coco is thinking…</Text>}
-          </ScrollView>
-          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-end' }}>
-            <TextInput
-              value={text}
-              onChangeText={setText}
-              multiline
-              placeholder="Ask about this card…"
-              placeholderTextColor="#A69A8A"
-              style={{ flex: 1, minHeight: 44, maxHeight: 110, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, fontFamily: F.medium, fontSize: 14, color: C.ink }}
-            />
-            <Pressable onPress={send} disabled={!text.trim() || busy} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: text.trim() && !busy ? C.teal : C.lineStrong, alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="arrow-up" size={20} color={C.white} />
-            </Pressable>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+    <CocoChatSheet
+      open={visible}
+      about={card.q}
+      thread={thread}
+      waiting={busy}
+      starters={['Why is this the answer?', 'Give me an example']}
+      onSend={send}
+      onClose={onClose}
+    />
   );
 }
 

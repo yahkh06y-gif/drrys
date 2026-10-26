@@ -7,24 +7,25 @@
  *  - words only: text-to-image (the hook, turned into a scene by the AI);
  *  - with Coco: Coco's picture (bundled in the app) is uploaded as the reference (image-to-image).
  * The API is asynchronous: start a task, then poll it until it is "success" (or "error").
- * Key: EXPO_PUBLIC_YOUCAM_API_KEY in .env. Without a key the "Make a picture" option is hidden.
+ * Key: YOUCAM_API_KEY, a Supabase secret: every YouCam call goes through Drrys' server function
+ * (supabase/functions/ai), so the key never ships in the app. EXPO_PUBLIC_PICTURES=0 hides "Make a picture".
  */
 import { Asset } from 'expo-asset';
 import { File, Paths } from 'expo-file-system';
 import * as Legacy from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 
+import { cloudEnabled, fetchFunction } from '@/lib/cloud';
 import { shrinkImage } from '@/lib/shrink';
 import { saveSketch } from '@/lib/sketch';
 
-const KEY = process.env.EXPO_PUBLIC_YOUCAM_API_KEY ?? '';
-const API = 'https://yce-api-01.makeupar.com/s2s/v2.0';
-const TEXT_TO_IMAGE = `${API}/task/text-to-image/youcam`; // words only (no reference picture needed)
-const IMAGE_TO_IMAGE = `${API}/task/image-to-image/youcam`; // with a reference picture (Coco)
-const FILE_API = `${API}/file`; // asks for a place to upload a picture
+// the server knows YouCam's addresses: 'text' = words only (no reference picture needed), 'image' = with a
+// reference picture (Coco)
+type Kind = 'text' | 'image';
+const youcam = (body: Record<string, unknown>) => fetchFunction('ai', { action: 'youcam', ...body });
 const SIZE = '1472*1104'; // 4:3; the allowed sizes are 1664*928, 1472*1104, 1328*1328, 1104*1472, 928*1664
 
-export const youcamEnabled = !!KEY;
+export const youcamEnabled = cloudEnabled && process.env.EXPO_PUBLIC_PICTURES !== '0';
 
 /** The picture could not be uploaded to YouCam (so it cannot be used as a reference). */
 export class UploadError extends Error {}
@@ -81,10 +82,9 @@ const fromBase64 = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCode
 
 /** Uploads a picture to YouCam and returns its file id. */
 async function uploadImage(bytes: Uint8Array, contentType: string, fileName: string): Promise<string> {
-  const headers = { 'content-type': 'application/json', authorization: `Bearer ${KEY}` };
   let body: any;
   try {
-    const res = await fetch(FILE_API, { method: 'POST', headers, body: JSON.stringify({ files: [{ content_type: contentType, file_name: fileName, file_size: bytes.byteLength }] }) });
+    const res = await youcam({ step: 'file', files: [{ content_type: contentType, file_name: fileName, file_size: bytes.byteLength }] });
     body = await res.json().catch(() => undefined);
     if (!res.ok) throw new Error(`${res.status} ${JSON.stringify(body ?? {}).slice(0, 120)}`);
   } catch (e) {
@@ -137,8 +137,7 @@ async function cocoFileId(): Promise<string> {
 
 /** Makes one picture and returns a link to it (temporary: save it with savePicture). */
 export async function makeHookPicture(p: PictureRequest): Promise<string> {
-  if (!KEY) throw new Error('No YouCam key');
-  const headers = { 'content-type': 'application/json', authorization: `Bearer ${KEY}` };
+  if (!youcamEnabled) throw new Error('Pictures are turned off');
   // reference picture: Coco's (when "Coco in it" is on)
   const ids: string[] = [];
   let coco = p.withCoco;
@@ -149,13 +148,9 @@ export async function makeHookPicture(p: PictureRequest): Promise<string> {
       coco = false; // Coco's picture could not be sent: the picture is made without him rather than not at all
     }
   }
-  const base = ids.length ? IMAGE_TO_IMAGE : TEXT_TO_IMAGE;
+  const kind: Kind = ids.length ? 'image' : 'text';
   const begin = (minimal: boolean) =>
-    fetch(base, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ ...(ids.length ? { src_file_ids: ids } : {}), model: 'youcam-image-v2', prompt: buildPrompt(p, coco, minimal), size: SIZE }),
-    });
+    youcam({ step: 'start', kind, task: { ...(ids.length ? { src_file_ids: ids } : {}), model: 'youcam-image-v2', prompt: buildPrompt(p, coco, minimal), size: SIZE } });
   let start = await begin(false);
   let started = await start.json().catch(() => undefined);
   if (start.status === 400 && /prompt is longer/i.test(String(started?.error))) {
@@ -168,7 +163,7 @@ export async function makeHookPicture(p: PictureRequest): Promise<string> {
   let last = 'none';
   for (let i = 0; i < 36; i++) {
     await sleep(i < 10 ? 2000 : 3000);
-    const res = await fetch(`${base}/${id}`, { headers });
+    const res = await youcam({ step: 'status', kind, id });
     const body = await res.json().catch(() => undefined);
     if (!res.ok) throw new Error(`YouCam status ${res.status}: ${JSON.stringify(body ?? {}).slice(0, 160)}`);
     const st = String(body?.data?.task_status ?? '');
