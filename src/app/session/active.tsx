@@ -16,6 +16,7 @@ import { toneOf as toneFor } from '@/design';
 import { MicButton, useVoice, withLive } from '@/components/Voice';
 import { gradeAnswer, type ActiveQuestion, type Grade, type QFormat, type QKind } from '@/lib/ai';
 import { HookSheet, type HookTarget } from '@/components/HookSheet';
+import { HookEntry, Verdict } from '@/components/SessionMotion';
 import { SketchPad, type SketchHandle } from '@/components/SketchPad';
 import { BlankQ } from '@/components/questions/Blank';
 import { MatchQ } from '@/components/questions/Match';
@@ -336,11 +337,7 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
         {grade && tone && res && (
           <Enter style={{ gap: 12 }}>
             {/* 3 · how it went (and the right answer, only when it was missed) */}
-            <View style={{ backgroundColor: tone.bg, borderRadius: radius.lg, padding: 16, gap: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name={tone.icon} size={24} color={tone.color} />
-                <Text style={{ fontFamily: F.semi, fontSize: 18, lineHeight: 24, color: tone.text }}>{tone.title}</Text>
-              </View>
+            <Verdict kind={grade.correct ? 'correct' : grade.close ? 'almost' : 'wrong'} tone={tone}>
               <Text style={[{ fontFamily: F.regular, fontSize: 15, lineHeight: 23, color: C.ink }, autoDir(grade.feedback)]}>{grade.feedback}</Text>
               {!grade.correct && (
                 <View style={{ borderTopWidth: 1, borderColor: tone.border, paddingTop: 8, gap: 2 }}>
@@ -348,29 +345,17 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
                   <Text style={[{ fontFamily: F.medium, fontSize: 15, lineHeight: 22, color: C.ink }, autoDir(solution(q))]}>{solution(q)}</Text>
                 </View>
               )}
-            </View>
+            </Verdict>
 
             {/* 4 · still unsure: Ask Coco opens its own page, so it's never mixed up with moving on */}
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <Pressable
-                onPress={() => (tap('select'), setAsk({}))}
-                accessibilityRole="button"
-                style={({ pressed }) => ({ flex: 1, height: 48, borderRadius: radius.lg, borderWidth: 1, borderBottomWidth: 4, transform: [{ translateY: pressed ? 2 : 0 }], borderColor: C.lineStrong, backgroundColor: C.white, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 })}>
-                <Ionicons name="chatbubble-ellipses-outline" size={18} color={C.teal} />
-                <Text style={{ fontFamily: F.semi, fontSize: 15, color: C.teal }}>{talks ? 'Continue with Coco' : 'Ask Coco'}</Text>
-              </Pressable>
-              <Pressable
-                accessibilityLabel="Ask Coco by voice"
-                onPress={() => (tap('select'), setAsk({ voice: true }))}
-                style={({ pressed }) => ({ width: 48, height: 48, borderRadius: radius.lg, borderWidth: 1, borderBottomWidth: 4, transform: [{ translateY: pressed ? 2 : 0 }], borderColor: C.lineStrong, backgroundColor: C.white, alignItems: 'center', justifyContent: 'center' })}>
-                <Ionicons name="mic-outline" size={20} color={C.teal} />
-              </Pressable>
-            </View>
+            <Enter delay={120} style={{ flexDirection: 'row', gap: 10 }}>
+              <Btn title={talks ? 'Continue with Coco' : 'Ask Coco'} iconLeft="chatbubble-ellipses-outline" kind="light" height={48} sfx="select" onPress={() => setAsk({})} style={{ flex: 1 }} />
+              <Btn title="" label="Ask Coco by voice" iconLeft="mic-outline" kind="light" height={48} sfx="select" onPress={() => setAsk({ voice: true })} style={{ width: 52 }} />
+            </Enter>
 
-            <Pressable onPress={openHook} style={{ alignSelf: 'center', flexDirection: 'row', gap: 6, alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6 }}>
-              <Ionicons name="bulb-outline" size={15} color={C.goldInk} />
-              <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.goldInk }}>{existing?.mnemonic ? 'My memory hook' : 'Make a memory hook'}</Text>
-            </Pressable>
+            <Enter delay={200}>
+              <HookEntry mnemonic={existing?.mnemonic} onPress={openHook} />
+            </Enter>
           </Enter>
         )}
       </ScrollView>

@@ -10,10 +10,10 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import Animated, { cancelAnimation, Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { cancelAnimation, Easing, runOnJS, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { color, radius } from '@/design/tokens';
+import { color, ease, motion, radius } from '@/design/tokens';
 import { COCO } from '@/art';
 import { Btn, Enter, OnbBar } from '@/components/ui';
 import { useBack } from '@/lib/back';
@@ -150,11 +150,11 @@ export default function Plan() {
 
       <View style={{ flex: step === 2 ? 0 : 1 }} />
       {step < 2 ? (
-        <Btn title="continue" mono onPress={() => setStep(step + 1)} />
+        <Btn title="Continue" mono onPress={() => setStep(step + 1)} />
       ) : (
         // promised already (back from the next screen): straight on
         promised ? (
-          <Btn title="continue" mono onPress={finish} />
+          <Btn title="Continue" mono onPress={finish} />
         ) : (
           <Pressable onPress={notNow} style={{ alignSelf: 'center', padding: 8 }}>
             <Text style={{ fontFamily: F.medium, fontSize: 15, color: C.muted }}>Not now</Text>
@@ -179,26 +179,34 @@ function Option({ big, small, on, onPress }: { big: string; small: string; on: b
 // A big round button that fills with water while held; let go early and it drains.
 function HoldToPromise({ done, onDone }: { done: boolean; onDone: () => void }) {
   const fill = useSharedValue(done ? 1 : 0);
+  // held: the circle slowly presses in (deliberate); done: it pops back with one small bounce
+  const squeeze = useSharedValue(1);
   const size = 170;
   const start = () => {
     if (done) return;
     haptic('light');
+    squeeze.value = withTiming(0.95, { duration: 600, easing: ease.out });
     fill.value = withTiming(1, { duration: HOLD_MS * (1 - fill.value), easing: Easing.linear }, (ok) => {
-      if (ok) runOnJS(onDone)();
+      if (ok) {
+        squeeze.value = withSequence(withTiming(1.06, { duration: 140, easing: ease.out }), withSpring(1, motion.spring.bouncy));
+        runOnJS(onDone)();
+      }
     });
   };
   const stop = () => {
     if (done || fill.value >= 1) return;
     cancelAnimation(fill);
-    fill.value = withTiming(0, { duration: 350 });
+    fill.value = withTiming(0, { duration: 350, easing: ease.out });
+    squeeze.value = withSpring(1, motion.spring.press);
   };
   const water = useAnimatedStyle(() => ({ height: `${fill.value * 100}%` }));
+  const body = useAnimatedStyle(() => ({ transform: [{ scale: squeeze.value }] }));
   return (
     <Pressable onPressIn={start} onPressOut={stop} accessibilityRole="button" accessibilityLabel="Hold to promise">
-      <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: C.white, borderWidth: 4, borderColor: C.teal, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View style={[{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: done ? color.selected.bg : C.white, borderWidth: 4, borderColor: color.action.primary, alignItems: 'center', justifyContent: 'center' }, body]}>
         <Animated.View style={[{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: color.game.water }, water]} />
-        <Text style={{ fontFamily: F.semi, fontSize: 18, color: C.teal, textAlign: 'center' }}>{done ? 'Promised! 🌱' : 'Hold to\npromise 🌱'}</Text>
-      </View>
+        <Text style={{ fontFamily: F.semi, fontSize: 18, lineHeight: 24, color: done ? color.selected.text : color.text.primary, textAlign: 'center' }}>{done ? 'Promised! 🌱' : 'Hold to\npromise 🌱'}</Text>
+      </Animated.View>
     </Pressable>
   );
 }

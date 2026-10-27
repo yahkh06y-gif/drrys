@@ -6,11 +6,13 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, View, type DimensionValue } from 'react-native';
+import { ScrollView, Text, View, type DimensionValue } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { palette, radius, shadow } from '@/design/tokens';
+import { Segmented } from '@/design/components';
+
+import { palette } from '@/design/tokens';
 import { COCO } from '@/art';
 import { SafePicture } from '@/components/SafePicture';
 import { Btn, Enter, OnbBar } from '@/components/ui';
@@ -72,19 +74,16 @@ export default function First() {
         </View>
 
         {/* my way / the usual way */}
-        <View style={{ flexDirection: 'row', backgroundColor: C.sand, borderRadius: radius.lg, padding: 4 }}>
-          {[
-            { u: false, label: 'My way' },
-            { u: true, label: 'Usual way' },
-          ].map((o) => {
-            const on = usual === o.u;
-            return (
-              <Pressable key={o.label} onPress={() => show(o.u)} disabled={!ready} accessibilityRole="tab" accessibilityState={{ selected: on }} style={{ flex: 1, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', ...(on ? shadow.lift : null), backgroundColor: on ? C.white : 'transparent' }}>
-                <Text style={{ fontFamily: F.medium, fontSize: 14, color: on ? C.ink : C.muted }}>{o.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <Segmented
+          value={usual}
+          onChange={show}
+          disabled={!ready}
+          height={40}
+          options={[
+            { key: false, label: 'My way' },
+            { key: true, label: 'Usual way' },
+          ]}
+        />
 
         <View>
           {/* my way */}

@@ -8,7 +8,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
   type StyleProp,
@@ -67,17 +66,19 @@ export function T({ v = 'body', auto, style, ...p }: TextProps & { v?: V; auto?:
 /* ---------- Button (the pressable with a bottom edge) ---------- */
 // One main color: every "go" button is leaf green, whatever kind a screen asks for (green, leaf, teal).
 // light / white are the secondary button; dark is for the photo and video screens.
-type BtnKind = 'green' | 'teal' | 'leaf' | 'dark' | 'light' | 'white';
+type BtnKind = 'green' | 'teal' | 'leaf' | 'dark' | 'light' | 'white' | 'danger';
 const PRIMARY = { bg: color.action.primary, sh: color.action.primaryEdge, fg: color.text.onAction };
 const KIND: Record<BtnKind, { bg: string; sh: string; fg: string; border?: string }> = {
   green: PRIMARY,
   leaf: PRIMARY,
   teal: PRIMARY,
   dark: { bg: C.ink, sh: '#000', fg: C.white },
+  danger: { bg: color.action.danger, sh: color.action.dangerEdge, fg: C.white },
   light: { bg: color.action.secondary, sh: color.action.secondaryEdge, fg: color.action.secondaryText, border: color.border.strong },
   white: { bg: color.action.secondary, sh: color.action.secondaryEdge, fg: color.text.primary, border: color.border.strong },
 };
-const OFF = { bg: color.action.disabled, sh: 'transparent', fg: color.action.disabledText };
+// disabled has no edge at all: it sits pressed-in, flat and grey
+const OFF = { bg: color.action.disabled, sh: color.action.disabled, fg: color.action.disabledText };
 
 export function Btn({
   title,
@@ -92,15 +93,19 @@ export function Btn({
   pill,
   height = 52,
   mono,
+  label,
 }: {
+  /** empty for an icon-only button (then give it a `label`) */
   title: string;
+  label?: string;
   onPress?: () => void;
   kind?: BtnKind;
   icon?: keyof typeof Ionicons.glyphMap;
   iconLeft?: keyof typeof Ionicons.glyphMap;
   loading?: boolean;
   disabled?: boolean;
-  sfx?: Sfx;
+  /** false when onPress plays its own sound */
+  sfx?: Sfx | false;
   style?: StyleProp<ViewStyle>;
   pill?: boolean;
   height?: number;
@@ -108,7 +113,11 @@ export function Btn({
 }) {
   // disabled is grey (not see-through), so it never reads as "almost ready"; loading keeps its color
   const k = disabled ? OFF : KIND[kind];
-  const y = useSharedValue(0);
+  // disabled sits pressed-in (no edge); becoming ready it rises onto its edge
+  const y = useSharedValue(disabled ? depth.press : 0);
+  useEffect(() => {
+    y.value = withTiming(disabled ? depth.press : 0, { duration: motion.fast, easing: ease.out });
+  }, [disabled, y]);
   const a = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
   const off = disabled || loading;
   const r = pill ? radius.pill : radius.lg;
@@ -116,15 +125,23 @@ export function Btn({
     <Pressable
       disabled={off}
       accessibilityRole="button"
+      accessibilityLabel={label}
       accessibilityState={{ disabled: !!off, busy: !!loading }}
       onPressIn={() => (y.value = withTiming(depth.press, { duration: motion.press, easing: ease.out }))}
       onPressOut={() => (y.value = withSpring(0, motion.spring.press))}
       onPress={() => {
-        tap(sfx);
+        if (sfx) tap(sfx);
         onPress?.();
       }}
       style={[{ height: height + depth.press }, style]}>
-      <View style={[StyleSheet.absoluteFill, { top: depth.press, backgroundColor: k.sh, borderRadius: r }]} />
+      {/* The edge is its own rounded slab under the face. It is remounted (key) whenever the kind or
+          disabled state changes: Android drops the corner radius when a background goes from none to a color. */}
+      {!disabled && (
+        <View
+          key={kind}
+          style={{ position: 'absolute', left: 0, right: 0, top: depth.press, height, backgroundColor: k.sh, borderRadius: r, overflow: 'hidden' }}
+        />
+      )}
       <Animated.View
         style={[
           {
@@ -135,7 +152,7 @@ export function Btn({
             justifyContent: 'center',
             flexDirection: 'row',
             gap: 8,
-            paddingHorizontal: 20,
+            paddingHorizontal: title ? 18 : 0,
             borderWidth: 'border' in k && k.border ? 1 : 0,
             borderColor: 'border' in k ? k.border : undefined,
           },
@@ -146,7 +163,14 @@ export function Btn({
         ) : (
           <>
             {iconLeft && <Ionicons name={iconLeft} size={18} color={k.fg} />}
-            <Text style={mono ? { ...type.number, fontVariant: ['tabular-nums'], color: k.fg } : { color: k.fg, fontFamily: F.semi, fontSize: 16 }}>{title}</Text>
+            {/* one line, always: a long title shrinks a little instead of wrapping out of the button */}
+            {!!title && <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
+              style={[{ flexShrink: 1, textAlign: 'center' }, mono ? { ...type.number, fontVariant: ['tabular-nums'], color: k.fg } : { color: k.fg, fontFamily: F.semi, fontSize: 16 }]}>
+              {title}
+            </Text>}
             {icon && <Ionicons name={icon} size={18} color={k.fg} />}
           </>
         )}
@@ -176,6 +200,13 @@ export function Choice({
 }) {
   const s = useSharedValue(1);
   const a = useAnimatedStyle(() => ({ transform: [{ scale: s.value }] }));
+  // picking it: a small check pops in at the corner
+  const still = useReducedMotion();
+  const chk = useSharedValue(selected ? 1 : 0);
+  useEffect(() => {
+    chk.value = selected ? (still ? withTiming(1, { duration: motion.fast }) : withSpring(1, motion.spring.bouncy)) : withTiming(0, { duration: motion.fast, easing: ease.out });
+  }, [selected, still, chk]);
+  const ca = useAnimatedStyle(() => ({ opacity: Math.min(1, chk.value * 1.5), transform: [{ scale: 0.4 + chk.value * 0.6 }] }));
   return (
     <Pressable
       accessibilityRole="button"
@@ -213,6 +244,11 @@ export function Choice({
           {label}
         </Text>
         {sub && <Text style={{ ...type.caption, color: selected ? color.selected.text : color.text.muted, marginTop: 4, textAlign: 'center' }}>{sub}</Text>}
+        {!row && (
+          <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: 8, right: 8 }, ca]}>
+            <Ionicons name="checkmark-circle" size={20} color={color.selected.border} />
+          </Animated.View>
+        )}
       </Animated.View>
     </Pressable>
   );

@@ -9,9 +9,10 @@ import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } f
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { autoDir } from '@/design/rtl';
-import { color, radius, shadow } from '@/design/tokens';
+import { color, ease, palette, radius, shadow } from '@/design/tokens';
 import { CocoChatSheet } from '@/components/AskCoco';
 import { HookSheet } from '@/components/HookSheet';
+import { Squeeze } from '@/components/SessionMotion';
 import { Enter, IconBtn, Pill, SessionHeader, T } from '@/components/ui';
 import { askAboutCard, levelUp, makeCards } from '@/lib/ai';
 import { haptic, play, tap } from '@/lib/feedback';
@@ -81,7 +82,7 @@ export default function Cards() {
     const toBack = !onBack;
     play('flip');
     haptic('light');
-    flip.value = withTiming(toBack ? 1 : 0, { duration: 380 });
+    flip.value = withTiming(toBack ? 1 : 0, { duration: 360, easing: ease.inOut });
     setOnBack(toBack);
     if (toBack) setRevealed(true);
   };
@@ -169,6 +170,7 @@ export default function Cards() {
           </View>
         ) : (
           <>
+            <Enter key={card.id}>
             <Pressable onPress={reveal} style={{ height: 300 }}>
               <Animated.View style={[cardStyle, front]}>
                 <Pill text={card.reps ? 'Review' : 'New'} bg={color.feedback.almost.picked} border={color.feedback.almost.picked} fg={color.feedback.almost.text} />
@@ -189,6 +191,7 @@ export default function Cards() {
                 <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.leaf, textAlign: 'center', marginTop: 4 }}>Tap to see the question again</Text>
               </Animated.View>
             </Pressable>
+            </Enter>
 
             {(revealed || !!card.mnemonic) && (
               <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -200,12 +203,12 @@ export default function Cards() {
                   <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.teal }}>Ask Coco</Text>
                 </Pressable>
                 )}
-                <Pressable
+                <Squeeze
                   onPress={() => (tap('select'), setHook({ card, go: () => {} }))}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.white, borderWidth: 1, borderColor: C.amber, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
-                  <Ionicons name="bulb-outline" size={15} color={C.goldInk} />
-                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.goldInk }}>{card.mnemonic ? 'My memory hook' : 'Memory hook'}</Text>
-                </Pressable>
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: palette.sun50, borderWidth: 1, borderColor: palette.sun200, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
+                  <Ionicons name={card.mnemonic ? 'bulb' : 'bulb-outline'} size={15} color={palette.sun700} />
+                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: palette.sun800 }}>{card.mnemonic ? 'My memory hook' : 'Make a memory hook'}</Text>
+                </Squeeze>
               </View>
             )}
             {/* the ratings show up once the answer has been seen */}
@@ -213,15 +216,16 @@ export default function Cards() {
               <Enter key="rate" style={{ gap: 14 }}>
                 <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.ink, textAlign: 'center' }}>Rate your answer</Text>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
-                {RATINGS.map((x) => (
-                  <Pressable
-                    key={x.r}
+                {RATINGS.map((x, k) => (
+                  <Enter key={x.r} delay={k * 50} style={{ flex: 1 }}>
+                  <Squeeze
                     onPress={() => rate(x.r)}
-                    style={{ flex: 1, alignItems: 'center', gap: 2, backgroundColor: C.white, borderWidth: 1.5, borderColor: C.lineStrong, borderBottomWidth: 4, borderRadius: radius.lg, paddingVertical: 10 }}>
+                    style={{ alignItems: 'center', gap: 2, backgroundColor: C.white, borderWidth: 1.5, borderColor: C.lineStrong, borderBottomWidth: 4, borderRadius: radius.lg, paddingVertical: 10, paddingHorizontal: 2 }}>
                     <Image source={x.icon} style={{ width: 30, height: 30, marginBottom: 2 }} contentFit="contain" />
-                    <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.ink }}>{x.label}</Text>
-                    <Text style={{ fontFamily: F.regular, fontSize: 11, color: C.muted }}>{x.sub}</Text>
-                  </Pressable>
+                    <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: F.medium, fontSize: 12, color: C.ink }}>{x.label}</Text>
+                    <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontFamily: F.regular, fontSize: 11, color: C.muted }}>{x.sub}</Text>
+                  </Squeeze>
+                  </Enter>
                 ))}
                 </View>
               </Enter>

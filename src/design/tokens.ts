@@ -286,7 +286,14 @@ export const motion = {
   progress: 400, // progress bars filling
   bob: 1400, // Coco's idle bob, one way
   stagger: 50, // the gap between list items entering
-  spring: { press: { damping: 20, stiffness: 500 }, pop: { damping: 16, stiffness: 260 } },
+  spring: {
+    press: { damping: 20, stiffness: 500 },
+    pop: { damping: 16, stiffness: 260 },
+    /** a thumb or panel gliding into place: quick, no visible bounce */
+    slide: { damping: 26, stiffness: 320, mass: 0.9 },
+    /** something alive (the mic, a correct-answer pop): one small overshoot */
+    bouncy: { damping: 11, stiffness: 220 },
+  },
   pressScale: 0.98,
 } as const;
 

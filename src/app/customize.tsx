@@ -7,11 +7,13 @@ import { useState } from 'react';
 import { Pressable, ScrollView, Switch, Text, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Segmented } from '@/design/components';
+
 import { COCO } from '@/art';
 import { Coco, IconBtn, XpStars } from '@/components/ui';
 import { haptic, play, tap } from '@/lib/feedback';
 import { useApp, type CocoStyle, type Depth, type Outfit } from '@/store';
-import { color, shadow } from '@/design/tokens';
+import { color } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 const CLOSET: { id: Outfit; name: string; cost: number }[] = [
@@ -154,21 +156,7 @@ export default function Customize() {
           <Text accessibilityRole="header" style={{ fontFamily: F.medium, fontSize: 14, color: C.muted, paddingHorizontal: 4 }}>
             Answer length
           </Text>
-          <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', backgroundColor: C.sand, borderRadius: 16, padding: 4 }}>
-            {DEPTHS.map((d) => {
-              const on = coco.depth === d.id;
-              return (
-                <Pressable
-                  key={d.id}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: on }}
-                  onPress={() => (tap('select'), setC({ depth: d.id }))}
-                  style={{ flex: 1, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? C.white : 'transparent', ...(on ? shadow.lift : null) }}>
-                  <Text style={{ fontFamily: F.medium, fontSize: 14, color: on ? C.ink : C.muted }}>{d.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <Segmented role="radio" height={40} value={coco.depth} onChange={(id) => setC({ depth: id })} options={DEPTHS.map((d) => ({ key: d.id, label: d.label }))} />
           <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted, paddingHorizontal: 4 }}>{depth.sub}</Text>
         </View>
 

@@ -11,9 +11,11 @@ import { hookToScene, suggestHooks } from '@/lib/ai';
 import { haptic, play, tap } from '@/lib/feedback';
 import { cardContext } from '@/lib/session';
 import { makeHookPicture, savePicture, youcamEnabled } from '@/lib/youcam';
+import { Squeeze } from '@/components/SessionMotion';
+import { Btn, Enter } from '@/components/ui';
 import { useApp } from '@/store';
 import { autoDir } from '@/design/rtl';
-import { color, radius } from '@/design/tokens';
+import { color, palette, radius } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 export type HookTarget = {
@@ -102,15 +104,21 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
     onClose();
   };
   const canSave = !!text.trim() || !!pic;
-  const chip = (on: boolean) => ({ flexDirection: 'row' as const, gap: 6, alignItems: 'center' as const, backgroundColor: on ? C.teal : C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 8 });
+  const chip = (on: boolean) => ({ flexDirection: 'row' as const, gap: 6, alignItems: 'center' as const, backgroundColor: on ? color.action.primary : C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 8 });
   const inPic = phase === 'picture';
   return (
     <Modal visible transparent animationType="slide" onRequestClose={() => (inPic ? setPhase('write') : onClose())}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: color.overlay.scrim }}>
-          <View style={{ backgroundColor: C.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 18, gap: 12, maxHeight: '92%' }}>
+          <View style={{ backgroundColor: C.paper, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, padding: 18, paddingTop: 10, gap: 12, maxHeight: '92%' }}>
+            <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: C.lineStrong }} />
             {/* title */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              {!inPic && (
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: palette.sun100, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name={card.mnemonic ? 'bulb' : 'bulb-outline'} size={19} color={palette.sun700} />
+                </View>
+              )}
               {inPic && (
                 <Pressable hitSlop={12} onPress={() => (tap('select'), setPhase('write'))}>
                   <Ionicons name="arrow-back" size={22} color={C.teal} />
@@ -145,16 +153,25 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
                     <View style={{ gap: 6 }}>
                       <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>Coco’s ideas: tap one, then make it yours</Text>
                       {ideas.map((h, k) => (
-                        <Pressable key={k} onPress={() => (tap('select'), setText(h))} style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 10 }}>
-                          <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.ink }}>{h}</Text>
-                        </Pressable>
+                        <Enter key={k} delay={k * 60}>
+                          <Squeeze
+                            onPress={() => (tap('select'), setText(h))}
+                            style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: text === h ? color.selected.bg : C.white, borderWidth: 1, borderColor: text === h ? color.selected.border : C.line, borderRadius: radius.md, padding: 12 }}>
+                            <Ionicons name={text === h ? 'checkmark-circle' : 'sparkles-outline'} size={15} color={text === h ? color.selected.text : palette.sun600} style={{ marginTop: 2 }} />
+                            <Text style={[{ flex: 1, fontFamily: F.medium, fontSize: 14, lineHeight: 20, color: C.ink }, autoDir(h)]}>{h}</Text>
+                          </Squeeze>
+                        </Enter>
                       ))}
                     </View>
                   ) : (
-                    <Pressable onPress={getIdeas} disabled={busy || !tried} style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', opacity: tried ? 1 : 0.55 }}>
-                      {busy ? <ActivityIndicator size="small" color={C.teal} /> : <Ionicons name="bulb-outline" size={14} color={C.goldInk} />}
-                      <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.goldInk }}>{tried ? 'Need ideas? Ask Coco' : 'Try one yourself first, then Coco can add ideas'}</Text>
-                    </Pressable>
+                    <Squeeze
+                      onPress={getIdeas}
+                      disabled={busy || !tried}
+                      outer={{ alignSelf: 'flex-start' }}
+                      style={{ flexDirection: 'row', gap: 6, alignItems: 'center', opacity: tried ? 1 : 0.6, backgroundColor: palette.sun50, borderWidth: 1, borderColor: palette.sun200, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 7 }}>
+                      {busy ? <ActivityIndicator size="small" color={palette.sun700} /> : <Ionicons name="sparkles-outline" size={14} color={palette.sun700} />}
+                      <Text style={{ fontFamily: F.medium, fontSize: 13, color: palette.sun800 }}>{tried ? 'Need ideas? Ask Coco' : 'Try one yourself first, then Coco can add ideas'}</Text>
+                    </Squeeze>
                   )}
                 </View>
 
@@ -214,14 +231,9 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
 
             <View style={{ gap: 8 }}>
               {!inPic && youcamEnabled && canPic && (
-                <Pressable onPress={goPicture} accessibilityRole="button" style={({ pressed }) => ({ height: 48, borderRadius: radius.lg, borderWidth: 1, borderBottomWidth: 4, borderColor: C.lineStrong, backgroundColor: C.white, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', transform: [{ translateY: pressed ? 2 : 0 }] })}>
-                  <Text style={{ fontFamily: F.semi, fontSize: 15, color: C.teal }}>Want a picture of it? Continue</Text>
-                  <Ionicons name="arrow-forward" size={18} color={C.teal} />
-                </Pressable>
+                <Btn title="Want a picture of it? Continue" icon="arrow-forward" kind="light" height={48} sfx={false} onPress={goPicture} />
               )}
-              <Pressable onPress={plant} disabled={!canSave || busy} accessibilityRole="button" accessibilityState={{ disabled: !canSave || busy }} style={({ pressed }) => ({ height: 52, borderRadius: radius.lg, backgroundColor: canSave ? C.green : color.action.disabled, borderBottomWidth: canSave ? 4 : 0, borderColor: C.greenShadow, alignItems: 'center', justifyContent: 'center', transform: [{ translateY: pressed && canSave ? 2 : 0 }] })}>
-                {busy ? <ActivityIndicator color={C.white} /> : <Text style={{ fontFamily: F.semi, fontSize: 16, color: canSave ? C.white : color.action.disabledText }}>{card.mnemonic ? 'Update my hook' : 'Save my hook'}</Text>}
-              </Pressable>
+              <Btn title={card.mnemonic ? 'Update my hook' : 'Save my hook'} iconLeft="bulb" kind="green" sfx={false} disabled={!canSave} loading={busy} onPress={plant} />
               <Pressable onPress={() => (inPic ? setPhase('write') : onClose())} hitSlop={10} style={{ alignSelf: 'center' }}>
                 <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>{inPic ? '← Back to my hook' : 'Not now'}</Text>
               </Pressable>

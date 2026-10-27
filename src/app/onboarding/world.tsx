@@ -31,6 +31,7 @@ import { progressOf } from '@/lib/onboarding';
 import { prepareFirst } from '@/lib/first';
 import { AREA_TYPE, CATEGORIES, cocoComment, nichesFor, relatedTo, rowOf, searchWorld, SECTION_ICON, SECTION_LABEL, sectionOf, shelfOf, TYPE_EMOJI, TYPE_ICON, type CategoryKey, type Niche, type Row, type Section } from '@/lib/qloo';
 import { useApp, type WorldItem } from '@/store';
+import { color } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 const MIN = 3;
@@ -227,10 +228,10 @@ export function WorldView({ editing = false }: { editing?: boolean }) {
   const left = MIN - picked.length;
   const cta =
     step === 'areas'
-      ? { title: 'continue', ok: areas.length > 0, go: toNiches }
+      ? { title: 'Continue', ok: areas.length > 0, go: toNiches }
       : step === 'niches'
-        ? { title: 'continue', ok: picks.length > 0, go: toThings }
-        : { title: left > 0 ? `pick ${left} more` : editing ? 'save' : 'continue', ok: left <= 0, go: next };
+        ? { title: 'Continue', ok: picks.length > 0, go: toThings }
+        : { title: left > 0 ? `Pick ${left} more` : editing ? 'Save' : 'Continue', ok: left <= 0, go: next };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.cream }}>
@@ -294,9 +295,9 @@ export function WorldView({ editing = false }: { editing?: boolean }) {
                   const cat = CATEGORIES.find((c) => c.key === t)!;
                   const on = area === t;
                   return (
-                    <Pressable key={t} onPress={() => (tap('select'), setQuery(''), setTab(t), scroller.current?.scrollTo({ y: 0, animated: false }))} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 6, paddingRight: 14, height: 40, borderRadius: 99, backgroundColor: on ? C.teal : C.sand, borderWidth: 1, borderColor: on ? C.teal : C.line }}>
+                    <Pressable key={t} onPress={() => (tap('select'), setQuery(''), setTab(t), scroller.current?.scrollTo({ y: 0, animated: false }))} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 6, paddingRight: 14, height: 40, borderRadius: 99, backgroundColor: on ? color.selected.bg : C.white, borderWidth: 1.5, borderColor: on ? color.selected.border : C.line }}>
                       {cat.icon !== undefined ? <Image source={cat.icon} style={{ width: 28, height: 28 }} contentFit="contain" /> : <Text style={{ fontSize: 16 }}>{cat.emoji}</Text>}
-                      <Text style={{ fontFamily: F.bold, fontSize: 13, color: on ? C.white : C.teal }}>{cat.label}</Text>
+                      <Text style={{ fontFamily: F.bold, fontSize: 13, color: on ? color.selected.text : C.body }}>{cat.label}</Text>
                     </Pressable>
                   );
                 })}

@@ -81,7 +81,7 @@ export default function Hello() {
           </Enter>
         )}
         <View style={{ flex: 1 }} />
-        <Btn title="continue" mono disabled={step === 1 && !name.trim()} onPress={next} />
+        <Btn title="Continue" mono disabled={step === 1 && !name.trim()} onPress={next} />
       </SafeAreaView>
     </View>
   );

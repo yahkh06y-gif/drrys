@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, AppState, Pressable, Text, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import { Alert, AppState, Pressable, Text, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector, ScrollView } from 'react-native-gesture-handler';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -174,16 +174,20 @@ export default function TreeScreen() {
   // the lawn-to-soil edge fills only what's left of the first screen under the tree, so the
   // insights further down sit on plain earth
   const band = Math.max(90, (viewH || treeH + 90) - treeH);
+  // a strip of lawn under the tree holds today's card, so the card sits between the tree and
+  // "Subject insights" instead of over the trunk (the chip stays in view on the first screen)
+  const lift = Math.min(84, Math.max(24, band - 56));
+  const pagerH = treeH + lift;
 
   return (
     <View style={{ flex: 1, backgroundColor: '#241911' }}>
       <ScrollView ref={scroller} onLayout={(e) => setViewH(e.nativeEvent.layout.height)} scrollEnabled={!onPlant} showsVerticalScrollIndicator={false} bounces={false}>
         <GestureDetector gesture={swipe}>
-          <View style={{ width, height: treeH, overflow: 'hidden' }}>
-            <Animated.View style={[{ position: 'absolute', left: 0, top: 0, height: treeH, width: STEP * pageCount }, stripA]}>
+          <View style={{ width, height: pagerH, overflow: 'hidden', backgroundColor: LAWN }}>
+            <Animated.View style={[{ position: 'absolute', left: 0, top: 0, height: pagerH, width: STEP * pageCount }, stripA]}>
               {subjects.map((s, i) => (
-                <View key={s.id} style={{ position: 'absolute', top: 0, left: i * STEP, width, height: treeH }}>
-                  <TreePage clock={clock} subjectId={s.id} width={width} topInset={insets.top} near={Math.abs(i - page) <= 1} coco={i === page ? landing : undefined} onInsights={() => scroller.current?.scrollTo({ y: treeH - 30, animated: true })} />
+                <View key={s.id} style={{ position: 'absolute', top: 0, left: i * STEP, width, height: pagerH }}>
+                  <TreePage clock={clock} subjectId={s.id} width={width} height={pagerH} topInset={insets.top} near={Math.abs(i - page) <= 1} coco={i === page ? landing : undefined} onInsights={() => scroller.current?.scrollTo({ y: pagerH - 30, animated: true })} />
                 </View>
               ))}
               {Array.from({ length: pageCount - 1 }, (_, i) => (
@@ -201,10 +205,10 @@ export default function TreeScreen() {
             {page < last && <SideArrow side="right" top={treeH * 0.56} onPress={() => goTo(page + 1)} plus={plantPage && page + 1 === last} />}
 
             {/* first visit: Coco explains the daily watering, pointing at the card */}
-            {!coachSeen && !guide && !onPlant && <CoachTip width={width} height={treeH} onDone={() => set({ coachSeen: true })} />}
+            {!coachSeen && !guide && !onPlant && <CoachTip width={width} height={pagerH} onDone={() => set({ coachSeen: true })} />}
 
             {/* right after onboarding: one guided step, done by hand (add a lecture, then how the days work) */}
-            {!!guide && !onPlant && <GuideTip subject={subject} step={guide} width={width} height={treeH} />}
+            {!!guide && !onPlant && <GuideTip subject={subject} step={guide} width={width} height={pagerH} />}
 
             {/* which tree you're looking at */}
             {pageCount > 1 && (
@@ -225,7 +229,7 @@ export default function TreeScreen() {
         {onPlant ? (
           <Soil band={band} />
         ) : (
-          <Soil band={band} style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 40, gap: 16 }}>
+          <Soil band={band} style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 40, gap: 16 }}>
             <View style={{ alignItems: 'center', gap: 2, marginBottom: 18 }}>
               <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.paper, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 6 }}>
                 <Ionicons name="stats-chart" size={13} color={C.bark} />
@@ -291,7 +295,7 @@ function SideArrow({ side, top, onPress, plus }: { side: 'left' | 'right'; top: 
 
 // One subject's tree: header, the Knowledge Tree itself and today's session card on the lawn.
 // Trees far from the one on screen render just the tree (no card) to keep the forest light.
-function TreePage({ clock, subjectId, width, topInset, near, coco, onInsights }: { clock: number; subjectId: string; width: number; topInset: number; near: boolean; coco?: CocoLanding; onInsights: () => void }) {
+function TreePage({ clock, subjectId, width, height, topInset, near, coco, onInsights }: { clock: number; subjectId: string; width: number; height: number; topInset: number; near: boolean; coco?: CocoLanding; onInsights: () => void }) {
   const subject = useApp((s) => s.subjects.find((x) => x.id === subjectId));
   const cards = useApp((s) => s.cards);
   const [sel, setSel] = useState<string>();
@@ -317,6 +321,7 @@ function TreePage({ clock, subjectId, width, topInset, near, coco, onInsights }:
   const open = subject.chapters.filter((_, i) => !isResting(subjectIdx, i, isPro, together));
   const chapter = subject.chapters.find((c) => c.id === sel) ?? open.find((c) => c.mastery < 1) ?? open[0] ?? subject.chapters[0];
   return (
+    <View style={{ width, height }}>
     <KnowledgeTree width={width} chapters={subject.chapters} wilt={wilt} selected={chapter?.id} coco={coco} onSelect={(id) => (tap('select'), setSel(id))} onHold={(id) => (setHoldId(id), setApp({ hookTipSeen: true }))}>
       <View style={{ position: 'absolute', top: topInset + 8, left: 16, right: 16, flexDirection: 'row', alignItems: 'center' }}>
         <Pressable hitSlop={10} onPress={() => (tap(), router.push({ pathname: '/subject', params: { id: subject.id } }))} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
@@ -336,17 +341,18 @@ function TreePage({ clock, subjectId, width, topInset, near, coco, onInsights }:
         </Enter>
       )}
 
-      {near && chapter && (
-        <Enter delay={200} style={{ position: 'absolute', bottom: 20, left: 24, right: 24 }}>
-          <TodayCard subject={subject} chapter={chapter} due={due.length} onInsights={onInsights} />
-        </Enter>
-      )}
       <HookGallery
         title={holdId ? `Ch ${subject.chapters.findIndex((c) => c.id === holdId) + 1}` : undefined}
         cards={hooks.filter((c) => c.chapterId === holdId)}
         onClose={() => setHoldId(undefined)}
       />
     </KnowledgeTree>
+      {near && chapter && (
+        <Enter delay={200} style={{ position: 'absolute', bottom: CARD_GAP, left: 20, right: 20 }}>
+          <TodayCard subject={subject} chapter={chapter} due={due.length} onInsights={onInsights} />
+        </Enter>
+      )}
+    </View>
   );
 }
 
@@ -507,20 +513,21 @@ const COACH_LINES: { text: string; icons?: { src: number; label: string }[] }[] 
   },
 ];
 const CARD_H = 158; // today's card height, measured from its layout (header + week strip + button + padding)
+const CARD_GAP = 8; // space under today's card, above the soil
 
 function CoachTip({ width, height, onDone }: { width: number; height: number; onDone: () => void }) {
   const [i, setI] = useState(0);
   const line = COACH_LINES[i];
   const last = i === COACH_LINES.length - 1;
-  const cardTop = height - 20 - CARD_H;
+  const cardTop = height - CARD_GAP - CARD_H;
   const dim = color.overlay.scrimStrong;
   return (
     <View style={{ position: 'absolute', left: 0, top: 0, width, height, zIndex: 20 }}>
       {/* dim everything except the card */}
       <View style={{ position: 'absolute', left: 0, right: 0, top: 0, height: cardTop - 6, backgroundColor: dim }} />
-      <View style={{ position: 'absolute', left: 0, width: 18, top: cardTop - 6, bottom: 0, backgroundColor: dim }} />
-      <View style={{ position: 'absolute', right: 0, width: 18, top: cardTop - 6, bottom: 0, backgroundColor: dim }} />
-      <View style={{ position: 'absolute', left: 18, right: 18, top: height - 14, bottom: 0, backgroundColor: dim }} />
+      <View style={{ position: 'absolute', left: 0, width: 14, top: cardTop - 6, bottom: 0, backgroundColor: dim }} />
+      <View style={{ position: 'absolute', right: 0, width: 14, top: cardTop - 6, bottom: 0, backgroundColor: dim }} />
+      <View style={{ position: 'absolute', left: 14, right: 14, top: height - CARD_GAP + 6, bottom: 0, backgroundColor: dim }} />
 
       <Enter key={i} style={{ position: 'absolute', left: 28, right: 28, bottom: height - cardTop + 14 }}>
         <View style={{ backgroundColor: C.white, borderRadius: radius.xl, padding: 16, gap: 10 }}>
@@ -649,20 +656,11 @@ function GuideTip({ subject, step, width, height }: { subject: Subject; step: 'f
             <Btn title="Got it!" kind="green" height={48} onPress={close} />
           ) : step === 'files' ? (
             <View style={{ gap: 10 }}>
-              <Btn title="Upload a lecture (PDF or PowerPoint)" iconLeft="cloud-upload-outline" kind="green" height={50} disabled={busy} onPress={upload} />
-              <Pressable
-                onPress={sample}
-                disabled={busy}
-                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: radius.lg, borderWidth: 1, borderBottomWidth: 4, borderColor: color.border.strong, backgroundColor: C.white }}>
-                {busy ? (
-                  <ActivityIndicator color={C.teal} />
-                ) : (
-                  <>
-                    <Ionicons name="sparkles-outline" size={16} color={C.teal} />
-                    <Text style={{ fontFamily: F.semi, fontSize: 15, color: C.teal }}>Try a sample lecture</Text>
-                  </>
-                )}
-              </Pressable>
+              <View style={{ gap: 6 }}>
+                <Btn title="Upload a lecture" iconLeft="cloud-upload-outline" kind="green" height={50} disabled={busy} onPress={upload} />
+                <Text style={{ fontFamily: F.regular, fontSize: 12, color: C.muted, textAlign: 'center' }}>PDF or PowerPoint</Text>
+              </View>
+              <Btn title="Try a sample lecture" iconLeft="sparkles-outline" kind="light" height={48} loading={busy} onPress={sample} />
               <Pressable onPress={() => (tap(), setLater(true))} style={{ alignSelf: 'center', padding: 4 }}>
                 <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>Later</Text>
               </Pressable>
@@ -722,12 +720,14 @@ function PlantPage({ width, height, topInset, locked }: { width: number; height:
 
 // Lawn → soil, matching the Figma "under ground" gradient: the first `band` px carry the lawn-to-earth
 // edge, then the earth darkens down to the bottom of the page.
+const LAWN = '#C8F197'; // the colour at the very bottom of the tree render
+
 function Soil({ band, style, children }: { band: number; style?: StyleProp<ViewStyle>; children?: React.ReactNode }) {
   return (
     <View style={[{ minHeight: band, backgroundColor: '#241911' }, style]}>
       <LinearGradient
         pointerEvents="none"
-        colors={['#C8F197', '#A9D179', '#95B96C', '#6E8852', '#787249', '#7E6644', '#835B3F']}
+        colors={[LAWN, '#A9D179', '#95B96C', '#6E8852', '#787249', '#7E6644', '#835B3F']}
         locations={[0, 0.37, 0.5, 0.74, 0.81, 0.85, 1]}
         style={{ position: 'absolute', left: 0, right: 0, top: 0, height: band }}
       />

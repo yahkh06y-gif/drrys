@@ -14,13 +14,26 @@ import {
 import { File } from 'expo-file-system';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  interpolate,
+  interpolateColor,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { readFileBase64 } from '@/lib/readfile';
 import { transcribe, voiceEnabled } from '@/lib/ai';
 import { liveEnabled, startDictation, type DictationHandle } from '@/lib/live';
 import { haptic } from '@/lib/feedback';
-import { alpha, color, palette } from '@/design/tokens';
+import { color, ease, motion, palette } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 // Speech only: mono, 16 kHz, 32 kbps AAC → about 4 KB a second (a 5-minute brain dump ≈ 1.2 MB).
@@ -195,36 +208,95 @@ export function useVoice(onText: (text: string) => void, onFallback?: () => void
 /** The text with the words being spoken right now added at the end. */
 export const withLive = (text: string, live: string) => (live ? `${text}${text && !/\s$/.test(text) ? ' ' : ''}${live}` : text);
 
-/** The mic button: pulses with your voice while recording, spins while Coco writes. */
+/** One sonar ring: grows out of the mic and fades, again and again, while you talk. */
+function Sonar({ size, delay, tint }: { size: number; delay: number; tint: string }) {
+  const t = useSharedValue(0);
+  useEffect(() => {
+    t.value = withDelay(delay, withRepeat(withTiming(1, { duration: 1800, easing: Easing.out(Easing.quad) }), -1, false));
+    return () => cancelAnimation(t);
+  }, [delay, t]);
+  const a = useAnimatedStyle(() => ({ opacity: interpolate(t.value, [0, 0.15, 1], [0, 0.5, 0]), transform: [{ scale: interpolate(t.value, [0, 1], [1, 1.9]) }] }));
+  return <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: size, height: size, borderRadius: size / 2, borderWidth: 2, borderColor: tint }, a]} />;
+}
+
+/** The mic button. Idle: it breathes softly, inviting a tap. Recording: it turns red, sonar rings ripple out
+ *  and a halo swells with your voice. Writing: back to green with a spinner while Coco types it up. */
 export function MicButton({ voice, size = 50, style }: { voice: ReturnType<typeof useVoice>; size?: number; style?: StyleProp<ViewStyle> }) {
   const { state, level, toggle } = voice;
   const recording = state === 'recording';
-  const ring = useAnimatedStyle(() => ({
-    transform: [{ scale: withTiming(recording ? 1.15 + level * 0.45 : 1, { duration: 140 }) }],
-    opacity: withTiming(recording ? 1 : 0, { duration: 200 }),
+  const writing = state === 'writing';
+  const reduce = useReducedMotion();
+  const edge = Math.max(3, Math.round(size / 18));
+
+  // 0 = green (idle/writing) → 1 = red (recording)
+  const hot = useSharedValue(0);
+  useEffect(() => {
+    hot.value = withTiming(recording ? 1 : 0, { duration: motion.base, easing: ease.inOut });
+  }, [recording, hot]);
+
+  // the voice halo follows the mic level, smoothed by a spring so it swells instead of jumping
+  const lv = useSharedValue(0);
+  useEffect(() => {
+    lv.value = reduce ? 0 : withSpring(recording ? level : 0, { damping: 14, stiffness: 180 });
+  }, [level, recording, reduce, lv]);
+
+  // idle breathing: a slow 2.6 s in-and-out, only while nothing is happening
+  const breath = useSharedValue(0);
+  useEffect(() => {
+    if (state === 'idle' && !reduce) breath.value = withRepeat(withTiming(1, { duration: 1300, easing: Easing.inOut(Easing.sin) }), -1, true);
+    else breath.value = withTiming(0, { duration: motion.fast });
+    return () => cancelAnimation(breath);
+  }, [state, reduce, breath]);
+
+  // press: sinks onto its edge and squeezes a touch; springs back on release
+  const down = useSharedValue(0);
+  // the icon pops when it changes (mic ↔ stop)
+  const pop = useSharedValue(1);
+  useEffect(() => {
+    pop.value = reduce ? 1 : withSequence(withTiming(0.6, { duration: 90, easing: ease.out }), withSpring(1, motion.spring.bouncy));
+  }, [state, reduce, pop]);
+
+  const halo = useAnimatedStyle(() => ({
+    opacity: interpolate(hot.value, [0, 1], [interpolate(breath.value, [0, 1], [0.18, 0.32]), 0.32]),
+    transform: [{ scale: 1.08 + breath.value * 0.1 * (1 - hot.value) + lv.value * 0.55 * hot.value }],
+    backgroundColor: interpolateColor(hot.value, [0, 1], [color.action.primary, palette.berry500]),
   }));
+  const body = useAnimatedStyle(() => ({ transform: [{ translateY: down.value * edge }, { scale: 1 - down.value * 0.03 }] }));
+  const face = useAnimatedStyle(() => ({ backgroundColor: interpolateColor(hot.value, [0, 1], [color.action.primary, palette.berry500]) }));
+  const under = useAnimatedStyle(() => ({ backgroundColor: interpolateColor(hot.value, [0, 1], [color.action.primaryEdge, palette.berry700]) }));
+  const icon = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
+
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={recording ? 'Stop recording' : state === 'writing' ? 'Writing down what you said' : 'Talk to Coco'}
+      accessibilityLabel={recording ? 'Stop recording' : writing ? 'Writing down what you said' : 'Talk to Coco'}
       onPress={toggle}
-      disabled={state === 'writing'}
+      onPressIn={() => (down.value = withTiming(1, { duration: motion.press, easing: ease.out }))}
+      onPressOut={() => (down.value = withSpring(0, motion.spring.press))}
+      disabled={writing}
       hitSlop={6}
-      style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, style]}>
-      <Animated.View style={[{ position: 'absolute', width: size, height: size, borderRadius: size / 2, backgroundColor: alpha(palette.berry500, 0.28) }, ring]} />
-      <View
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: recording ? C.red : C.teal,
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderBottomWidth: 4,
-          borderColor: recording ? color.feedback.wrong.text : palette.pine800,
-        }}>
-        {state === 'writing' ? <ActivityIndicator color={C.white} /> : <Ionicons name={recording ? 'stop' : 'mic'} size={size * 0.42} color={C.white} />}
-      </View>
+      style={[{ width: size, height: size + edge, alignItems: 'center', justifyContent: 'flex-start' }, style]}>
+      {/* voice halo (behind everything) */}
+      <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: 0, width: size, height: size, borderRadius: size / 2 }, halo]} />
+      {/* sonar rings, only while recording */}
+      {recording && !reduce && (
+        <View pointerEvents="none" style={{ position: 'absolute', top: 0, width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+          {[0, 600, 1200].map((d) => (
+            <Sonar key={d} size={size} delay={d} tint={palette.berry500} />
+          ))}
+        </View>
+      )}
+      {/* the edge it sinks onto */}
+      <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: edge, width: size, height: size, borderRadius: size / 2 }, under]} />
+      <Animated.View style={[{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center' }, face, body]}>
+        {writing ? (
+          <ActivityIndicator color={C.white} />
+        ) : (
+          <Animated.View style={icon}>
+            <Ionicons name={recording ? 'stop' : 'mic'} size={size * (recording ? 0.36 : 0.42)} color={C.white} />
+          </Animated.View>
+        )}
+      </Animated.View>
     </Pressable>
   );
 }

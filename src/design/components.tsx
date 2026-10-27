@@ -5,12 +5,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image, type ImageSource } from 'expo-image';
 import React from 'react';
 import { Modal, Pressable, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { Btn, Coco, T } from '@/components/ui';
 import { tap } from '@/lib/feedback';
 
 import { autoDir, dirIcon } from './rtl';
-import { color, depth, font, layout, radius, S, shadow, size, type Space, type Tone } from './tokens';
+import { color, depth, font, layout, motion, radius, S, shadow, size, type Space, type Tone } from './tokens';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -157,47 +158,69 @@ export function Badge({ text, tone = 'brand', icon, caps, style }: { text: strin
 }
 
 /* ---------- Segmented toggle ---------- */
-/** Two to four options in one track: "Speak / Write", "Monthly / Yearly". */
-export function Segmented<K extends string>({
+/** Two to four options in one track: "Speak / Write", "Monthly / Yearly". One white thumb slides under the
+ *  picked option (it is always there, so it never flickers or loses its corners on Android). Labels stay on one line. */
+export function Segmented<K extends string | number | boolean>({
   options,
   value,
   onChange,
+  disabled,
+  role = 'tab',
+  height = layout.tapMin,
   style,
 }: {
-  options: { key: K; label: string; icon?: IconName; badge?: string }[];
+  options: { key: K; label: string; icon?: IconName; badge?: string; badgeTone?: BadgeTone }[];
   value: K;
   onChange: (k: K) => void;
+  disabled?: boolean;
+  /** 'radio' for a setting (answer length), 'tab' when it switches what is shown */
+  role?: 'tab' | 'radio';
+  height?: number;
   style?: StyleProp<ViewStyle>;
 }) {
+  const PAD = S[1];
+  const [w, setW] = React.useState(0);
+  const reduce = useReducedMotion();
+  const i = Math.max(0, options.findIndex((o) => o.key === value));
+  const seg = w > 0 ? (w - PAD * 2) / options.length : 0;
+  const x = useSharedValue(0);
+  const placed = React.useRef(false);
+  React.useEffect(() => {
+    if (!seg) return;
+    // the first placement is instant; after that the thumb glides to the new option
+    x.value = !placed.current || reduce ? i * seg : withSpring(i * seg, motion.spring.slide);
+    placed.current = true;
+  }, [i, seg, reduce, x]);
+  const thumb = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
   return (
-    <View style={[{ flexDirection: 'row', backgroundColor: color.bg.sunken, borderRadius: radius.lg, padding: S[1] }, style]} accessibilityRole="tablist">
+    <View
+      onLayout={(e) => setW(e.nativeEvent.layout.width)}
+      style={[{ flexDirection: 'row', backgroundColor: color.bg.sunken, borderRadius: radius.lg, padding: PAD, opacity: disabled ? 0.6 : 1 }, style]}
+      accessibilityRole={role === 'radio' ? 'radiogroup' : 'tablist'}>
+      {seg > 0 && (
+        <Animated.View
+          pointerEvents="none"
+          style={[{ position: 'absolute', top: PAD, left: PAD, width: seg, height, borderRadius: radius.md, backgroundColor: color.surface.card, ...shadow.lift }, thumb]}
+        />
+      )}
       {options.map((o) => {
         const on = o.key === value;
         return (
           <Pressable
-            key={o.key}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: on }}
+            key={String(o.key)}
+            disabled={disabled}
+            accessibilityRole={role}
+            accessibilityState={role === 'radio' ? { checked: on } : { selected: on }}
             onPress={() => {
               if (!on) tap('select');
               onChange(o.key);
             }}
-            style={{
-              flex: 1,
-              minHeight: layout.tapMin,
-              flexDirection: 'row',
-              gap: S[1.5],
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: radius.md,
-              backgroundColor: on ? color.surface.card : 'transparent',
-              ...(on ? shadow.lift : null),
-            }}>
+            style={{ flex: 1, minWidth: 0, height, flexDirection: 'row', gap: S[1.5], alignItems: 'center', justifyContent: 'center', paddingHorizontal: S[2] }}>
             {o.icon && <Ionicons name={o.icon} size={size.icon.sm} color={on ? color.text.brand : color.text.muted} />}
-            <T v="subhead" style={{ color: on ? color.text.primary : color.text.muted }}>
+            <T v="subhead" numberOfLines={1} style={{ flexShrink: 1, color: on ? color.text.primary : color.text.muted }}>
               {o.label}
             </T>
-            {o.badge && <Badge text={o.badge} tone="gold" />}
+            {o.badge && <Badge text={o.badge} tone={o.badgeTone ?? 'gold'} style={{ alignSelf: 'center', flexShrink: 0 }} />}
           </Pressable>
         );
       })}

@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Segmented } from '@/design/components';
+
 import { Btn, Enter, SessionHeader, T } from '@/components/ui';
 import { MicButton, useVoice, VoiceHint, withLive } from '@/components/Voice';
 import { aiEnabled } from '@/lib/ai';
@@ -13,7 +15,7 @@ import { tap } from '@/lib/feedback';
 import { onSample, SAMPLE_RECALL, typeOut } from '@/lib/sample';
 import { useApp } from '@/store';
 import { autoDir } from '@/design/rtl';
-import { color, radius, shadow } from '@/design/tokens';
+import { color, radius } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 export default function Recall() {
@@ -57,19 +59,14 @@ export default function Recall() {
           </View>
 
           {/* mode toggle */}
-          <View accessibilityRole="tablist" style={{ flexDirection: 'row', backgroundColor: color.bg.sunken, borderRadius: radius.lg, padding: 4 }}>
-            {(['speak', 'write'] as const).map((m) => (
-              <Pressable
-                key={m}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: mode === m }}
-                onPress={() => (tap('select'), setMode(m))}
-                style={{ flex: 1, minHeight: 44, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: mode === m ? C.white : 'transparent', ...(mode === m ? shadow.lift : null) }}>
-                <Ionicons name={m === 'speak' ? 'mic' : 'create-outline'} size={15} color={mode === m ? C.teal : C.muted} />
-                <Text style={{ fontFamily: F.medium, fontSize: 14, color: mode === m ? C.ink : C.muted }}>{m === 'speak' ? 'Speak (Recommended)' : 'Write instead'}</Text>
-              </Pressable>
-            ))}
-          </View>
+          <Segmented
+            value={mode}
+            onChange={setMode}
+            options={[
+              { key: 'speak', label: 'Speak', icon: 'mic', badge: 'Best', badgeTone: 'brand' },
+              { key: 'write', label: 'Write', icon: 'create-outline' },
+            ]}
+          />
 
           <View style={{ backgroundColor: C.white, borderRadius: 20, borderWidth: 1, borderColor: C.line, padding: 16, gap: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderColor: color.border.subtle, paddingBottom: 9 }}>

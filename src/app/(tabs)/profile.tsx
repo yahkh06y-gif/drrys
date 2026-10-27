@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { autoDir, dirIcon } from '@/design/rtl';
 import { color, radius, shadow } from '@/design/tokens';
 import { COCO, STAT_ICONS } from '@/art';
-import { Confirm, Progress, XpStars } from '@/components/ui';
+import { Btn, Confirm, Progress, XpStars } from '@/components/ui';
 import { aiLabel } from '@/lib/ai';
 import { play, tap } from '@/lib/feedback';
 import { DEFAULT_HOUR, disableReminders, enableReminders, hourLabel, REMINDER_HOURS, remindersSupported } from '@/lib/notify';
@@ -124,13 +124,7 @@ export default function Profile() {
                 <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.moss }}>Active</Text>
               </View>
             ) : (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => (tap(), router.push('/paywall'))}
-                hitSlop={6}
-                style={({ pressed }) => ({ backgroundColor: C.green, borderRadius: radius.md, paddingHorizontal: 16, height: 38, justifyContent: 'center', borderBottomWidth: 3, borderColor: C.greenShadow, transform: [{ translateY: pressed ? 2 : 0 }] })}>
-                <Text style={{ fontFamily: F.semi, fontSize: 14, color: C.white }}>Upgrade</Text>
-              </Pressable>
+              <Btn title="Upgrade" kind="green" height={38} onPress={() => router.push('/paywall')} style={{ width: 104 }} />
             )}
           </View>
           <Progress value={subjects.length / limit} height={6} track={C.track} />

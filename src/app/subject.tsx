@@ -266,19 +266,20 @@ export default function SubjectForm() {
                       The tree, its {existing.chapters.length} {existing.chapters.length === 1 ? 'branch' : 'branches'} and all its flashcards will be gone. This can’t be undone.
                     </Text>
                     <View style={{ flexDirection: 'row', gap: 10 }}>
-                      <Pressable onPress={() => (tap(), setConfirmDelete(false))} style={{ flex: 1, height: 44, borderRadius: radius.md, borderWidth: 1, borderBottomWidth: 3, borderColor: C.lineStrong, alignItems: 'center', justifyContent: 'center', backgroundColor: C.white }}>
-                        <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.ink }}>Keep it</Text>
-                      </Pressable>
-                      <Pressable
+                      <Btn title="Keep it" kind="white" height={44} onPress={() => setConfirmDelete(false)} style={{ flex: 1 }} />
+                      <Btn
+                        title="Delete tree"
+                        iconLeft="trash"
+                        kind="danger"
+                        height={44}
+                        sfx={false}
                         onPress={() => {
                           haptic('medium');
                           removeSubject(existing.id);
                           router.back();
                         }}
-                        style={{ flex: 1, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: color.action.danger, borderBottomWidth: 3, borderColor: color.action.dangerEdge, flexDirection: 'row', gap: 6 }}>
-                        <Ionicons name="trash" size={15} color={C.white} />
-                        <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.white }}>Delete tree</Text>
-                      </Pressable>
+                        style={{ flex: 1 }}
+                      />
                     </View>
                   </View>
                 </Enter>

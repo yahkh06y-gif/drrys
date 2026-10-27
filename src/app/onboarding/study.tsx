@@ -75,7 +75,7 @@ export function StudyView({ editing = false }: { editing?: boolean }) {
       </ScrollView>
       {!!field && !!sub && (
         <Enter key="go" style={{ paddingHorizontal: 20, paddingBottom: 12, paddingTop: 8 }}>
-          <Btn title={editing ? 'save' : 'continue'} mono onPress={next} />
+          <Btn title={editing ? 'Save' : 'Continue'} mono onPress={next} />
         </Enter>
       )}
     </SafeAreaView>

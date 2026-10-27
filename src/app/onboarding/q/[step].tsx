@@ -101,7 +101,7 @@ export function QuestionView({ n, editing }: { n: number; editing: boolean }) {
       footer={
         ready ? (
           <Enter key="go">
-            <Btn title={editing ? 'save' : 'continue'} mono onPress={next} />
+            <Btn title={editing ? 'Save' : 'Continue'} mono onPress={next} />
           </Enter>
         ) : undefined
       }>

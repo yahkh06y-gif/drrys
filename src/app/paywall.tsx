@@ -5,6 +5,8 @@ import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Segmented } from '@/design/components';
+
 import { Image } from 'expo-image';
 
 import { dirIcon } from '@/design/rtl';
@@ -167,16 +169,14 @@ export default function Paywall() {
               </Pressable>
             )}
 
-            <View accessibilityRole="tablist" style={{ flexDirection: 'row', backgroundColor: C.sand, borderRadius: radius.lg, padding: 4 }}>
-              {(['monthly', 'yearly'] as const).map((p) => (
-                <Pressable key={p} accessibilityRole="tab" accessibilityState={{ selected: sel === p }} onPress={() => (tap('select'), setSel(p))} style={{ flex: 1, minHeight: 44, flexDirection: 'row', gap: 6, justifyContent: 'center', alignItems: 'center', borderRadius: radius.md, backgroundColor: sel === p ? C.white : 'transparent', ...(sel === p ? shadow.lift : null) }}>
-                  <Text style={{ fontFamily: F.medium, fontSize: 14, color: sel === p ? C.ink : C.muted, textTransform: 'capitalize' }}>{p}</Text>
-                  {p === 'yearly' && save > 0 && (
-                    <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.moss, backgroundColor: color.feedback.correct.picked, borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2, overflow: 'hidden' }}>save {save}%</Text>
-                  )}
-                </Pressable>
-              ))}
-            </View>
+            <Segmented
+              value={sel}
+              onChange={setSel}
+              options={[
+                { key: 'monthly', label: 'Monthly' },
+                { key: 'yearly', label: 'Yearly', badge: save > 0 ? `Save ${save}%` : undefined, badgeTone: 'brand' },
+              ]}
+            />
 
             <View style={{ backgroundColor: C.white, borderRadius: radius.xl, borderWidth: 1.5, borderColor: color.selected.border, padding: 18, gap: 12, ...shadow.float }}>
               <View>
