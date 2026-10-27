@@ -459,22 +459,25 @@ function WeekStrip({ subject, next }: { subject: Subject; next: string }) {
             key={i}
             style={{
               flex: 1,
-              height: 36,
+              height: 42,
               borderRadius: 10,
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 1,
+              gap: 3,
               backgroundColor: watered ? color.game.watered : C.white,
               borderWidth: isToday ? 2 : 1,
               borderColor: isToday ? C.teal : watered ? color.game.wateredEdge : C.line,
               opacity: missed ? 0.45 : 1,
             }}>
-            <Text style={{ fontFamily: F.medium, fontSize: 11, color: isToday ? C.teal : C.muted }}>{letter}</Text>
-            {watered ? (
-              <Ionicons name="checkmark" size={13} color={C.leaf} />
-            ) : (
-              <Image source={lecture ? STAT_ICONS.book : STAT_ICONS.water} style={{ width: 16, height: 16 }} contentFit="contain" />
-            )}
+            {/* fixed line height and a fixed icon box, so the letter and the picture sit centred on every phone */}
+            <Text style={{ fontFamily: F.medium, fontSize: 11, lineHeight: 13, includeFontPadding: false, color: isToday ? C.teal : C.muted }}>{letter}</Text>
+            <View style={{ width: 18, height: 18, alignItems: 'center', justifyContent: 'center' }}>
+              {watered ? (
+                <Ionicons name="checkmark" size={14} color={C.leaf} />
+              ) : (
+                <Image source={lecture ? STAT_ICONS.book : STAT_ICONS.water} style={{ width: 18, height: 18 }} contentFit="contain" />
+              )}
+            </View>
           </View>
         );
       })}
@@ -509,7 +512,7 @@ const COACH_LINES: { text: string; icons?: { src: number; label: string }[] }[] 
     ],
   },
 ];
-const CARD_H = 158; // today's card height, measured from its layout (header + week strip + button + padding)
+const CARD_H = 164; // today's card height, measured from its layout (header + week strip + button + padding)
 const CARD_GAP = 10; // space under today's card, above the soil
 
 function CoachTip({ width, height, onDone }: { width: number; height: number; onDone: () => void }) {

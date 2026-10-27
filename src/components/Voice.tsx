@@ -22,7 +22,6 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
-  withDelay,
   withRepeat,
   withSequence,
   withSpring,
@@ -208,19 +207,8 @@ export function useVoice(onText: (text: string) => void, onFallback?: () => void
 /** The text with the words being spoken right now added at the end. */
 export const withLive = (text: string, live: string) => (live ? `${text}${text && !/\s$/.test(text) ? ' ' : ''}${live}` : text);
 
-/** One sonar ring: grows out of the mic and fades, again and again, while you talk. */
-function Sonar({ size, delay, tint }: { size: number; delay: number; tint: string }) {
-  const t = useSharedValue(0);
-  useEffect(() => {
-    t.value = withDelay(delay, withRepeat(withTiming(1, { duration: 1800, easing: Easing.out(Easing.quad) }), -1, false));
-    return () => cancelAnimation(t);
-  }, [delay, t]);
-  const a = useAnimatedStyle(() => ({ opacity: interpolate(t.value, [0, 0.15, 1], [0, 0.5, 0]), transform: [{ scale: interpolate(t.value, [0, 1], [1, 1.9]) }] }));
-  return <Animated.View pointerEvents="none" style={[{ position: 'absolute', width: size, height: size, borderRadius: size / 2, borderWidth: 2, borderColor: tint }, a]} />;
-}
-
-/** The mic button. Idle: it breathes softly, inviting a tap. Recording: it turns red, sonar rings ripple out
- *  and a halo swells with your voice. Writing: back to green with a spinner while Coco types it up. */
+/** The mic button. Idle: it breathes softly, inviting a tap. Recording: it turns red and a soft halo swells
+ *  with your voice (the voice lines next to it show what you say, see VoiceWave). Writing: back to green with a spinner while Coco types it up. */
 export function MicButton({ voice, size = 50, style }: { voice: ReturnType<typeof useVoice>; size?: number; style?: StyleProp<ViewStyle> }) {
   const { state, level, toggle } = voice;
   const recording = state === 'recording';
@@ -278,14 +266,6 @@ export function MicButton({ voice, size = 50, style }: { voice: ReturnType<typeo
       style={[{ width: size, height: size + edge, alignItems: 'center', justifyContent: 'flex-start' }, style]}>
       {/* voice halo (behind everything) */}
       <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: 0, width: size, height: size, borderRadius: size / 2 }, halo]} />
-      {/* sonar rings, only while recording */}
-      {recording && !reduce && (
-        <View pointerEvents="none" style={{ position: 'absolute', top: 0, width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-          {[0, 600, 1200].map((d) => (
-            <Sonar key={d} size={size} delay={d} tint={palette.berry500} />
-          ))}
-        </View>
-      )}
       {/* the edge it sinks onto */}
       <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: edge, width: size, height: size, borderRadius: size / 2 }, under]} />
       <Animated.View style={[{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center' }, face, body]}>
@@ -311,4 +291,55 @@ export function VoiceHint({ voice, idle }: { voice: ReturnType<typeof useVoice>;
         ? 'Coco is writing down what you said…'
         : idle;
   return <Text style={{ fontFamily: F.medium, fontSize: 12, color: voice.state === 'recording' ? C.red : C.body, textAlign: 'center' }}>{text}</Text>;
+}
+
+/** Voice lines: while you talk, a new line comes in on the right every beat, as tall as your voice is loud,
+ *  and the older ones slide left. Quiet moments leave small dots, so you can see your speech as you go. */
+export function VoiceWave({ level, active, height = 36, tint = palette.berry500, style }: { level: number; active: boolean; height?: number; tint?: string; style?: StyleProp<ViewStyle> }) {
+  const [w, setW] = useState(0);
+  const count = Math.max(8, Math.floor((w + GAP) / (BAR + GAP)));
+  const [bars, setBars] = useState<number[]>([]);
+  const lvl = useRef(level);
+  useEffect(() => {
+    lvl.current = level;
+  }, [level]);
+
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => {
+      // a little wobble so steady talking still looks alive; silence stays a dot
+      const v = lvl.current < 0.06 ? 0 : Math.min(1, lvl.current * (0.7 + Math.random() * 0.45));
+      setBars((b) => [...b, v].slice(-count));
+    }, TICK);
+    return () => {
+      clearInterval(id);
+      setBars([]);
+    };
+  }, [active, count]);
+
+  const pad = Array.from({ length: Math.max(0, count - bars.length) }, () => 0);
+  return (
+    <View
+      onLayout={(e) => setW(e.nativeEvent.layout.width)}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[{ height, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: GAP, overflow: 'hidden' }, style]}>
+      {w > 0 && [...pad, ...bars].map((v, i) => <WaveBar key={i} v={v} max={height} tint={tint} />)}
+    </View>
+  );
+}
+
+const BAR = 3;
+const GAP = 3;
+const TICK = 90;
+
+function WaveBar({ v, max, tint }: { v: number; max: number; tint: string }) {
+  const h = useSharedValue(BAR);
+  const reduce = useReducedMotion();
+  useEffect(() => {
+    const to = BAR + v * (max - BAR);
+    h.value = reduce ? to : withTiming(to, { duration: TICK, easing: Easing.out(Easing.quad) });
+  }, [v, max, reduce, h]);
+  const a = useAnimatedStyle(() => ({ height: h.value }));
+  return <Animated.View style={[{ width: BAR, borderRadius: BAR / 2, backgroundColor: tint }, a]} />;
 }

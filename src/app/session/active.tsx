@@ -13,7 +13,7 @@ import { COCO } from '@/art';
 import { AskCoco } from '@/components/AskCoco';
 import { Btn, Coco, Enter, Pill, SessionHeader, T } from '@/components/ui';
 import { toneOf as toneFor } from '@/design';
-import { MicButton, useVoice, withLive } from '@/components/Voice';
+import { MicButton, useVoice, VoiceWave, withLive } from '@/components/Voice';
 import { gradeAnswer, type ActiveQuestion, type Grade, type QFormat, type QKind } from '@/lib/ai';
 import { HookSheet, type HookTarget } from '@/components/HookSheet';
 import { HookEntry, Verdict } from '@/components/SessionMotion';
@@ -297,9 +297,12 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
         {!grade && !marked && (
           <View style={{ backgroundColor: C.white, borderRadius: radius.lg, borderWidth: 1.5, borderColor: C.lineStrong, padding: 12, gap: 8 }}>
             {voice.state !== 'idle' && (
-              <Text style={{ fontFamily: F.medium, fontSize: 12, color: voice.state === 'recording' ? C.red : C.leaf, fontVariant: ['tabular-nums'] }}>
-                {voice.state === 'recording' ? `● ${voice.seconds}s · tap ■ to stop` : 'Writing it down…'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Text style={{ fontFamily: F.medium, fontSize: 12, color: voice.state === 'recording' ? C.red : C.leaf, fontVariant: ['tabular-nums'] }}>
+                  {voice.state === 'recording' ? `${voice.seconds}s · tap ■ to stop` : 'Writing it down…'}
+                </Text>
+                {voice.state === 'recording' && <VoiceWave level={voice.level} active height={22} style={{ flex: 1 }} />}
+              </View>
             )}
             <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-end' }}>
               <TextInput

@@ -15,7 +15,7 @@ import { autoDir } from '@/design/rtl';
 import { color, radius } from '@/design/tokens';
 import { COCO } from '@/art';
 import { Coco, Enter } from '@/components/ui';
-import { useVoice, withLive } from '@/components/Voice';
+import { useVoice, VoiceWave, withLive } from '@/components/Voice';
 import { chatCoco } from '@/lib/ai';
 import { play, tap } from '@/lib/feedback';
 import { activeSubject, useApp } from '@/store';
@@ -226,9 +226,7 @@ export default function CocoTab() {
                   <>
                     <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.red }} />
                     <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.ink, fontVariant: ['tabular-nums'] }}>{clock(voice.seconds)}</Text>
-                    <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: C.track, overflow: 'hidden' }}>
-                      <View style={{ width: `${Math.round(15 + voice.level * 85)}%`, height: 4, backgroundColor: C.red }} />
-                    </View>
+                    <VoiceWave level={voice.level} active height={26} style={{ flex: 1 }} />
                   </>
                 ) : (
                   <>

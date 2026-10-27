@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Segmented } from '@/design/components';
 
 import { Btn, Enter, SessionHeader, T } from '@/components/ui';
-import { MicButton, useVoice, VoiceHint, withLive } from '@/components/Voice';
+import { MicButton, useVoice, VoiceHint, VoiceWave, withLive } from '@/components/Voice';
 import { aiEnabled } from '@/lib/ai';
 import { DEMO } from '@/lib/demo';
 import { tap } from '@/lib/feedback';
@@ -79,7 +79,8 @@ export default function Recall() {
 
             {mode === 'speak' && (
               <View style={{ alignItems: 'center', paddingVertical: 8, gap: 8 }}>
-                <MicButton voice={voice} size={72} style={{ marginVertical: 14 }} />
+                <MicButton voice={voice} size={72} style={{ marginTop: 14, marginBottom: voice.state === 'recording' ? 4 : 14 }} />
+                {voice.state === 'recording' && <VoiceWave level={voice.level} active height={40} style={{ alignSelf: 'stretch', marginHorizontal: 8 }} />}
                 <VoiceHint voice={voice} idle={recall ? 'Tap the mic to add more.' : 'Tap and talk, in Arabic or English.'} />
               </View>
             )}
