@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COCO } from '@/art';
 import { AskCoco } from '@/components/AskCoco';
 import { Btn, Coco, Enter, Pill, SessionHeader, T } from '@/components/ui';
+import { toneOf as toneFor } from '@/design';
 import { MicButton, useVoice, withLive } from '@/components/Voice';
 import { gradeAnswer, type ActiveQuestion, type Grade, type QFormat, type QKind } from '@/lib/ai';
 import { HookSheet, type HookTarget } from '@/components/HookSheet';
@@ -42,13 +43,11 @@ const FORMAT_LINE: Partial<Record<QFormat, { pill: string; line: string }>> = {
   work: { pill: 'WORK IT OUT', line: 'Solve it below. Type your working.' },
 };
 
-// right = green, almost (on the right track) = orange, not yet = red
-const toneOf = (g: QResult['grade']) =>
-  g.correct
-    ? { bg: '#F0F8E6', border: C.mintBorder, icon: 'checkmark-circle' as const, color: C.leaf, text: C.moss, title: 'Nailed it!' }
-    : g.close
-      ? { bg: '#FFF3DC', border: '#F0A63A', icon: 'alert-circle' as const, color: '#E08A00', text: '#B86A00', title: 'Almost there' }
-      : { bg: '#FDECEA', border: '#E8998B', icon: 'close-circle' as const, color: '#D9573B', text: '#C2452B', title: 'Not yet' };
+// right = green, almost (on the right track) = orange, not yet = red: the shared answer colors from the design system
+const toneOf = (g: QResult['grade']) => {
+  const t = toneFor(g.correct ? 'correct' : g.close ? 'almost' : 'wrong');
+  return { bg: t.bg, border: t.border, icon: t.name, color: t.icon, text: t.text, title: t.title };
+};
 
 // the right answer, written out for each format (shown under the feedback when the student missed it)
 const solution = (q: ActiveQuestion) =>

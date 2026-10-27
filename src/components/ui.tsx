@@ -29,10 +29,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useBack } from '@/lib/back';
 import { tap, type Sfx } from '@/lib/feedback';
+import { autoDir } from '@/design/rtl';
+import { color, type } from '@/design/tokens';
 import { C, F, R } from '@/theme';
 
 /* ---------- Text ---------- */
-type V = 'h1' | 'h2' | 'h3' | 'title' | 'body' | 'small' | 'label' | 'mono';
+// h1…mono keep the looks the screens were built with; the rest come straight from the type scale
+// in src/design/tokens.ts. Pick a variant instead of writing a fontSize.
+type V = 'h1' | 'h2' | 'h3' | 'title' | 'body' | 'small' | 'label' | 'mono' | 'display' | 'bodyLg' | 'bodySm' | 'caption' | 'micro' | 'number';
 const TV: Record<V, TextStyle> = {
   h1: { fontFamily: F.bold, fontSize: 40, lineHeight: 44, color: C.title },
   h2: { fontFamily: F.bold, fontSize: 26, lineHeight: 32, color: C.teal, letterSpacing: -0.6 },
@@ -42,9 +46,19 @@ const TV: Record<V, TextStyle> = {
   small: { fontFamily: F.medium, fontSize: 12, lineHeight: 16, color: C.body },
   label: { fontFamily: F.bold, fontSize: 11, lineHeight: 16, color: C.goldInk, letterSpacing: 0.5, textTransform: 'uppercase' },
   mono: { fontFamily: F.monoRegular, fontSize: 14, color: C.tealSoft },
+  display: { ...type.display, color: color.text.hero },
+  bodyLg: { ...type.bodyLg, color: color.text.body },
+  bodySm: { ...type.bodySm, color: color.text.body },
+  caption: { ...type.caption, color: color.text.muted },
+  micro: { ...type.micro, color: color.text.body },
+  number: { ...type.number, color: color.text.primary },
 };
-export function T({ v = 'body', style, ...p }: TextProps & { v?: V }) {
-  return <Text {...p} style={[TV[v], style]} />;
+/**
+ * The app's text. `auto` makes it read in its own direction: use it for anything the student or the AI
+ * wrote (recalls, cards, Coco's answers), so Arabic reads right-to-left inside an English screen.
+ */
+export function T({ v = 'body', auto, style, ...p }: TextProps & { v?: V; auto?: boolean }) {
+  return <Text {...p} style={[TV[v], auto && autoDir(p.children), style]} />;
 }
 
 /* ---------- Clay button (the 3D pressable from Figma) ---------- */

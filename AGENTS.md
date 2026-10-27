@@ -39,3 +39,12 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## Design system (read before building or changing any screen)
+
+Drrys has one design system in `src/design/` (rules: `src/design/README.md`, live catalog: `src/app/design.tsx`, open `drrys://design` in a dev build).
+
+- Import UI from `@/design`: tokens (`color`, `S`, `radius`, `depth`, `type`, `motion`, `size`, `layout`) and blocks (`T`, `Btn`, `Surface`, `Stack`, `Row`, `Feedback`, `answerTile`, `Badge`, `Segmented`, `Field`, `ListGroup`, `ListRow`, `Sheet`, `Confirm`, `StatTile`, `EmptyState`, `Screen`, `SessionHeader`, `Coco`, `Bubble`).
+- No hex or `rgba()` literals and no raw `<Text fontSize>` in screens: use `color.*` and `<T v="…">`. Need something new? Add the token or block to `src/design` and to the catalog first, then use it.
+- Layout with `start`/`end`, not `left`/`right`; text written by the student or the AI gets `<T auto>` so Arabic reads right-to-left.
+- `src/theme.ts` (`C`, `F`, `R`) is the old name set, kept for existing screens. Don't use it in new code; move a screen to `@/design` when you touch it.

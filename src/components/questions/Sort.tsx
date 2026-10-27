@@ -5,6 +5,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { haptic, tap } from '@/lib/feedback';
+import { color } from '@/design';
 import { C, F } from '@/theme';
 
 type Bucket = { name: string; items: string[] };
@@ -96,7 +97,7 @@ export function SortQ({
             }}
             style={{
               zIndex: lifted && assigned[lifted] === b.name ? 30 : 1,
-              backgroundColor: picked ? '#EEF6E4' : '#F6F3EB',
+              backgroundColor: picked ? '#EEF6E4' : color.bg.sunken,
               borderRadius: 16,
               borderWidth: 1.5,
               borderStyle: 'dashed',
@@ -180,9 +181,9 @@ function Chip({
       <Animated.View
         style={[
           {
-            backgroundColor: done ? (mark ? '#F0F8E6' : '#FFF1EC') : selected ? '#E3F1D6' : C.white,
+            backgroundColor: done ? (mark ? color.feedback.correct.bg : color.feedback.wrong.bg) : selected ? color.feedback.correct.picked : C.white,
             borderWidth: 1.5,
-            borderColor: done ? (mark ? C.mintBorder : '#F2A58A') : selected ? C.leaf : C.lineStrong,
+            borderColor: done ? (mark ? C.mintBorder : color.feedback.wrong.border) : selected ? C.leaf : C.lineStrong,
             borderBottomWidth: small ? 1.5 : 3,
             borderRadius: small ? 12 : 14,
             paddingHorizontal: small ? 10 : 12,

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { haptic, tap } from '@/lib/feedback';
+import { color } from '@/design';
 import { C, F } from '@/theme';
 
 /** "The [[mitochondrion]] makes [[ATP]]." → pieces: text, gap, text, gap, text. */
@@ -90,8 +91,8 @@ export function BlankQ({ text, extras, locked, marks, onChange }: { text: string
                 borderRadius: 10,
                 borderWidth: 1.5,
                 borderStyle: id === undefined ? 'dashed' : 'solid',
-                borderColor: m === undefined ? (pick === g ? C.leaf : id === undefined ? C.lineStrong : C.teal) : m ? C.mintBorder : '#F2A58A',
-                backgroundColor: m === undefined ? (pick === g ? '#E3F1D6' : id === undefined ? '#F6F3EB' : '#E6F2EF') : m ? '#F0F8E6' : '#FFF1EC',
+                borderColor: m === undefined ? (pick === g ? C.leaf : id === undefined ? C.lineStrong : C.teal) : m ? C.mintBorder : color.feedback.wrong.border,
+                backgroundColor: m === undefined ? (pick === g ? color.feedback.correct.picked : id === undefined ? color.bg.sunken : '#E6F2EF') : m ? color.feedback.correct.bg : color.feedback.wrong.bg,
               }}>
               <Text style={{ fontFamily: F.bold, fontSize: 16, lineHeight: 24, textAlign: 'center', color: C.ink }}>
                 {m === undefined ? '' : m ? '✓ ' : '✗ '}

@@ -5,6 +5,7 @@ import { Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 
+import { color } from '@/design';
 import { C, F } from '@/theme';
 
 const H = 58; // one slot: item height 50 + gap 8
@@ -94,10 +95,10 @@ function Row({ id, label, pos, slot0, n, locked, mark, onEnd }: { id: number; la
           height: 50,
           flexDirection: 'row',
           alignItems: 'center',
-          backgroundColor: mark === undefined ? C.white : mark ? '#F0F8E6' : '#FFF1EC',
+          backgroundColor: mark === undefined ? C.white : mark ? color.feedback.correct.bg : color.feedback.wrong.bg,
           borderRadius: 14,
           borderWidth: 1.5,
-          borderColor: mark === undefined ? C.lineStrong : mark ? C.mintBorder : '#F2A58A',
+          borderColor: mark === undefined ? C.lineStrong : mark ? C.mintBorder : color.feedback.wrong.border,
           borderBottomWidth: 3,
           shadowColor: '#000',
           shadowRadius: 8,

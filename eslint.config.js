@@ -19,4 +19,23 @@ module.exports = defineConfig([
       'react-hooks/purity': 'warn',
     },
   },
+  {
+    // Design system guard: screens and components take their colors from '@/design', not from a hex
+    // written on the spot. Warnings for now, so the older screens still pass while they move over.
+    files: ['src/app/**/*.tsx', 'src/components/**/*.tsx'],
+    ignores: ['src/components/SketchPad.tsx'], // the drawing pens are real ink colors, not UI colors
+    rules: {
+      'no-restricted-syntax': [
+        'warn',
+        {
+          selector: 'Literal[value=/^#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/]',
+          message: 'Use a color token from @/design (color.*) instead of a hex. Missing one? Add it to src/design/tokens.ts.',
+        },
+        {
+          selector: 'Literal[value=/^rgba?\\(/]',
+          message: 'Use a color token from @/design (color.overlay.*, color.border.*) instead of rgba().',
+        },
+      ],
+    },
+  },
 ]);
