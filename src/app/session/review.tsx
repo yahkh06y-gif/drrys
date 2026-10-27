@@ -12,6 +12,8 @@ import { Btn, Enter, Pill, SessionHeader, T } from '@/components/ui';
 import { play, tap } from '@/lib/feedback';
 import { missedIdeas, ORGANIZE_MIN } from '@/lib/session';
 import { useApp } from '@/store';
+import { autoDir } from '@/design/rtl';
+import { color } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 export default function Review() {
@@ -50,12 +52,12 @@ export default function Review() {
       </View>
       <ScrollView key={page} contentContainerStyle={{ padding: 20, gap: 14 }}>
         <Enter>
-          <View style={{ backgroundColor: C.white, borderRadius: 24, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, overflow: 'hidden', paddingBottom: 16, alignItems: 'center', gap: 6 }}>
+          <View style={{ backgroundColor: C.white, borderRadius: 20, borderWidth: 1, borderColor: C.line, overflow: 'hidden', paddingBottom: 16, alignItems: 'center', gap: 6 }}>
             <Image source={HERO[page === 'nailed' ? 'celebrate' : page === 'forgotten' ? 'magnifier' : 'trash']} style={{ width: '100%', aspectRatio: 1.62, marginBottom: 6 }} contentFit="cover" transition={250} />
             {page === 'nailed' && (
               <>
-                <Pill icon="leaf" text={`${a.nailed.length} Key Concepts Rooted Firmly`} bg="#BEF37F" border="#8EB563" />
-                <T v="h3" style={{ color: C.teal, textAlign: 'center' }}>
+                <Pill icon="leaf" text={`${a.nailed.length} Key Concepts Rooted Firmly`} bg={color.feedback.correct.picked} border={color.feedback.correct.picked} />
+                <T v="h3" style={{ textAlign: 'center' }}>
                   Spot on! You nailed these
                 </T>
                 <T v="small" style={{ textAlign: 'center' }}>
@@ -65,8 +67,8 @@ export default function Review() {
             )}
             {page === 'forgotten' && (
               <>
-                <Pill icon="search" text={`${a.forgotten.length} Forgotten Concepts`} bg="#FDE7C8" border={C.amber} fg="#8A4B0F" />
-                <T v="h3" style={{ color: C.teal, textAlign: 'center' }}>
+                <Pill icon="search" text={`${a.forgotten.length} Forgotten Concepts`} bg={color.feedback.almost.picked} border={color.feedback.almost.picked} fg={color.feedback.almost.text} />
+                <T v="h3" style={{ textAlign: 'center' }}>
                   Slipped your mind (and that’s okay!)
                 </T>
                 <T v="small" style={{ textAlign: 'center' }}>
@@ -76,8 +78,8 @@ export default function Review() {
             )}
             {page === 'corrections' && (
               <>
-                <Pill icon="build" text={`${a.corrections.length} Needs Correction`} bg="#FDDCDC" border="#F29B9B" fg="#9B2C2C" />
-                <T v="h3" style={{ color: C.teal, textAlign: 'center' }}>
+                <Pill icon="build" text={`${a.corrections.length} Needs Correction`} bg={color.feedback.wrong.picked} border={color.feedback.wrong.picked} fg={color.feedback.wrong.text} />
+                <T v="h3" style={{ textAlign: 'center' }}>
                   Let’s adjust these concepts
                 </T>
                 <T v="small" style={{ textAlign: 'center' }}>
@@ -91,43 +93,43 @@ export default function Review() {
         {page === 'nailed' &&
           a.nailed.map((c, k) => (
             <Enter key={k} delay={100 + k * 80}>
-              <Row icon={<Ionicons name="checkmark-circle" size={22} color={C.leaf} />} title={c.title} tag={c.tag} tagColor="#BEF37F" body={c.detail} />
+              <Row icon={<Ionicons name="checkmark-circle" size={22} color={C.leaf} />} title={c.title} tag={c.tag} tagColor={color.feedback.correct.picked} body={c.detail} />
             </Enter>
           ))}
         {page === 'forgotten' &&
           a.forgotten.map((c, k) => (
             <Enter key={k} delay={100 + k * 80}>
-              <Row icon={<View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: C.amber }} />} title={c.title} tag={c.page ? `Missed · ${c.page}` : 'Missed'} tagColor="#FDE7C8" body={c.detail} why={c.why} />
+              <Row icon={<View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: C.amber }} />} title={c.title} tag={c.page ? `Missed · ${c.page}` : 'Missed'} tagColor={color.feedback.almost.picked} body={c.detail} why={c.why} />
             </Enter>
           ))}
         {page === 'corrections' &&
           a.corrections.map((c, k) => (
             <Enter key={k} delay={100 + k * 80}>
-              <View style={{ backgroundColor: C.white, borderRadius: 18, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, padding: 14, gap: 10 }}>
+              <View style={{ backgroundColor: C.white, borderRadius: 18, borderWidth: 1, borderColor: C.line, padding: 14, gap: 10 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: '#E56B6B' }} />
-                  <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 14, color: C.ink }}>{c.concept}</Text>
-                  <Pill text="Misconception" bg="#FDDCDC" border="#F29B9B" fg="#9B2C2C" />
+                  <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: color.feedback.wrong.icon }} />
+                  <Text style={[{ flex: 1, fontFamily: F.semi, fontSize: 15, color: C.ink }, autoDir(c.concept)]}>{c.concept}</Text>
+                  <Pill text="Misconception" bg={color.feedback.wrong.picked} border={color.feedback.wrong.picked} fg={color.feedback.wrong.text} />
                 </View>
-                <View style={{ backgroundColor: '#F6F3EB', borderRadius: 12, padding: 10 }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.red }}>⊘ WHAT YOU RECALLED</Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.body, textDecorationLine: 'line-through', marginTop: 4 }}>“{c.youSaid}”</Text>
+                <View style={{ backgroundColor: color.bg.sunken, borderRadius: 12, padding: 10 }}>
+                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: color.feedback.wrong.text }}>What you recalled</Text>
+                  <Text style={[{ fontFamily: F.regular, fontSize: 14, lineHeight: 21, color: C.body, textDecorationLine: 'line-through', marginTop: 4 }, autoDir(c.youSaid)]}>“{c.youSaid}”</Text>
                 </View>
                 <Ionicons name="arrow-down" size={16} color={C.muted} style={{ alignSelf: 'center' }} />
-                <View style={{ backgroundColor: '#F0F8E6', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: C.mintBorder }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.leaf }}>✓ WHAT REALLY HAPPENS</Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.ink, marginTop: 4, lineHeight: 19 }}>{c.truth}</Text>
-                  {c.formula && <Text style={{ fontFamily: F.monoRegular, fontSize: 13, color: C.teal, marginTop: 8 }}>⚗ {c.formula}</Text>}
+                <View style={{ backgroundColor: color.feedback.correct.bg, borderRadius: 12, padding: 10 }}>
+                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: color.feedback.correct.text }}>What really happens</Text>
+                  <Text style={[{ fontFamily: F.regular, fontSize: 14, color: C.ink, marginTop: 4, lineHeight: 21 }, autoDir(c.truth)]}>{c.truth}</Text>
+                  {c.formula && <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.teal, marginTop: 8, writingDirection: 'ltr' }}>{c.formula}</Text>}
                 </View>
               </View>
             </Enter>
           ))}
       </ScrollView>
       <View style={{ padding: 20, gap: 8 }}>
-        <Btn title={nextLabel} icon="arrow-forward" kind="teal" pill onPress={next} />
+        <Btn title={nextLabel} icon="arrow-forward" kind="green" onPress={next} />
         {i > 0 && (
           <Pressable onPress={() => (tap(), setI(i - 1))} style={{ alignSelf: 'center' }}>
-            <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>← Back</Text>
+            <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.muted, padding: 6 }}>Back</Text>
           </Pressable>
         )}
       </View>
@@ -137,16 +139,16 @@ export default function Review() {
 
 function Row({ icon, title, tag, tagColor, body, why }: { icon: React.ReactNode; title: string; tag: string; tagColor: string; body: string; why?: string }) {
   return (
-    <View style={{ backgroundColor: C.white, borderRadius: 18, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, padding: 14, gap: 6 }}>
+    <View style={{ backgroundColor: C.white, borderRadius: 18, borderWidth: 1, borderColor: C.line, padding: 14, gap: 6 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         {icon}
-        <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 14, color: C.teal }}>{title}</Text>
+        <Text style={[{ flex: 1, fontFamily: F.semi, fontSize: 15, color: C.ink }, autoDir(title)]}>{title}</Text>
         <Pill text={tag} bg={tagColor} border="transparent" fg={C.ink} />
       </View>
-      <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.body, paddingLeft: 30 }}>{body}</Text>
+      <Text style={[{ fontFamily: F.regular, fontSize: 14, lineHeight: 21, color: C.body, paddingStart: 30 }, autoDir(body)]}>{body}</Text>
       {!!why && (
-        <Text style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 18, color: C.goldInk, paddingLeft: 30 }}>
-          So what? <Text style={{ fontFamily: F.medium }}>{why}</Text>
+        <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.muted, paddingStart: 30 }}>
+          So what? <Text style={{ fontFamily: F.regular, color: C.body }}>{why}</Text>
         </Text>
       )}
     </View>

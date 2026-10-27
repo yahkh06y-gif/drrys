@@ -13,9 +13,9 @@ export default function SessionLayout() {
 export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
   return (
     <View style={{ flex: 1, backgroundColor: C.paper, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 14 }}>
-      <Text style={{ fontFamily: F.bold, fontSize: 22, color: C.teal, textAlign: 'center' }}>Coco tripped over a root 🌱</Text>
-      <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.body, textAlign: 'center' }}>Something went wrong in this step. Your progress is saved.</Text>
-      <Btn title="Try again" kind="teal" onPress={retry} style={{ alignSelf: 'stretch' }} />
+      <Text style={{ fontFamily: F.semi, fontSize: 22, lineHeight: 28, color: C.ink, textAlign: 'center' }}>Coco tripped over a root</Text>
+      <Text style={{ fontFamily: F.regular, fontSize: 15, lineHeight: 22, color: C.body, textAlign: 'center' }}>Something went wrong in this step. Your progress is saved.</Text>
+      <Btn title="Try again" kind="green" onPress={retry} style={{ alignSelf: 'stretch' }} />
       <Btn
         title="Back to my forest"
         kind="light"

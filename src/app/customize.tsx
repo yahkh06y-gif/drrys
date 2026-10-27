@@ -11,6 +11,7 @@ import { COCO } from '@/art';
 import { Coco, IconBtn, XpStars } from '@/components/ui';
 import { haptic, play, tap } from '@/lib/feedback';
 import { useApp, type CocoStyle, type Depth, type Outfit } from '@/store';
+import { color, shadow } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 const CLOSET: { id: Outfit; name: string; cost: number }[] = [
@@ -59,7 +60,7 @@ export default function Customize() {
     <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8 }}>
         <IconBtn name="arrow-back" onPress={() => router.back()} />
-        <Text accessibilityRole="header" style={{ flex: 1, textAlign: 'center', fontFamily: F.bold, fontSize: 17, color: C.ink, marginRight: 40 }}>
+        <Text accessibilityRole="header" style={{ flex: 1, textAlign: 'center', fontFamily: F.semi, fontSize: 17, color: C.ink, marginRight: 40 }}>
           Coco settings
         </Text>
       </View>
@@ -68,18 +69,18 @@ export default function Customize() {
         {/* preview: what Coco looks like right now */}
         <View style={{ backgroundColor: C.mint, borderRadius: 24, paddingTop: 12, paddingBottom: 14, alignItems: 'center', gap: 4 }}>
           <Coco src={COCO[coco.outfit] ?? COCO.classic} size={110} />
-          <Text style={{ fontFamily: F.semi, fontSize: 14, color: C.mossDark }}>Wearing {wearing}</Text>
+          <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.moss }}>Wearing {wearing}</Text>
         </View>
 
         {/* Look: outfits cost XP, so the balance sits right above them */}
         <View style={{ gap: 8 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 }}>
-            <Text accessibilityRole="header" style={{ flex: 1, fontFamily: F.semi, fontSize: 14, color: C.muted }}>
+            <Text accessibilityRole="header" style={{ flex: 1, fontFamily: F.medium, fontSize: 14, color: C.muted }}>
               Look
             </Text>
             <View accessible accessibilityLabel={`You have ${xp} XP`} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
               <XpStars size={15} />
-              <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.ink }}>{xp} XP</Text>
+              <Text style={{ fontFamily: F.semi, fontSize: 14, color: C.ink, fontVariant: ['tabular-nums'] }}>{xp} XP</Text>
             </View>
           </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -93,9 +94,9 @@ export default function Customize() {
                   accessibilityState={{ selected: on }}
                   accessibilityLabel={`${o.name}, ${on ? 'wearing' : owned ? 'owned' : `${o.cost} XP`}`}
                   onPress={() => (tap('select'), pick(o))}
-                  style={({ pressed }) => [card, { width: '48%', flexGrow: 1, alignItems: 'center', paddingTop: 10, paddingBottom: 12, gap: 4 }, on && { borderColor: C.teal, borderWidth: 2, borderBottomWidth: 4 }, pressed && { backgroundColor: C.sand }]}>
+                  style={({ pressed }) => [card, { width: '48%', flexGrow: 1, alignItems: 'center', paddingTop: 10, paddingBottom: 12, gap: 4 }, { borderWidth: 1.5, borderBottomWidth: 4, borderColor: on ? color.selected.border : C.lineStrong }, on && { backgroundColor: color.selected.bg }, pressed && { backgroundColor: C.sand }]}>
                   <Image source={COCO[o.id]} style={{ width: 64, height: 76, opacity: owned || xp >= o.cost ? 1 : 0.55 }} contentFit="contain" />
-                  <Text numberOfLines={1} style={{ fontFamily: F.bold, fontSize: 14, color: C.ink }}>
+                  <Text numberOfLines={1} style={{ fontFamily: F.medium, fontSize: 15, color: C.ink }}>
                     {o.name}
                   </Text>
                   {on ? (
@@ -124,7 +125,7 @@ export default function Customize() {
 
         {/* How Coco talks: one choice per list, each option says what it does */}
         <View style={{ gap: 8 }}>
-          <Text accessibilityRole="header" style={{ fontFamily: F.semi, fontSize: 14, color: C.muted, paddingHorizontal: 4 }}>
+          <Text accessibilityRole="header" style={{ fontFamily: F.medium, fontSize: 14, color: C.muted, paddingHorizontal: 4 }}>
             How Coco talks
           </Text>
           <View style={[card, { overflow: 'hidden' }]}>
@@ -138,11 +139,11 @@ export default function Customize() {
                   onPress={() => (tap('select'), setC({ style: s.id }))}
                   style={({ pressed }) => [{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 10 }, pressed && { backgroundColor: C.sand }]}>
                   <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={{ fontFamily: F.semi, fontSize: 16, color: C.ink }}>{s.label}</Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 16, color: C.ink }}>{s.label}</Text>
                     <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>{s.sub}</Text>
                   </View>
                   {on ? <Ionicons name="checkmark" size={22} color={C.teal} /> : <View style={{ width: 22 }} />}
-                  {i < STYLES.length - 1 && <View style={{ position: 'absolute', bottom: 0, left: 16, right: 0, height: 1, backgroundColor: C.line }} />}
+                  {i < STYLES.length - 1 && <View style={{ position: 'absolute', bottom: 0, left: 16, right: 0, height: 1, backgroundColor: color.border.subtle }} />}
                 </Pressable>
               );
             })}
@@ -150,10 +151,10 @@ export default function Customize() {
         </View>
 
         <View style={{ gap: 8 }}>
-          <Text accessibilityRole="header" style={{ fontFamily: F.semi, fontSize: 14, color: C.muted, paddingHorizontal: 4 }}>
+          <Text accessibilityRole="header" style={{ fontFamily: F.medium, fontSize: 14, color: C.muted, paddingHorizontal: 4 }}>
             Answer length
           </Text>
-          <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', backgroundColor: C.track, borderRadius: 14, padding: 4 }}>
+          <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', backgroundColor: C.sand, borderRadius: 16, padding: 4 }}>
             {DEPTHS.map((d) => {
               const on = coco.depth === d.id;
               return (
@@ -162,8 +163,8 @@ export default function Customize() {
                   accessibilityRole="radio"
                   accessibilityState={{ checked: on }}
                   onPress={() => (tap('select'), setC({ depth: d.id }))}
-                  style={{ flex: 1, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? C.white : 'transparent' }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 14, color: on ? C.teal : C.muted }}>{d.label}</Text>
+                  style={{ flex: 1, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? C.white : 'transparent', ...(on ? shadow.lift : null) }}>
+                  <Text style={{ fontFamily: F.medium, fontSize: 14, color: on ? C.ink : C.muted }}>{d.label}</Text>
                 </Pressable>
               );
             })}
@@ -174,7 +175,7 @@ export default function Customize() {
         <View style={[card, { overflow: 'hidden' }]}>
           <View style={{ minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 }}>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ fontFamily: F.semi, fontSize: 16, color: C.ink }}>Examples from my interests</Text>
+              <Text style={{ fontFamily: F.medium, fontSize: 16, color: C.ink }}>Examples from my interests</Text>
               <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 18, color: C.muted }}>When something is hard, Coco explains it with things you love.</Text>
             </View>
             <Switch value={coco.memory} onValueChange={(v) => (tap(), setC({ memory: v }))} trackColor={{ true: C.leaf, false: C.track }} thumbColor={C.white} />
@@ -184,7 +185,7 @@ export default function Customize() {
               accessibilityRole="button"
               onPress={() => (tap(), router.push({ pathname: '/about/[step]', params: { step: 'world' } }))}
               style={({ pressed }) => [{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, borderTopWidth: 1, borderColor: C.line }, pressed && { backgroundColor: C.sand }]}>
-              <Text style={{ fontFamily: F.semi, fontSize: 16, color: C.ink }}>Interests</Text>
+              <Text style={{ fontFamily: F.medium, fontSize: 16, color: C.ink }}>Interests</Text>
               <Text numberOfLines={1} style={{ flex: 1, textAlign: 'right', fontFamily: F.medium, fontSize: 14, color: C.muted }}>
                 {interests.length ? interests.slice(0, 2).join(', ') + (interests.length > 2 ? ` +${interests.length - 2}` : '') : 'Add'}
               </Text>
@@ -200,4 +201,4 @@ export default function Customize() {
 }
 
 // same card as Profile: quiet border, a soft clay edge underneath
-const card: ViewStyle = { backgroundColor: C.white, borderRadius: 20, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 3 };
+const card: ViewStyle = { backgroundColor: C.white, borderRadius: 20, borderWidth: 1, borderColor: C.line };

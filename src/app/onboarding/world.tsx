@@ -304,7 +304,7 @@ export function WorldView({ editing = false }: { editing?: boolean }) {
             )}
             <View style={{ marginHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderRadius: 12, paddingHorizontal: 12 }}>
               <Ionicons name="search" size={16} color={C.muted} />
-              <TextInput value={query} onChangeText={setQuery} placeholder="Search" placeholderTextColor="#A69A8A" returnKeyType="search" style={{ flex: 1, paddingVertical: 10, fontFamily: F.medium, fontSize: 15, color: C.ink }} />
+              <TextInput value={query} onChangeText={setQuery} placeholder="Search" placeholderTextColor={C.mutedLight} returnKeyType="search" style={{ flex: 1, paddingVertical: 10, fontFamily: F.medium, fontSize: 15, color: C.ink }} />
               {searching ? (
                 <ActivityIndicator size="small" color={C.teal} />
               ) : query ? (

@@ -11,6 +11,8 @@ import { ActivityIndicator, KeyboardAvoidingView, Pressable, ScrollView, Text, T
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { autoDir } from '@/design/rtl';
+import { color, radius } from '@/design/tokens';
 import { COCO } from '@/art';
 import { Coco, Enter } from '@/components/ui';
 import { useVoice, withLive } from '@/components/Voice';
@@ -132,7 +134,7 @@ export default function CocoTab() {
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: C.paper }}>
       {/* 1. title row — same large title as Profile, actions on the right */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 20, paddingRight: 12, paddingTop: 8, height: 56 }}>
-        <Text accessibilityRole="header" style={{ flex: 1, fontFamily: F.bold, fontSize: 30, lineHeight: 36, color: C.teal, letterSpacing: -0.6 }}>
+        <Text accessibilityRole="header" style={{ flex: 1, fontFamily: F.semi, fontSize: 28, lineHeight: 34, color: C.ink, letterSpacing: -0.5 }}>
           Coco
         </Text>
         {!empty && <HeaderIcon name="create-outline" label="New chat" onPress={newChat} />}
@@ -161,10 +163,10 @@ export default function CocoTab() {
             <View style={{ flex: 1, justifyContent: 'space-between', gap: 24 }}>
               <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 <Coco src={COCO[coco.outfit] ?? COCO.classic} size={96} />
-                <Text style={{ fontFamily: F.bold, fontSize: 20, lineHeight: 26, color: C.ink, textAlign: 'center' }}>
+                <Text style={{ fontFamily: F.semi, fontSize: 20, lineHeight: 26, color: C.ink, textAlign: 'center' }}>
                   {first ? `Hi ${first}, what’s on your mind?` : 'Hi, what’s on your mind?'}
                 </Text>
-                <Text style={{ fontFamily: F.medium, fontSize: 15, lineHeight: 21, color: C.muted, textAlign: 'center', maxWidth: 300 }}>
+                <Text style={{ fontFamily: F.regular, fontSize: 15, lineHeight: 22, color: C.muted, textAlign: 'center', maxWidth: 300 }}>
                   {subject ? `Ask me anything about ${subject.name}.` : 'Ask about any subject, or how to study.'}
                 </Text>
               </View>
@@ -175,9 +177,9 @@ export default function CocoTab() {
                     <Pressable
                       accessibilityRole="button"
                       onPress={() => send(s.text)}
-                      style={({ pressed }) => ({ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, borderWidth: 1, borderColor: C.line, backgroundColor: pressed ? C.sand : C.white })}>
+                      style={({ pressed }) => ({ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderRadius: radius.lg, borderWidth: 1, borderColor: C.lineStrong, backgroundColor: pressed ? C.sand : C.white })}>
                       <Ionicons name={s.icon} size={18} color={C.teal} />
-                      <Text numberOfLines={2} style={{ flex: 1, fontFamily: F.medium, fontSize: 15, color: C.ink }}>
+                      <Text numberOfLines={2} style={{ flex: 1, fontFamily: F.regular, fontSize: 15, color: C.ink }}>
                         {s.text}
                       </Text>
                     </Pressable>
@@ -190,22 +192,22 @@ export default function CocoTab() {
               m.role === 'user' ? (
                 <Enter key={k} style={{ alignSelf: 'flex-end', maxWidth: '82%' }}>
                   <View style={{ backgroundColor: C.teal, borderRadius: 20, borderBottomRightRadius: 6, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', gap: 6 }}>
-                    {m.voice && <Ionicons name="mic" size={13} color="rgba(255,255,255,0.7)" style={{ marginTop: 4 }} />}
-                    <Text style={{ flexShrink: 1, fontFamily: F.medium, fontSize: 15, lineHeight: 21, color: C.white }}>{m.text}</Text>
+                    {m.voice && <Ionicons name="mic" size={13} color={color.overlay.onDark} style={{ marginTop: 4 }} />}
+                    <Text style={[{ flexShrink: 1, fontFamily: F.regular, fontSize: 16, lineHeight: 23, color: C.white }, autoDir(m.text)]}>{m.text}</Text>
                   </View>
                 </Enter>
               ) : m.failed ? (
                 <Pressable key={k} accessibilityRole="button" onPress={() => retry(k)} hitSlop={6} style={{ alignSelf: 'flex-start', gap: 2 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Ionicons name="refresh" size={15} color={C.orange} />
-                    <Text style={{ fontFamily: F.semi, fontSize: 14, color: C.orange }}>Couldn’t reach Coco. Tap to try again.</Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.orange }}>Couldn’t reach Coco. Tap to try again.</Text>
                   </View>
                   {m.why && <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.mutedLight }}>{m.why}</Text>}
                 </Pressable>
               ) : (
                 // Coco's replies read like text on the page, not boxes (same as Ask Coco in a session)
                 <Enter key={k} style={{ alignSelf: 'flex-start', maxWidth: '92%' }}>
-                  <Text selectable style={{ fontFamily: F.medium, fontSize: 16, lineHeight: 24, color: C.ink }}>
+                  <Text selectable style={[{ fontFamily: F.regular, fontSize: 16, lineHeight: 26, color: C.ink }, autoDir(m.text)]}>
                     {m.text}
                   </Text>
                 </Enter>
@@ -217,13 +219,13 @@ export default function CocoTab() {
 
         {/* 4. message bar: while recording it turns into a recording bar */}
         <View style={{ paddingHorizontal: 12, paddingTop: 4, paddingBottom: 10 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, backgroundColor: C.white, borderWidth: 1, borderColor: recording ? C.red : C.lineStrong, borderRadius: 26, paddingLeft: 16, paddingRight: 5, paddingVertical: 5, minHeight: 52 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, backgroundColor: C.white, borderWidth: 1.5, borderColor: recording ? C.red : C.lineStrong, borderRadius: 26, paddingLeft: 16, paddingRight: 5, paddingVertical: 5, minHeight: 52 }}>
             {busyVoice ? (
               <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, height: 42 }}>
                 {recording ? (
                   <>
                     <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.red }} />
-                    <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.ink }}>{clock(voice.seconds)}</Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.ink, fontVariant: ['tabular-nums'] }}>{clock(voice.seconds)}</Text>
                     <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: C.track, overflow: 'hidden' }}>
                       <View style={{ width: `${Math.round(15 + voice.level * 85)}%`, height: 4, backgroundColor: C.red }} />
                     </View>
@@ -242,8 +244,8 @@ export default function CocoTab() {
                 onChangeText={setText}
                 multiline
                 placeholder={subject ? `Ask about ${subject.name}` : 'Message Coco'}
-                placeholderTextColor="#A69A8A"
-                style={{ flex: 1, maxHeight: 120, paddingTop: 11, paddingBottom: 11, fontFamily: F.medium, fontSize: 16, color: C.ink }}
+                placeholderTextColor={C.mutedLight}
+                style={[{ flex: 1, maxHeight: 120, paddingTop: 11, paddingBottom: 11, fontFamily: F.regular, fontSize: 16, color: C.ink }, autoDir(text)]}
               />
             )}
             {typed && !busyVoice ? (
@@ -252,7 +254,7 @@ export default function CocoTab() {
                 accessibilityLabel="Send"
                 onPress={() => send(text)}
                 disabled={!!busy}
-                style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: busy ? C.lineStrong : C.teal, alignItems: 'center', justifyContent: 'center' }}>
+                style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: busy ? C.lineStrong : C.green, alignItems: 'center', justifyContent: 'center' }}>
                 <Ionicons name="arrow-up" size={22} color={C.white} />
               </Pressable>
             ) : (
@@ -301,12 +303,12 @@ function Topic({ label, icon, on, onPress }: { label: string; icon: keyof typeof
         gap: 6,
         paddingHorizontal: 14,
         borderRadius: 18,
-        borderWidth: 1,
-        borderColor: on ? C.teal : C.lineStrong,
-        backgroundColor: on ? C.teal : pressed ? C.sand : C.white,
+        borderWidth: 1.5,
+        borderColor: on ? color.selected.border : C.lineStrong,
+        backgroundColor: on ? color.selected.bg : pressed ? C.sand : C.white,
       })}>
-      <Ionicons name={icon} size={15} color={on ? C.white : C.teal} />
-      <Text numberOfLines={1} style={{ maxWidth: 160, fontFamily: F.semi, fontSize: 14, color: on ? C.white : C.ink }}>
+      <Ionicons name={icon} size={15} color={on ? color.selected.text : C.muted} />
+      <Text numberOfLines={1} style={{ maxWidth: 160, fontFamily: F.medium, fontSize: 14, color: on ? color.selected.text : C.ink }}>
         {label}
       </Text>
     </Pressable>

@@ -14,7 +14,6 @@ import {
   Choice,
   Coco,
   color,
-  depth,
   Divider,
   EmptyState,
   Feedback,
@@ -75,7 +74,7 @@ export default function DesignCatalog() {
 
       <Section title="Brand palette (raw: screens never use these directly)">
         <Row wrap gap={2}>
-          {(['leaf500', 'leaf600', 'leaf800', 'pine600', 'pine400', 'bark700', 'bark400', 'soil300', 'soil100', 'sun300', 'sun500', 'berry600', 'sky400', 'ink900', 'ink500'] as const).map((k) => (
+          {(['leaf500', 'leaf600', 'leaf800', 'pine50', 'pine600', 'neutral0', 'neutral50', 'neutral200', 'neutral600', 'neutral900', 'bark', 'sun400', 'berry500', 'sky300', 'sky500'] as const).map((k) => (
             <Swatch key={k} name={k} value={palette[k]} />
           ))}
         </Row>
@@ -101,11 +100,12 @@ export default function DesignCatalog() {
         <T v="h2">h2 · page title</T>
         <T v="h3">h3 · card title</T>
         <T v="title">title · row and button text</T>
+        <T v="subhead">subhead · small strong lines</T>
         <T v="bodyLg">bodyLg · Coco speaking, big answers</T>
         <T>body · paragraphs (the default)</T>
         <T v="bodySm">bodySm · secondary lines</T>
         <T v="caption">caption · hints and meta</T>
-        <T v="label">label · section caps</T>
+        <T v="label">label · section labels (sentence case)</T>
         <T v="micro">micro · badges</T>
         <T v="number">12:40 · 120 XP</T>
         <T v="bodyLg" auto>
@@ -117,7 +117,7 @@ export default function DesignCatalog() {
         <Row wrap gap={2} align="flex-end">
           {([1, 2, 3, 4, 5, 6, 8, 10] as const).map((k) => (
             <Stack key={k} gap={1} align="center">
-              <View style={{ width: S[k], height: S[k], backgroundColor: color.action.leaf, borderRadius: 2 }} />
+              <View style={{ width: S[k], height: S[k], backgroundColor: color.action.primary, borderRadius: 2 }} />
               <T v="micro">S[{k}]={S[k]}</T>
             </Stack>
           ))}
@@ -125,14 +125,14 @@ export default function DesignCatalog() {
         <Row wrap gap={2}>
           {(['sm', 'md', 'lg', 'xl', 'xxl'] as const).map((k) => (
             <Stack key={k} gap={1} align="center">
-              <View style={{ width: 52, height: 52, backgroundColor: color.surface.card, borderRadius: radius[k], borderWidth: 2, borderColor: color.border.bark, borderBottomWidth: depth.md }} />
+              <View style={{ width: 52, height: 52, backgroundColor: color.surface.card, borderRadius: radius[k], borderWidth: 1, borderColor: color.border.default }} />
               <T v="micro">{k}</T>
             </Stack>
           ))}
         </Row>
       </Section>
 
-      <Section title="Clay buttons">
+      <Section title="Buttons (one green for every main button)">
         <Btn title="Start session" icon="arrow-forward" kind="green" />
         <Btn title="Next question" icon="arrow-forward" kind="teal" />
         <Btn title="Keep studying" kind="leaf" height={48} />
@@ -177,7 +177,7 @@ export default function DesignCatalog() {
       <Section title="Badges">
         <Row wrap gap={2}>
           <Badge text="Full session" />
-          <Badge text="Coco asks" tone="neutral" caps />
+          <Badge text="Coco asks" tone="neutral" />
           <Badge text="Strong recall" tone="correct" icon="leaf" />
           <Badge text="Almost" tone="almost" />
           <Badge text="Missed" tone="wrong" />

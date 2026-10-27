@@ -46,5 +46,6 @@ Drrys has one design system in `src/design/` (rules: `src/design/README.md`, liv
 
 - Import UI from `@/design`: tokens (`color`, `S`, `radius`, `depth`, `type`, `motion`, `size`, `layout`) and blocks (`T`, `Btn`, `Surface`, `Stack`, `Row`, `Feedback`, `answerTile`, `Badge`, `Segmented`, `Field`, `ListGroup`, `ListRow`, `Sheet`, `Confirm`, `StatTile`, `EmptyState`, `Screen`, `SessionHeader`, `Coco`, `Bubble`).
 - No hex or `rgba()` literals and no raw `<Text fontSize>` in screens: use `color.*` and `<T v="…">`. Need something new? Add the token or block to `src/design` and to the catalog first, then use it.
-- Layout with `start`/`end`, not `left`/`right`; text written by the student or the AI gets `<T auto>` so Arabic reads right-to-left.
+- Layout with `start`/`end`, not `left`/`right`; text written by the student or the AI gets `<T auto>` (or `autoDir(text)` on a raw `Text`) so Arabic reads right-to-left.
+- Version 2 rules, in short: one family (Readex Pro, 600 at most), one main button color (leaf green `color.action.primary`; secondary is white with a hairline), a bottom edge only on things you press (cards you read are flat: white + `color.border.default`), "picked" is pine (`color.selected`), no CAPS labels and no emoji in the interface, tabs switch without animation, motion from `motion`/`ease` (presses 100ms, entrances 260ms, nothing UI over 300ms except sheets).
 - `src/theme.ts` (`C`, `F`, `R`) is the old name set, kept for existing screens. Don't use it in new code; move a screen to `@/design` when you touch it.

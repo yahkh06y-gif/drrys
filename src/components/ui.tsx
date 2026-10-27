@@ -19,6 +19,7 @@ import {
 import Animated, {
   Easing,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withRepeat,
   withSequence,
@@ -30,28 +31,30 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBack } from '@/lib/back';
 import { tap, type Sfx } from '@/lib/feedback';
 import { autoDir } from '@/design/rtl';
-import { color, type } from '@/design/tokens';
+import { color, depth, ease, motion, radius, shadow, type } from '@/design/tokens';
 import { C, F, R } from '@/theme';
 
 /* ---------- Text ---------- */
-// h1…mono keep the looks the screens were built with; the rest come straight from the type scale
-// in src/design/tokens.ts. Pick a variant instead of writing a fontSize.
-type V = 'h1' | 'h2' | 'h3' | 'title' | 'body' | 'small' | 'label' | 'mono' | 'display' | 'bodyLg' | 'bodySm' | 'caption' | 'micro' | 'number';
+// Every variant comes from the type scale in src/design/tokens.ts (one family, Readex Pro, 600 at most).
+// The old names stay so every screen keeps working: h1 = the green hero title, h2 = a brand title,
+// h3 = a heading, title = a strong line. Pick a variant instead of writing a fontSize.
+type V = 'h1' | 'h2' | 'h3' | 'title' | 'body' | 'small' | 'label' | 'mono' | 'display' | 'bodyLg' | 'bodySm' | 'caption' | 'micro' | 'number' | 'subhead';
 const TV: Record<V, TextStyle> = {
-  h1: { fontFamily: F.bold, fontSize: 40, lineHeight: 44, color: C.title },
-  h2: { fontFamily: F.bold, fontSize: 26, lineHeight: 32, color: C.teal, letterSpacing: -0.6 },
-  h3: { fontFamily: F.bold, fontSize: 18, lineHeight: 24, color: C.ink },
-  title: { fontFamily: F.bold, fontSize: 16, lineHeight: 22, color: C.ink },
-  body: { fontFamily: F.medium, fontSize: 14, lineHeight: 22, color: C.body },
-  small: { fontFamily: F.medium, fontSize: 12, lineHeight: 16, color: C.body },
-  label: { fontFamily: F.bold, fontSize: 11, lineHeight: 16, color: C.goldInk, letterSpacing: 0.5, textTransform: 'uppercase' },
-  mono: { fontFamily: F.monoRegular, fontSize: 14, color: C.tealSoft },
+  h1: { ...type.display, color: color.text.hero },
+  h2: { ...type.title, color: color.text.brand },
+  h3: { ...type.heading, color: color.text.primary },
+  title: { ...type.bodyStrong, fontFamily: F.semi, color: color.text.primary },
+  body: { fontFamily: F.regular, fontSize: 15, lineHeight: 22, color: color.text.body },
+  small: { ...type.caption, color: color.text.body },
+  label: { ...type.subhead, color: color.text.label },
+  mono: { fontFamily: F.medium, fontSize: 14, color: color.text.brand, fontVariant: ['tabular-nums'] },
   display: { ...type.display, color: color.text.hero },
-  bodyLg: { ...type.bodyLg, color: color.text.body },
-  bodySm: { ...type.bodySm, color: color.text.body },
+  bodyLg: { ...type.body, color: color.text.body },
+  bodySm: { ...type.subhead, fontFamily: F.regular, color: color.text.body },
   caption: { ...type.caption, color: color.text.muted },
+  subhead: { ...type.subhead, color: color.text.body },
   micro: { ...type.micro, color: color.text.body },
-  number: { ...type.number, color: color.text.primary },
+  number: { ...type.number, fontVariant: ['tabular-nums'], color: color.text.primary },
 };
 /**
  * The app's text. `auto` makes it read in its own direction: use it for anything the student or the AI
@@ -61,16 +64,20 @@ export function T({ v = 'body', auto, style, ...p }: TextProps & { v?: V; auto?:
   return <Text {...p} style={[TV[v], auto && autoDir(p.children), style]} />;
 }
 
-/* ---------- Clay button (the 3D pressable from Figma) ---------- */
+/* ---------- Button (the pressable with a bottom edge) ---------- */
+// One main color: every "go" button is leaf green, whatever kind a screen asks for (green, leaf, teal).
+// light / white are the secondary button; dark is for the photo and video screens.
 type BtnKind = 'green' | 'teal' | 'leaf' | 'dark' | 'light' | 'white';
+const PRIMARY = { bg: color.action.primary, sh: color.action.primaryEdge, fg: color.text.onAction };
 const KIND: Record<BtnKind, { bg: string; sh: string; fg: string; border?: string }> = {
-  green: { bg: C.green, sh: C.greenShadow, fg: C.white },
-  leaf: { bg: C.leaf, sh: C.leafShadow, fg: C.white },
-  teal: { bg: C.teal, sh: 'rgba(90,66,37,0.45)', fg: C.white },
-  dark: { bg: '#1F1F1F', sh: '#000', fg: C.white },
-  light: { bg: C.sand, sh: 'rgba(90,66,37,0.25)', fg: C.teal, border: C.line },
-  white: { bg: C.white, sh: 'rgba(90,66,37,0.18)', fg: C.ink, border: C.line },
+  green: PRIMARY,
+  leaf: PRIMARY,
+  teal: PRIMARY,
+  dark: { bg: C.ink, sh: '#000', fg: C.white },
+  light: { bg: color.action.secondary, sh: color.action.secondaryEdge, fg: color.action.secondaryText, border: color.border.strong },
+  white: { bg: color.action.secondary, sh: color.action.secondaryEdge, fg: color.text.primary, border: color.border.strong },
 };
+const OFF = { bg: color.action.disabled, sh: 'transparent', fg: color.action.disabledText };
 
 export function Btn({
   title,
@@ -83,7 +90,7 @@ export function Btn({
   sfx = 'tap',
   style,
   pill,
-  height = 56,
+  height = 52,
   mono,
 }: {
   title: string;
@@ -99,34 +106,38 @@ export function Btn({
   height?: number;
   mono?: boolean;
 }) {
-  const k = KIND[kind];
+  // disabled is grey (not see-through), so it never reads as "almost ready"; loading keeps its color
+  const k = disabled ? OFF : KIND[kind];
   const y = useSharedValue(0);
   const a = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
   const off = disabled || loading;
+  const r = pill ? radius.pill : radius.lg;
   return (
     <Pressable
       disabled={off}
-      onPressIn={() => (y.value = withTiming(4, { duration: 60 }))}
-      onPressOut={() => (y.value = withSpring(0, { damping: 12, stiffness: 400 }))}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!off, busy: !!loading }}
+      onPressIn={() => (y.value = withTiming(depth.press, { duration: motion.press, easing: ease.out }))}
+      onPressOut={() => (y.value = withSpring(0, motion.spring.press))}
       onPress={() => {
         tap(sfx);
         onPress?.();
       }}
-      style={[{ height: height + 4, opacity: off ? 0.55 : 1 }, style]}>
-      <View style={[StyleSheet.absoluteFill, { top: 4, backgroundColor: k.sh, borderRadius: pill ? R.pill : 18 }]} />
+      style={[{ height: height + depth.press }, style]}>
+      <View style={[StyleSheet.absoluteFill, { top: depth.press, backgroundColor: k.sh, borderRadius: r }]} />
       <Animated.View
         style={[
           {
             height,
             backgroundColor: k.bg,
-            borderRadius: pill ? R.pill : 18,
+            borderRadius: r,
             alignItems: 'center',
             justifyContent: 'center',
             flexDirection: 'row',
             gap: 8,
-            paddingHorizontal: 18,
-            borderWidth: k.border ? 1 : 0,
-            borderColor: k.border,
+            paddingHorizontal: 20,
+            borderWidth: 'border' in k && k.border ? 1 : 0,
+            borderColor: 'border' in k ? k.border : undefined,
           },
           a,
         ]}>
@@ -135,7 +146,7 @@ export function Btn({
         ) : (
           <>
             {iconLeft && <Ionicons name={iconLeft} size={18} color={k.fg} />}
-            <Text style={{ color: k.fg, fontFamily: mono ? F.mono : F.bold, fontSize: mono ? 20 : 16, letterSpacing: 0.3 }}>{title}</Text>
+            <Text style={mono ? { ...type.number, fontVariant: ['tabular-nums'], color: k.fg } : { color: k.fg, fontFamily: F.semi, fontSize: 16 }}>{title}</Text>
             {icon && <Ionicons name={icon} size={18} color={k.fg} />}
           </>
         )}
@@ -167,8 +178,10 @@ export function Choice({
   const a = useAnimatedStyle(() => ({ transform: [{ scale: s.value }] }));
   return (
     <Pressable
-      onPressIn={() => (s.value = withTiming(0.96, { duration: 80 }))}
-      onPressOut={() => (s.value = withSpring(1))}
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!selected }}
+      onPressIn={() => (s.value = withTiming(motion.pressScale, { duration: motion.press, easing: ease.out }))}
+      onPressOut={() => (s.value = withSpring(1, motion.spring.press))}
       onPress={() => {
         tap('select');
         onPress();
@@ -177,10 +190,10 @@ export function Choice({
       <Animated.View
         style={[
           {
-            backgroundColor: selected ? C.cardSelected : C.card,
-            borderWidth: 2,
-            borderColor: C.brown,
-            borderRadius: row ? 14 : 21.6,
+            backgroundColor: selected ? color.selected.bg : color.surface.choice,
+            borderWidth: 1.5,
+            borderColor: selected ? color.selected.border : color.border.strong,
+            borderRadius: radius.lg,
             paddingVertical: row ? 14 : 0,
             paddingHorizontal: 12,
             alignItems: row ? (icon ? 'center' : 'flex-start') : 'center',
@@ -188,7 +201,7 @@ export function Choice({
             gap: icon ? (row ? 12 : 4) : 0,
             justifyContent: row && icon ? 'flex-start' : 'center',
             minHeight: row ? 56 : 132,
-            borderBottomWidth: selected ? 5 : 2,
+            borderBottomWidth: depth.md,
           },
           a,
         ]}>
@@ -196,21 +209,23 @@ export function Choice({
         <Text
           adjustsFontSizeToFit
           numberOfLines={row ? 2 : 1}
-          style={{ flexShrink: 1, fontFamily: F.bold, fontSize: row ? 18 : icon ? 20 : 24, color: C.teal, textAlign: row ? 'left' : 'center', letterSpacing: -0.5 }}>
+          style={{ flexShrink: 1, fontFamily: F.semi, fontSize: row ? 17 : icon ? 18 : 22, color: selected ? color.selected.text : color.text.primary, textAlign: row ? 'left' : 'center', letterSpacing: row ? 0 : -0.3 }}>
           {label}
         </Text>
-        {sub && <Text style={{ fontFamily: F.medium, fontSize: 10, color: C.teal, marginTop: 4, textAlign: 'center' }}>{sub}</Text>}
+        {sub && <Text style={{ ...type.caption, color: selected ? color.selected.text : color.text.muted, marginTop: 4, textAlign: 'center' }}>{sub}</Text>}
       </Animated.View>
     </Pressable>
   );
 }
 
 /* ---------- Progress ---------- */
-export function Progress({ value, height = 10, track = C.white, fill = C.gold }: { value: number; height?: number; track?: string; fill?: string }) {
+export function Progress({ value, height = 10, track = color.surface.track, fill = color.game.progress }: { value: number; height?: number; track?: string; fill?: string }) {
   const w = useSharedValue(0);
+  const still = useReducedMotion();
   useEffect(() => {
-    w.value = withTiming(Math.max(0.03, Math.min(1, value)), { duration: 600, easing: Easing.out(Easing.cubic) });
-  }, [value, w]);
+    const to = Math.max(0.03, Math.min(1, value));
+    w.value = still ? to : withTiming(to, { duration: motion.progress, easing: ease.out });
+  }, [value, w, still]);
   const a = useAnimatedStyle(() => ({ width: `${w.value * 100}%` }));
   return (
     <View style={{ height, borderRadius: R.pill, backgroundColor: track, overflow: 'hidden' }}>
@@ -273,14 +288,14 @@ export function SessionHeader({
   // Android back goes one step back (when there is a step to go back to); on the first step it asks about leaving
   useBack(useCallback(() => (onBack ? onBack() : setAsking(true), true), [onBack]));
   return (
-    <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10, borderBottomWidth: 1, borderColor: 'rgba(90,66,37,0.1)', gap: 10 }}>
+    <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10, borderBottomWidth: 1, borderColor: color.border.subtle, gap: 10 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         {onBack ? <IconBtn name="arrow-back" onPress={onBack} /> : <IconBtn name="close" onPress={() => setAsking(true)} />}
         <View style={{ flex: 1, alignItems: 'center', marginRight: onBack ? 0 : 40 }}>
-          <T v="small" style={{ fontFamily: F.semi, fontSize: 11, color: C.goldInk, letterSpacing: 0.5 }}>
-            step {step} of {SESSION_STEPS}
+          <T v="caption" style={{ fontVariant: ['tabular-nums'] }}>
+            Step {step} of {SESSION_STEPS}
           </T>
-          <T v="title" style={{ color: C.teal, fontSize: 14 }}>
+          <T v="title" style={{ color: color.text.brand, fontSize: 15, lineHeight: 20 }}>
             {title}
           </T>
         </View>
@@ -307,12 +322,10 @@ export function SessionHeader({
 export function Confirm({ visible, title, body, yes, no, onYes, onNo }: { visible: boolean; title: string; body?: string; yes: string; no: string; onYes: () => void; onNo: () => void }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onNo}>
-      <Pressable onPress={onNo} style={{ flex: 1, backgroundColor: 'rgba(24,36,28,0.45)', alignItems: 'center', justifyContent: 'center', padding: 28 }}>
-        <Pressable style={{ width: '100%', maxWidth: 360, backgroundColor: C.paper, borderRadius: 24, borderWidth: 2, borderColor: C.brown, padding: 20, gap: 10 }}>
-          <T v="h3" style={{ color: C.teal }}>
-            {title}
-          </T>
-          {!!body && <T v="small" style={{ color: C.ink, lineHeight: 20 }}>{body}</T>}
+      <Pressable onPress={onNo} style={{ flex: 1, backgroundColor: color.overlay.scrimStrong, alignItems: 'center', justifyContent: 'center', padding: 28 }}>
+        <Pressable style={{ width: '100%', maxWidth: 360, backgroundColor: color.bg.raised, borderRadius: radius.xxl, padding: 20, gap: 8, ...shadow.float }}>
+          <T v="h3">{title}</T>
+          {!!body && <T v="body">{body}</T>}
           <View style={{ gap: 10, marginTop: 8 }}>
             <Btn title={no} kind="leaf" height={48} onPress={onNo} />
             <Btn title={yes} kind="light" height={44} onPress={onYes} />
@@ -336,7 +349,7 @@ export function OnbBar({ value, onBack, style }: { value: number; onBack?: (() =
   );
 }
 
-export function IconBtn({ name, onPress, size = 40, color = C.teal }: { name: keyof typeof Ionicons.glyphMap; onPress: () => void; size?: number; color?: string }) {
+export function IconBtn({ name, onPress, size = 40, color: tint = C.teal }: { name: keyof typeof Ionicons.glyphMap; onPress: () => void; size?: number; color?: string }) {
   return (
     <Pressable
       onPress={() => {
@@ -344,18 +357,17 @@ export function IconBtn({ name, onPress, size = 40, color = C.teal }: { name: ke
         onPress();
       }}
       hitSlop={8}
-      style={{
+      accessibilityRole="button"
+      accessibilityLabel={name.replace(/-outline$/, '').replace(/-/g, ' ')}
+      style={({ pressed }) => ({
         width: size,
         height: size,
         borderRadius: size / 2,
-        backgroundColor: C.sand,
-        borderWidth: 1,
-        borderColor: C.line,
+        backgroundColor: pressed ? color.surface.track : color.surface.muted,
         alignItems: 'center',
         justifyContent: 'center',
-        borderBottomWidth: 3,
-      }}>
-      <Ionicons name={name} size={size * 0.45} color={color} />
+      })}>
+      <Ionicons name={name} size={size * 0.45} color={tint} />
     </Pressable>
   );
 }
@@ -363,9 +375,9 @@ export function IconBtn({ name, onPress, size = 40, color = C.teal }: { name: ke
 /* ---------- Pills / cards ---------- */
 export function Pill({ text, bg = C.mint, fg = C.mossDark, border = C.mintBorder, icon }: { text: string; bg?: string; fg?: string; border?: string; icon?: keyof typeof Ionicons.glyphMap }) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: bg, borderWidth: 1, borderColor: border, borderRadius: R.pill, paddingHorizontal: 9, paddingVertical: 3, alignSelf: 'flex-start' }}>
-      {icon && <Ionicons name={icon} size={11} color={fg} />}
-      <Text style={{ fontFamily: F.bold, fontSize: 10, color: fg }}>{text}</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: bg, borderWidth: 1, borderColor: border, borderRadius: R.pill, paddingHorizontal: 10, paddingVertical: 3, alignSelf: 'flex-start' }}>
+      {icon && <Ionicons name={icon} size={12} color={fg} />}
+      <Text style={{ ...type.micro, color: fg }}>{text}</Text>
     </View>
   );
 }
@@ -375,11 +387,12 @@ export function Card({ children, style, bark }: { children: React.ReactNode; sty
     <View
       style={[
         {
-          backgroundColor: bark ? '#FBF9F4' : C.white,
-          borderRadius: bark ? 16 : 24,
+          // a card you read is flat (one hairline); the bark card is the tree's game card and keeps its edge
+          backgroundColor: bark ? color.surface.cardWarm : color.surface.card,
+          borderRadius: bark ? radius.lg : radius.xl,
           borderWidth: bark ? 2 : 1,
-          borderColor: bark ? C.bark : C.lineStrong,
-          borderBottomWidth: bark ? 6 : 4,
+          borderColor: bark ? color.border.bark : color.border.default,
+          borderBottomWidth: bark ? depth.lg : 1,
           padding: 16,
         },
         style,
@@ -393,11 +406,12 @@ export function Card({ children, style, bark }: { children: React.ReactNode; sty
 export function Coco({ src, size = 220, style, bob = true }: { src: ImageSource | number; size?: number; style?: StyleProp<ViewStyle>; bob?: boolean }) {
   const y = useSharedValue(0);
   const r = useSharedValue(0);
+  const still = useReducedMotion();
   useEffect(() => {
-    if (!bob) return;
-    y.value = withRepeat(withSequence(withTiming(-6, { duration: 1400, easing: Easing.inOut(Easing.sin) }), withTiming(0, { duration: 1400, easing: Easing.inOut(Easing.sin) })), -1);
+    if (!bob || still) return;
+    y.value = withRepeat(withSequence(withTiming(-6, { duration: motion.bob, easing: Easing.inOut(Easing.sin) }), withTiming(0, { duration: motion.bob, easing: Easing.inOut(Easing.sin) })), -1);
     r.value = withRepeat(withSequence(withTiming(1.5, { duration: 2100 }), withTiming(-1.5, { duration: 2100 })), -1, true);
-  }, [bob, y, r]);
+  }, [bob, still, y, r]);
   const a = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }, { rotate: `${r.value}deg` }] }));
   return (
     <Animated.View style={[{ width: size, height: size * 1.25, alignSelf: 'center' }, a, style]}>
@@ -409,10 +423,10 @@ export function Coco({ src, size = 220, style, bob = true }: { src: ImageSource 
 export function Bubble({ text, style }: { text: string; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[{ alignSelf: 'center' }, style]}>
-      <View style={{ backgroundColor: C.white, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: C.line, maxWidth: 260 }}>
-        <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.teal, textAlign: 'center' }}>{text}</Text>
+      <View style={{ backgroundColor: color.surface.card, borderRadius: radius.lg, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1.5, borderColor: color.border.strong, maxWidth: 260 }}>
+        <Text style={{ ...type.subhead, fontSize: 15, lineHeight: 21, color: color.text.brand, textAlign: 'center' }}>{text}</Text>
       </View>
-      <View style={{ width: 14, height: 14, backgroundColor: C.white, transform: [{ rotate: '45deg' }], alignSelf: 'center', marginTop: -8, borderRightWidth: 1, borderBottomWidth: 1, borderColor: C.line }} />
+      <View style={{ width: 14, height: 14, backgroundColor: color.surface.card, transform: [{ rotate: '45deg' }], alignSelf: 'center', marginTop: -8, borderRightWidth: 1.5, borderBottomWidth: 1.5, borderColor: color.border.strong }} />
     </View>
   );
 }
@@ -420,11 +434,13 @@ export function Bubble({ text, style }: { text: string; style?: StyleProp<ViewSt
 /* Fade/slide in wrapper for staggered entrances */
 export function Enter({ children, delay = 0, style }: { children: React.ReactNode; delay?: number; style?: StyleProp<ViewStyle> }) {
   const o = useSharedValue(0);
+  const still = useReducedMotion();
   useEffect(() => {
-    const t = setTimeout(() => (o.value = withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) })), delay);
+    const t = setTimeout(() => (o.value = withTiming(1, { duration: still ? motion.fast : motion.enter, easing: ease.out })), delay);
     return () => clearTimeout(t);
-  }, [delay, o]);
-  const a = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateY: (1 - o.value) * 16 }] }));
+  }, [delay, o, still]);
+  // a short rise (8, not 16): it should feel like the screen settling, not things flying in
+  const a = useAnimatedStyle(() => ({ opacity: o.value, transform: [{ translateY: still ? 0 : (1 - o.value) * 8 }] }));
   return <Animated.View style={[a, style]}>{children}</Animated.View>;
 }
 

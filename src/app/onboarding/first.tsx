@@ -10,6 +10,7 @@ import { Pressable, ScrollView, Text, View, type DimensionValue } from 'react-na
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { palette, radius, shadow } from '@/design/tokens';
 import { COCO } from '@/art';
 import { SafePicture } from '@/components/SafePicture';
 import { Btn, Enter, OnbBar } from '@/components/ui';
@@ -64,22 +65,22 @@ export default function First() {
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
           <Image source={COCO.classic} style={{ width: 72, height: 90 }} contentFit="contain" />
           <Enter key={usual ? 'u' : 'w'} style={{ flex: 1, marginBottom: 18 }}>
-            <View style={{ backgroundColor: C.white, borderRadius: 18, borderBottomLeftRadius: 4, borderWidth: 1, borderColor: C.lineStrong, paddingHorizontal: 14, paddingVertical: 12 }}>
-              <Text style={{ fontFamily: F.bold, fontSize: 19, lineHeight: 24, color: C.teal }}>{usual ? 'See the difference? 😏' : 'Let me show you how we’ll study.'}</Text>
+            <View style={{ backgroundColor: C.white, borderRadius: 18, borderBottomLeftRadius: 4, borderWidth: 1.5, borderColor: C.lineStrong, paddingHorizontal: 14, paddingVertical: 12 }}>
+              <Text style={{ fontFamily: F.medium, fontSize: 18, lineHeight: 25, color: C.teal }}>{usual ? 'See the difference? 😏' : 'Let me show you how we’ll study.'}</Text>
             </View>
           </Enter>
         </View>
 
         {/* my way / the usual way */}
-        <View style={{ flexDirection: 'row', backgroundColor: C.sand, borderRadius: 99, padding: 4, borderWidth: 1, borderColor: C.line }}>
+        <View style={{ flexDirection: 'row', backgroundColor: C.sand, borderRadius: radius.lg, padding: 4 }}>
           {[
             { u: false, label: 'My way' },
             { u: true, label: 'Usual way' },
           ].map((o) => {
             const on = usual === o.u;
             return (
-              <Pressable key={o.label} onPress={() => show(o.u)} disabled={!ready} accessibilityRole="tab" accessibilityState={{ selected: on }} style={{ flex: 1, height: 38, borderRadius: 99, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? C.white : 'transparent' }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 14, color: on ? C.teal : C.muted }}>{o.label}</Text>
+              <Pressable key={o.label} onPress={() => show(o.u)} disabled={!ready} accessibilityRole="tab" accessibilityState={{ selected: on }} style={{ flex: 1, height: 40, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', ...(on ? shadow.lift : null), backgroundColor: on ? C.white : 'transparent' }}>
+                <Text style={{ fontFamily: F.medium, fontSize: 14, color: on ? C.ink : C.muted }}>{o.label}</Text>
               </Pressable>
             );
           })}
@@ -88,14 +89,14 @@ export default function First() {
         <View>
           {/* my way */}
           <Animated.View style={[face, { backgroundColor: C.white, borderColor: C.bark }, front]}>
-            <Text style={{ fontFamily: F.bold, fontSize: 12, letterSpacing: 1, color: C.muted }}>{fieldName.toUpperCase()}</Text>
+            <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>{fieldName}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               {pick && personal && <SafePicture uri={pick.image} emoji={TYPE_EMOJI[pick.type]} icon={TYPE_ICON[pick.type]} style={{ width: 46, height: 69, borderRadius: 8 }} />}
-              <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 22, lineHeight: 27, color: C.teal }}>{ready ? title : concept.name}</Text>
+              <Text style={{ flex: 1, fontFamily: F.semi, fontSize: 22, lineHeight: 28, letterSpacing: -0.3, color: C.ink }}>{ready ? title : concept.name}</Text>
             </View>
             {ready ? (
               <Enter>
-                <Text style={{ fontFamily: F.medium, fontSize: 17, lineHeight: 26, color: C.ink }}>{analogy ?? concept.simple}</Text>
+                <Text style={{ fontFamily: F.regular, fontSize: 17, lineHeight: 27, color: C.ink }}>{analogy ?? concept.simple}</Text>
               </Enter>
             ) : (
               <View style={{ gap: 10, paddingTop: 4 }}>
@@ -107,10 +108,10 @@ export default function First() {
           </Animated.View>
 
           {/* the usual way */}
-          <Animated.View style={[face, { position: 'absolute', inset: 0, backgroundColor: '#EEEDEA', borderColor: '#B9B4AC' }, back]}>
-            <Text style={{ fontFamily: F.bold, fontSize: 12, letterSpacing: 1, color: '#8E8A83' }}>{fieldName.toUpperCase()}</Text>
-            <Text style={{ fontFamily: F.bold, fontSize: 22, lineHeight: 27, color: '#6B6760' }}>{concept.name}</Text>
-            <Text style={{ fontFamily: F.medium, fontSize: 17, lineHeight: 26, color: '#6B6760' }}>{concept.usual}</Text>
+          <Animated.View style={[face, { position: 'absolute', inset: 0, backgroundColor: palette.neutral100, borderColor: palette.neutral300 }, back]}>
+            <Text style={{ fontFamily: F.medium, fontSize: 13, color: palette.neutral500 }}>{fieldName}</Text>
+            <Text style={{ fontFamily: F.semi, fontSize: 22, lineHeight: 28, letterSpacing: -0.3, color: palette.neutral600 }}>{concept.name}</Text>
+            <Text style={{ fontFamily: F.regular, fontSize: 17, lineHeight: 27, color: palette.neutral600 }}>{concept.usual}</Text>
           </Animated.View>
         </View>
       </ScrollView>

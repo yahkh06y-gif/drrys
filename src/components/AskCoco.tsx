@@ -9,6 +9,7 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { color } from '@/design/tokens';
 import { COCO } from '@/art';
 import { Coco } from '@/components/ui';
 import { useVoice, withLive } from '@/components/Voice';
@@ -140,7 +141,7 @@ export function CocoChatSheet({
   return (
     <Modal visible={open} transparent animationType="none" statusBarTranslucent onRequestClose={dismiss}>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(24,36,28,0.4)' }, shade]}>
+        <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: color.overlay.scrim }, shade]}>
           <Pressable accessibilityLabel="Close" style={{ flex: 1 }} onPress={dismiss} />
         </Animated.View>
         <KeyboardAvoidingView behavior="padding" pointerEvents="box-none" style={{ flex: 1, justifyContent: 'flex-end', paddingTop: insets.top + 12 }}>
@@ -148,10 +149,10 @@ export function CocoChatSheet({
             {/* the top bar: the handle to pull, the title, what it's about, and ✕ */}
             <GestureDetector gesture={pan}>
               <View style={{ paddingHorizontal: 18, paddingTop: 8, paddingBottom: 12, borderBottomWidth: 1, borderColor: C.line }}>
-                <View style={{ alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: C.lineStrong, marginBottom: 10 }} />
+                <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: 4, backgroundColor: C.lineStrong, marginBottom: 10 }} />
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 17, color: C.ink }}>Ask Coco</Text>
+                    <Text style={{ fontFamily: F.semi, fontSize: 17, color: C.ink }}>Ask Coco</Text>
                     <Text numberOfLines={1} style={{ fontFamily: F.medium, fontSize: 12, color: C.muted, marginTop: 1 }}>
                       {about}
                     </Text>
@@ -180,7 +181,7 @@ export function CocoChatSheet({
                 thread.map((m, k) =>
                   m.role === 'user' ? (
                     <View key={k} style={{ alignSelf: 'flex-end', maxWidth: '82%', backgroundColor: C.teal, borderRadius: 18, borderBottomRightRadius: 6, paddingHorizontal: 14, paddingVertical: 9, flexDirection: 'row', gap: 6 }}>
-                      {m.voice && <Ionicons name="mic" size={13} color="rgba(255,255,255,0.7)" style={{ marginTop: 4 }} />}
+                      {m.voice && <Ionicons name="mic" size={13} color={color.overlay.onDark} style={{ marginTop: 4 }} />}
                       <Text style={{ flexShrink: 1, fontFamily: F.medium, fontSize: 15, lineHeight: 21, color: C.white }}>{m.text}</Text>
                     </View>
                   ) : (
@@ -202,7 +203,7 @@ export function CocoChatSheet({
                     {recording ? (
                       <>
                         <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.red }} />
-                        <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.ink }}>{clock(voice.seconds)}</Text>
+                        <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.ink, fontVariant: ['tabular-nums'] }}>{clock(voice.seconds)}</Text>
                         <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: C.track, overflow: 'hidden' }}>
                           <View style={{ width: `${Math.round(15 + voice.level * 85)}%`, height: 4, backgroundColor: C.red }} />
                         </View>
@@ -222,7 +223,7 @@ export function CocoChatSheet({
                     onFocus={() => (height.value = withTiming(FULL, EASE))}
                     multiline
                     placeholder="Message Coco"
-                    placeholderTextColor="#A69A8A"
+                    placeholderTextColor={C.mutedLight}
                     style={{ flex: 1, maxHeight: 120, paddingTop: 9, paddingBottom: 9, fontFamily: F.medium, fontSize: 15, color: C.ink }}
                   />
                 )}

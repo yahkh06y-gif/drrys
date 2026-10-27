@@ -12,6 +12,8 @@ import { DEMO } from '@/lib/demo';
 import { tap } from '@/lib/feedback';
 import { onSample, SAMPLE_RECALL, typeOut } from '@/lib/sample';
 import { useApp } from '@/store';
+import { autoDir } from '@/design/rtl';
+import { color, radius, shadow } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 export default function Recall() {
@@ -55,25 +57,27 @@ export default function Recall() {
           </View>
 
           {/* mode toggle */}
-          <View style={{ flexDirection: 'row', backgroundColor: '#EBE8E0', borderRadius: 16, padding: 5, borderWidth: 1, borderColor: C.lineStrong }}>
+          <View accessibilityRole="tablist" style={{ flexDirection: 'row', backgroundColor: color.bg.sunken, borderRadius: radius.lg, padding: 4 }}>
             {(['speak', 'write'] as const).map((m) => (
               <Pressable
                 key={m}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: mode === m }}
                 onPress={() => (tap('select'), setMode(m))}
-                style={{ flex: 1, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 12, backgroundColor: mode === m ? C.white : 'transparent', borderWidth: mode === m ? 1 : 0, borderColor: C.line }}>
-                <Ionicons name={m === 'speak' ? 'mic' : 'create-outline'} size={14} color={m === 'speak' ? C.leaf : C.body} />
-                <Text style={{ fontFamily: F.bold, fontSize: 12, color: mode === m ? C.teal : C.body }}>{m === 'speak' ? 'Speak (Recommended)' : 'Write instead'}</Text>
+                style={{ flex: 1, minHeight: 44, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: mode === m ? C.white : 'transparent', ...(mode === m ? shadow.lift : null) }}>
+                <Ionicons name={m === 'speak' ? 'mic' : 'create-outline'} size={15} color={mode === m ? C.teal : C.muted} />
+                <Text style={{ fontFamily: F.medium, fontSize: 14, color: mode === m ? C.ink : C.muted }}>{m === 'speak' ? 'Speak (Recommended)' : 'Write instead'}</Text>
               </Pressable>
             ))}
           </View>
 
-          <View style={{ backgroundColor: C.white, borderRadius: 24, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, padding: 16, gap: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderColor: 'rgba(90,66,37,0.1)', paddingBottom: 9 }}>
+          <View style={{ backgroundColor: C.white, borderRadius: 20, borderWidth: 1, borderColor: C.line, padding: 16, gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderColor: color.border.subtle, paddingBottom: 9 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: active || voice.state === 'recording' ? C.red : C.lineStrong }} />
-                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.teal }}>{mode === 'speak' ? 'Voice recall' : 'Written recall'}</Text>
+                <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.ink }}>{mode === 'speak' ? 'Voice recall' : 'Written recall'}</Text>
               </View>
-              <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.goldInk, backgroundColor: C.sand, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>{mm}</Text>
+              <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.body, backgroundColor: C.sand, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.sm, overflow: 'hidden', fontVariant: ['tabular-nums'] }}>{mm}</Text>
             </View>
 
             {mode === 'speak' && (
@@ -86,8 +90,9 @@ export default function Recall() {
             {sample && !recall && voice.state === 'idle' && (
               <Pressable
                 onPress={() => (tap('select'), (stopTyping.current = typeOut(SAMPLE_RECALL, (t) => patchSession({ recall: t }))))}
-                style={{ alignSelf: 'flex-start', backgroundColor: C.mint, borderWidth: 1, borderColor: C.mintBorder, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.mossDark }}>✨ Fill sample answer</Text>
+                style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.mint, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
+                <Ionicons name="sparkles-outline" size={14} color={C.moss} />
+                <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.moss }}>Fill sample answer</Text>
               </Pressable>
             )}
             <TextInput
@@ -98,20 +103,20 @@ export default function Recall() {
               onBlur={() => setActive(false)}
               multiline
               placeholder="“We started with…”"
-              placeholderTextColor="#A69A8A"
-              style={{ minHeight: mode === 'write' ? 220 : 110, backgroundColor: '#F6F3EB', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(90,66,37,0.1)', padding: 13, fontFamily: F.medium, fontSize: 14, lineHeight: 21, color: '#1C1C17', textAlignVertical: 'top' }}
+              placeholderTextColor={C.mutedLight}
+              style={[{ minHeight: mode === 'write' ? 220 : 110, backgroundColor: C.white, borderRadius: radius.lg, borderWidth: 1.5, borderColor: active ? color.border.focus : C.lineStrong, padding: 13, fontFamily: F.regular, fontSize: 16, lineHeight: 25, color: color.text.primary, textAlignVertical: 'top' }, autoDir(recall)]}
             />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.muted }}>{words} words</Text>
+              <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted, fontVariant: ['tabular-nums'] }}>{words} words</Text>
               <View style={{ flexDirection: 'row', gap: 14 }}>
                 {!aiEnabled && !sample && !recall && (
                   <Pressable onPress={() => (tap(), patchSession({ recall: DEMO.recallExample }))}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.leaf }}>Use example</Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.leaf }}>Use example</Text>
                   </Pressable>
                 )}
                 {!!recall && (
                   <Pressable onPress={() => (tap(), patchSession({ recall: '' }))}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.body }}>↺ Clear</Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.body }}>Clear</Text>
                   </Pressable>
                 )}
               </View>
@@ -122,10 +127,10 @@ export default function Recall() {
           {/* the button shows up once there's something to analyse */}
           {words >= 3 && voice.state === 'idle' ? (
             <Enter key="analyze">
-              <Btn title="Analyze & compare with lecture" icon="arrow-forward" kind="teal" pill onPress={() => router.push('/session/analyze')} />
+              <Btn title="Analyze & compare with lecture" icon="arrow-forward" kind="green" onPress={() => router.push('/session/analyze')} />
             </Enter>
           ) : null}
-          <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.body, textAlign: 'center' }}>Coco will highlight what you nailed and where memory gaps are.</Text>
+          <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.muted, textAlign: 'center' }}>Coco will highlight what you nailed and where memory gaps are.</Text>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

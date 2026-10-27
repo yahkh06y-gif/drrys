@@ -13,6 +13,8 @@ import { verifyGrouping, type GroupCheck } from '@/lib/ai';
 import { haptic, play, tap } from '@/lib/feedback';
 import { missedIdeas, ORGANIZE_MIN, sessionContext } from '@/lib/session';
 import { useApp } from '@/store';
+import { autoDir } from '@/design/rtl';
+import { color, palette, radius } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 type Item = { id: string; title: string; detail: string };
@@ -113,23 +115,23 @@ export default function Group() {
         <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
           <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled">
             <Enter>
-              <Pill text="30 SECONDS" />
+              <Pill text="30 seconds" />
               <T v="h2" style={{ marginTop: 6 }}>
                 Cover and recall
               </T>
               <T>The ideas are hidden. Look at each group’s name and write what was inside it, from memory.</T>
             </Enter>
             {used.map((g, gi) => (
-              <View key={gi} style={{ backgroundColor: C.white, borderRadius: 18, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, padding: 12, gap: 8 }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.teal }}>{g.name}</Text>
+              <View key={gi} style={{ backgroundColor: C.white, borderRadius: 18, borderWidth: 1, borderColor: C.line, padding: 12, gap: 8 }}>
+                <Text style={[{ fontFamily: F.semi, fontSize: 16, color: C.ink }, autoDir(g.name)]}>{g.name}</Text>
                 <TextInput
                   value={typed[gi] ?? ''}
                   onChangeText={(t) => setTyped((a) => a.map((x, k) => (k === gi ? t : x)))}
                   editable={!revealed}
                   multiline
                   placeholder="What was in this group?"
-                  placeholderTextColor="#A69A8A"
-                  style={{ minHeight: 56, fontFamily: F.medium, fontSize: 14, lineHeight: 20, color: C.ink, textAlignVertical: 'top' }}
+                  placeholderTextColor={C.mutedLight}
+                  style={[{ minHeight: 56, fontFamily: F.regular, fontSize: 16, lineHeight: 23, color: C.ink, textAlignVertical: 'top' }, autoDir(typed[gi])]}
                 />
                 {revealed &&
                   g.items.map((id) => {
@@ -145,7 +147,7 @@ export default function Group() {
             ))}
             {revealed && (
               <Enter>
-                <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.teal, textAlign: 'center' }}>
+                <Text style={{ fontFamily: F.semi, fontSize: 16, color: C.ink, textAlign: 'center', fontVariant: ['tabular-nums'] }}>
                   {got} of {total} came back from memory
                 </Text>
                 <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted, textAlign: 'center', marginTop: 2 }}>A rough check by matching words — you know best.</Text>
@@ -154,9 +156,9 @@ export default function Group() {
           </ScrollView>
           <View style={{ padding: 20 }}>
             {revealed ? (
-              <Btn title="On to the questions" icon="arrow-forward" kind="teal" pill onPress={() => router.replace('/session/active')} />
+              <Btn title="On to the questions" icon="arrow-forward" kind="green" onPress={() => router.replace('/session/active')} />
             ) : (
-              <Btn title="Reveal" iconLeft="eye" kind="teal" pill onPress={() => (play('success'), haptic('light'), setRevealed(true))} />
+              <Btn title="Reveal" iconLeft="eye" kind="green" onPress={() => (play('success'), haptic('light'), setRevealed(true))} />
             )}
           </View>
         </KeyboardAvoidingView>
@@ -170,7 +172,7 @@ export default function Group() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={{ padding: 20, gap: 14 }} keyboardShouldPersistTaps="handled" scrollEnabled={!dragging}>
           <Enter>
-            <Pill text="YOUR TURN" />
+            <Pill text="Your turn" />
             <T v="h2" style={{ marginTop: 6 }}>
               Group these in your own way
             </T>
@@ -184,7 +186,7 @@ export default function Group() {
             {loose.map((x) => (
               <DragChip key={x.id} label={x.title} active={picked === x.id} onTap={() => (tap('select'), setPicked(picked === x.id ? undefined : x.id))} onStart={() => setDragging(true)} onDrop={(px, py) => drop(x.id, px, py)} />
             ))}
-            {!loose.length && <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.leaf }}>All sorted</Text>}
+            {!loose.length && <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.leaf }}>All sorted</Text>}
           </View>
 
           {/* the groups */}
@@ -199,12 +201,11 @@ export default function Group() {
                 onPress={() => putIn(gi)}
                 style={{
                   zIndex: 1,
-                  backgroundColor: picked || dragging ? '#F0F8E6' : C.white,
-                  borderRadius: 18,
-                  borderWidth: picked || dragging ? 2 : 1,
+                  backgroundColor: picked || dragging ? color.feedback.correct.bg : C.white,
+                  borderRadius: radius.lg,
+                  borderWidth: 1.5,
                   borderStyle: picked || dragging ? 'dashed' : 'solid',
                   borderColor: picked || dragging ? C.mintBorder : C.lineStrong,
-                  borderBottomWidth: picked || dragging ? 2 : 4,
                   padding: 12,
                   gap: 8,
                 }}>
@@ -215,15 +216,15 @@ export default function Group() {
                     setCheck(undefined);
                   }}
                   placeholder={`Group ${gi + 1}: what connects them?`}
-                  placeholderTextColor="#A69A8A"
-                  style={{ fontFamily: F.bold, fontSize: 15, color: C.teal, paddingVertical: 4 }}
+                  placeholderTextColor={C.mutedLight}
+                  style={[{ fontFamily: F.semi, fontSize: 16, color: C.ink, paddingVertical: 4 }, autoDir(g.name)]}
                 />
                 {!!picked && (
                   <Pressable
                     onPress={() => putIn(gi)}
                     style={{ alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: C.leaf, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 7 }}>
                     <Ionicons name="add" size={14} color={C.white} />
-                    <Text numberOfLines={1} style={{ fontFamily: F.bold, fontSize: 12, color: C.white, maxWidth: 260 }}>
+                    <Text numberOfLines={1} style={{ fontFamily: F.medium, fontSize: 12, color: C.white, maxWidth: 260 }}>
                       Put “{byId(picked).title}” here
                     </Text>
                   </Pressable>
@@ -253,13 +254,11 @@ export default function Group() {
                       style={{
                         flexDirection: 'row',
                         gap: 8,
-                        backgroundColor: res.ok ? '#F0F8E6' : '#FFF6E3',
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: res.ok ? C.mintBorder : C.amber,
+                        backgroundColor: res.ok ? color.feedback.correct.bg : color.feedback.almost.bg,
+                        borderRadius: radius.md,
                         padding: 10,
                       }}>
-                      <Ionicons name={res.ok ? 'checkmark-circle' : 'help-circle'} size={18} color={res.ok ? C.leaf : C.orange} />
+                      <Ionicons name={res.ok ? 'checkmark-circle' : 'help-circle'} size={18} color={res.ok ? color.feedback.correct.icon : color.feedback.almost.icon} />
                       <Text style={{ flex: 1, fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.ink }}>{res.note}</Text>
                     </View>
                   </Enter>
@@ -273,13 +272,13 @@ export default function Group() {
               onPress={() => (tap(), setGroups((gs) => [...gs, { name: '', items: [] }]))}
               style={{ alignSelf: 'center', flexDirection: 'row', gap: 4, alignItems: 'center', backgroundColor: C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 6 }}>
               <Ionicons name="add" size={14} color={C.body} />
-              <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.body }}>Add a group</Text>
+              <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.body }}>Add a group</Text>
             </Pressable>
           )}
 
           {check && !!check.overall && (
             <Enter>
-              <Text style={{ fontFamily: F.bold, fontSize: 14, lineHeight: 21, color: C.teal, textAlign: 'center' }}>{check.overall}</Text>
+              <Text style={[{ fontFamily: F.medium, fontSize: 15, lineHeight: 22, color: C.teal, textAlign: 'center' }, autoDir(check.overall)]}>{check.overall}</Text>
             </Enter>
           )}
           {failed && (
@@ -294,8 +293,7 @@ export default function Group() {
               <Btn
                 title="Cover and recall"
                 icon="arrow-forward"
-                kind="teal"
-                pill
+                kind="green"
                 onPress={() => {
                   setTyped(used.map(() => ''));
                   setRevealed(false);
@@ -308,7 +306,7 @@ export default function Group() {
             </>
           ) : (
             <>
-              <Btn title="Ask Coco to check" iconLeft="checkmark-circle" kind="teal" pill loading={busy} disabled={!ready} onPress={submit} />
+              <Btn title="Ask Coco to check" iconLeft="checkmark-circle" kind="green" loading={busy} disabled={!ready} onPress={submit} />
               <Pressable onPress={() => router.replace('/session/active')} style={{ alignSelf: 'center' }}>
                 <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>Skip this step</Text>
               </Pressable>
@@ -358,21 +356,21 @@ function DragChip({ label, active, onTap, onStart, onDrop }: { label: string; ac
       <Animated.View
         style={[
           {
-            backgroundColor: active ? C.teal : C.white,
+            backgroundColor: active ? color.selected.bg : C.white,
             borderWidth: 1.5,
-            borderColor: active ? C.teal : C.lineStrong,
+            borderColor: active ? color.selected.border : C.lineStrong,
             borderBottomWidth: 3,
-            borderRadius: 14,
+            borderRadius: radius.md,
             paddingHorizontal: 12,
             paddingVertical: 8,
             maxWidth: '100%',
-            shadowColor: '#000',
+            shadowColor: palette.neutral900,
             shadowRadius: 8,
             shadowOffset: { width: 0, height: 4 },
           },
           st,
         ]}>
-        <Text style={{ fontFamily: F.bold, fontSize: 13, color: active ? C.white : C.ink }}>{label}</Text>
+        <Text style={[{ fontFamily: F.medium, fontSize: 14, color: active ? color.selected.text : C.ink }, autoDir(label)]}>{label}</Text>
       </Animated.View>
     </GestureDetector>
   );

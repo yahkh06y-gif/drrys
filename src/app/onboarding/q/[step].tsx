@@ -8,6 +8,7 @@ import { Btn, Choice, Enter, IconBtn, Screen, T } from '@/components/ui';
 import { OPTION_ICONS } from '@/art';
 import { FIELDS, SUBFIELDS, type Opt } from '@/lib/onboarding';
 import { useApp, type Profile } from '@/store';
+import { radius } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 type Q = {
@@ -112,7 +113,7 @@ export function QuestionView({ n, editing }: { n: number; editing: boolean }) {
           {q.title}
         </T>
         {q.subtitle && (
-          <T v="small" style={{ color: C_TITLE, fontFamily: 'SpaceGrotesk_700Bold', marginBottom: 22 }}>
+          <T v="bodySm" style={{ color: C.muted, marginBottom: 22 }}>
             {q.subtitle}
           </T>
         )}
@@ -140,9 +141,9 @@ export function QuestionView({ n, editing }: { n: number; editing: boolean }) {
             value={custom}
             onChangeText={setCustom}
             placeholder={q.other}
-            placeholderTextColor="#A69A8A"
+            placeholderTextColor={C.mutedLight}
             autoFocus
-            style={{ fontFamily: F.bold, fontSize: 17, color: C.ink, backgroundColor: C.white, borderWidth: 2, borderColor: C.brown, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14 }}
+            style={{ fontFamily: F.regular, fontSize: 17, color: C.ink, backgroundColor: C.white, borderWidth: 1.5, borderColor: C.lineStrong, borderRadius: radius.lg, paddingHorizontal: 16, paddingVertical: 14 }}
           />
         </Enter>
       )}
@@ -150,5 +151,4 @@ export function QuestionView({ n, editing }: { n: number; editing: boolean }) {
   );
 }
 
-const C_TITLE = '#7A9C3E';
 const OTHER = 'Other…';

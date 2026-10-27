@@ -2,7 +2,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COCO } from '@/art';
@@ -94,27 +94,27 @@ export default function Analyze() {
         <View style={{ flex: 1, justifyContent: 'center' }}>
           <Coco src={COCO.reading} size={190} />
         </View>
-        <View style={{ backgroundColor: C.white, borderRadius: 20, borderWidth: 1, borderColor: C.lineStrong, padding: 12, gap: 0 }}>
+        <View style={{ backgroundColor: C.white, borderRadius: 20, borderWidth: 1, borderColor: C.line, padding: 12, gap: 0 }}>
           {steps.map((label, i) => (
             <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }}>
               {i < done ? (
-                <Ionicons name="checkmark-circle" size={20} color={C.teal} />
+                <Ionicons name="checkmark-circle" size={20} color={C.leaf} />
               ) : i === done ? (
-                <Text style={{ fontFamily: F.bold, color: C.leaf, width: 20, textAlign: 'center' }}>•••</Text>
+                <ActivityIndicator size="small" color={C.leaf} style={{ width: 20 }} />
               ) : (
-                <Ionicons name="ellipse-outline" size={20} color={C.lineStrong} />
+                <Ionicons name="ellipse-outline" size={20} color={C.mutedLight} />
               )}
-              <Text style={{ fontFamily: F.bold, fontSize: 14, color: i <= done ? C.teal : C.muted }}>{label}</Text>
+              <Text style={{ fontFamily: i === done ? F.medium : F.regular, fontSize: 15, color: i <= done ? C.ink : C.muted }}>{label}</Text>
             </View>
           ))}
         </View>
         {err ? (
           <View style={{ marginTop: 14, gap: 8 }}>
-            <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.red, textAlign: 'center' }}>{err.startsWith('File problem') ? err.slice(0, 240) : `Coco couldn’t reach the cloud: ${err.slice(0, 120)}`}</Text>
-            <Btn title="Try again" kind="teal" pill onPress={() => setAttempt((a) => a + 1)} />
+            <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 18, color: C.orange, textAlign: 'center' }}>{err.startsWith('File problem') ? err.slice(0, 240) : `Coco couldn’t reach the cloud: ${err.slice(0, 120)}`}</Text>
+            <Btn title="Try again" kind="green" onPress={() => setAttempt((a) => a + 1)} />
           </View>
         ) : (
-          <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted, textAlign: 'center', marginTop: 14 }}>✓ Your notes and recall are safely stored.</Text>
+          <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.muted, textAlign: 'center', marginTop: 14 }}>Your notes and recall are safely stored.</Text>
         )}
       </View>
     </SafeAreaView>

@@ -12,6 +12,8 @@ import { haptic, play, tap } from '@/lib/feedback';
 import { cardContext } from '@/lib/session';
 import { makeHookPicture, savePicture, youcamEnabled } from '@/lib/youcam';
 import { useApp } from '@/store';
+import { autoDir } from '@/design/rtl';
+import { color, radius } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 export type HookTarget = {
@@ -105,7 +107,7 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
   return (
     <Modal visible transparent animationType="slide" onRequestClose={() => (inPic ? setPhase('write') : onClose())}>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,36,28,0.35)' }}>
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: color.overlay.scrim }}>
           <View style={{ backgroundColor: C.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 18, gap: 12, maxHeight: '92%' }}>
             {/* title */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -114,7 +116,7 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
                   <Ionicons name="arrow-back" size={22} color={C.teal} />
                 </Pressable>
               )}
-              <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 19, color: C.teal }}>{inPic ? 'Make a clay picture' : slipping ? 'This one keeps slipping' : card.mnemonic ? 'Your memory hook' : 'Make a memory hook'}</Text>
+              <Text style={{ flex: 1, fontFamily: F.semi, fontSize: 19, color: C.ink }}>{inPic ? 'Make a clay picture' : slipping ? 'This one keeps slipping' : card.mnemonic ? 'Your memory hook' : 'Make a memory hook'}</Text>
               <Pressable hitSlop={12} onPress={onClose}>
                 <Ionicons name="close" size={22} color={C.muted} />
               </Pressable>
@@ -122,8 +124,8 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
 
             <ScrollView ref={scroll} contentContainerStyle={{ gap: 16, paddingBottom: 6 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               {/* what it is for */}
-              <View style={{ backgroundColor: '#F0F8E6', borderRadius: 14, borderWidth: 1, borderColor: C.mintBorder, padding: 12, gap: 4 }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.ink }}>{card.q}</Text>
+              <View style={{ backgroundColor: color.feedback.correct.bg, borderRadius: 14, borderWidth: 1, borderColor: C.mintBorder, padding: 12, gap: 4 }}>
+                <Text style={[{ fontFamily: F.medium, fontSize: 14, lineHeight: 20, color: C.ink }, autoDir(card.q)]}>{card.q}</Text>
                 <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.teal }}>{card.a}</Text>
               </View>
 
@@ -136,12 +138,12 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
                     onChangeText={setText}
                     multiline
                     placeholder="My hook is…"
-                    placeholderTextColor="#A69A8A"
+                    placeholderTextColor={C.mutedLight}
                     style={{ minHeight: 76, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, fontFamily: F.medium, fontSize: 15, color: C.ink, textAlignVertical: 'top' }}
                   />
                   {ideas.length > 0 ? (
                     <View style={{ gap: 6 }}>
-                      <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.muted }}>COCO’S IDEAS: TAP ONE, THEN MAKE IT YOURS</Text>
+                      <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>Coco’s ideas: tap one, then make it yours</Text>
                       {ideas.map((h, k) => (
                         <Pressable key={k} onPress={() => (tap('select'), setText(h))} style={{ backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 10 }}>
                           <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.ink }}>{h}</Text>
@@ -151,14 +153,14 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
                   ) : (
                     <Pressable onPress={getIdeas} disabled={busy || !tried} style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', opacity: tried ? 1 : 0.55 }}>
                       {busy ? <ActivityIndicator size="small" color={C.teal} /> : <Ionicons name="bulb-outline" size={14} color={C.goldInk} />}
-                      <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.goldInk }}>{tried ? 'Need ideas? Ask Coco' : 'Try one yourself first, then Coco can add ideas'}</Text>
+                      <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.goldInk }}>{tried ? 'Need ideas? Ask Coco' : 'Try one yourself first, then Coco can add ideas'}</Text>
                     </Pressable>
                   )}
                 </View>
 
                 {!!card.mnemonicImg && !pic && (
                   <View style={{ gap: 4 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.muted }}>YOUR SAVED PICTURE</Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>Your saved picture</Text>
                     <Image source={{ uri: card.mnemonicImg }} style={{ width: '100%', aspectRatio: 1472 / 1104, borderRadius: 12, backgroundColor: C.sand }} contentFit="contain" />
                   </View>
                 )}
@@ -168,7 +170,7 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
               {inPic && (
                 <View style={{ gap: 12 }}>
                   <View style={{ backgroundColor: C.white, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 12, gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.muted }}>THE PICTURE IS MADE FROM YOUR HOOK</Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>The picture is made from your hook</Text>
                     {!!text.trim() && <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: C.ink }}>{text.trim()}</Text>}
                     <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Not what you meant? Go back and change your words.</Text>
                   </View>
@@ -177,11 +179,11 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
                       <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                         <Pressable onPress={makePic} disabled={making || !canPic || tries >= 3} style={{ ...chip(true), opacity: !canPic || tries >= 3 ? 0.5 : 1 }}>
                           {making ? <ActivityIndicator size="small" color={C.white} /> : <Ionicons name="image-outline" size={15} color={C.white} />}
-                          <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.white }}>{making ? 'Shaping it in clay…' : pic ? 'Try another' : 'Make my picture'}</Text>
+                          <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.white }}>{making ? 'Shaping it in clay…' : pic ? 'Try another' : 'Make my picture'}</Text>
                         </Pressable>
                         <Pressable onPress={() => (tap('select'), setWithCoco((v) => !v))} style={{ ...chip(false), backgroundColor: withCoco ? C.leaf : C.sand }}>
                           <Ionicons name={withCoco ? 'checkmark-circle' : 'ellipse-outline'} size={14} color={withCoco ? C.white : C.body} />
-                          <Text style={{ fontFamily: F.bold, fontSize: 12, color: withCoco ? C.white : C.body }}>Coco in it</Text>
+                          <Text style={{ fontFamily: F.medium, fontSize: 12, color: withCoco ? C.white : C.body }}>Coco in it</Text>
                         </Pressable>
                       </View>
                       {making && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>This takes about 20 seconds.</Text>}
@@ -198,7 +200,7 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
                         <View style={{ gap: 6 }}>
                           <Image source={{ uri: pic }} style={{ width: '100%', aspectRatio: 1472 / 1104, borderRadius: 12, backgroundColor: C.sand }} contentFit="cover" />
                           <Pressable onPress={() => (tap('select'), setPic(undefined))} style={{ alignSelf: 'flex-end', paddingHorizontal: 4, paddingVertical: 2 }}>
-                            <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.muted }}>Remove picture</Text>
+                            <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Remove picture</Text>
                           </Pressable>
                         </View>
                       )}
@@ -212,13 +214,13 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
 
             <View style={{ gap: 8 }}>
               {!inPic && youcamEnabled && canPic && (
-                <Pressable onPress={goPicture} style={{ height: 46, borderRadius: 23, borderWidth: 2, borderColor: C.teal, backgroundColor: C.white, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.teal }}>Want a picture of it? Continue</Text>
+                <Pressable onPress={goPicture} accessibilityRole="button" style={({ pressed }) => ({ height: 48, borderRadius: radius.lg, borderWidth: 1, borderBottomWidth: 4, borderColor: C.lineStrong, backgroundColor: C.white, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', transform: [{ translateY: pressed ? 2 : 0 }] })}>
+                  <Text style={{ fontFamily: F.semi, fontSize: 15, color: C.teal }}>Want a picture of it? Continue</Text>
                   <Ionicons name="arrow-forward" size={18} color={C.teal} />
                 </Pressable>
               )}
-              <Pressable onPress={plant} disabled={!canSave || busy} style={{ height: 52, borderRadius: 26, backgroundColor: canSave ? C.teal : C.lineStrong, alignItems: 'center', justifyContent: 'center' }}>
-                {busy ? <ActivityIndicator color={C.white} /> : <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.white }}>{card.mnemonic ? 'Update my hook' : 'Save my hook'}</Text>}
+              <Pressable onPress={plant} disabled={!canSave || busy} accessibilityRole="button" accessibilityState={{ disabled: !canSave || busy }} style={({ pressed }) => ({ height: 52, borderRadius: radius.lg, backgroundColor: canSave ? C.green : color.action.disabled, borderBottomWidth: canSave ? 4 : 0, borderColor: C.greenShadow, alignItems: 'center', justifyContent: 'center', transform: [{ translateY: pressed && canSave ? 2 : 0 }] })}>
+                {busy ? <ActivityIndicator color={C.white} /> : <Text style={{ fontFamily: F.semi, fontSize: 16, color: canSave ? C.white : color.action.disabledText }}>{card.mnemonic ? 'Update my hook' : 'Save my hook'}</Text>}
               </Pressable>
               <Pressable onPress={() => (inPic ? setPhase('write') : onClose())} hitSlop={10} style={{ alignSelf: 'center' }}>
                 <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>{inPic ? '← Back to my hook' : 'Not now'}</Text>
@@ -244,10 +246,10 @@ function Step({ n, title, note }: { n: number; title: string; note?: string }) {
           justifyContent: 'center',
         }}
       >
-        <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.white }}>{n}</Text>
+        <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.white }}>{n}</Text>
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.teal }}>{title}</Text>
+        <Text style={{ fontFamily: F.semi, fontSize: 14, color: C.teal }}>{title}</Text>
         {!!note && (
           <Text
             style={{

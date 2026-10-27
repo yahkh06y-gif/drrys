@@ -13,6 +13,7 @@ import { Pressable, Text, View } from 'react-native';
 import Animated, { cancelAnimation, Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { color, radius } from '@/design/tokens';
 import { COCO } from '@/art';
 import { Btn, Enter, OnbBar } from '@/components/ui';
 import { useBack } from '@/lib/back';
@@ -89,8 +90,8 @@ export default function Plan() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 18 }}>
         <Image source={promised ? COCO.bell : COCO.classic} style={{ width: 56, height: 70 }} contentFit="contain" />
         <Enter key={`${step}${promised}`} style={{ flex: 1 }}>
-          <View style={{ backgroundColor: C.white, borderRadius: 14, borderWidth: 1, borderColor: C.line, paddingHorizontal: 12, paddingVertical: 10 }}>
-            <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.teal }}>
+          <View style={{ backgroundColor: C.white, borderRadius: radius.lg, borderWidth: 1.5, borderColor: C.lineStrong, paddingHorizontal: 12, paddingVertical: 10 }}>
+            <Text style={{ fontFamily: F.medium, fontSize: 16, lineHeight: 22, color: C.teal }}>
               {promised
                 ? `I’ll ping you at ${hourLabel(hour)}. 🌱`
                 : step === 0
@@ -116,7 +117,7 @@ export default function Plan() {
           {GOALS.map((g) => (
             <Option key={g.v} big={`${g.v} days`} small={g.label} on={goal === g.v} onPress={() => setGoal(g.v)} />
           ))}
-          <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted, textAlign: 'center', marginTop: 4 }}>Short daily sessions beat long cramming sessions.</Text>
+          <Text style={{ fontFamily: F.regular, fontSize: 14, color: C.muted, textAlign: 'center', marginTop: 4 }}>Short daily sessions beat long cramming sessions.</Text>
         </Enter>
       )}
 
@@ -130,14 +131,14 @@ export default function Plan() {
                   key={t.h}
                   disabled={promised}
                   onPress={() => (tap('select'), setHour(t.h))}
-                  style={{ flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 14, borderWidth: 2, borderBottomWidth: on ? 5 : 2, borderColor: C.brown, backgroundColor: on ? C.cardSelected : C.card }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.teal }}>{t.label}</Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.teal }}>{hourLabel(t.h)}</Text>
+                  style={{ flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: radius.lg, borderWidth: 1.5, borderBottomWidth: 4, borderColor: on ? color.selected.border : C.lineStrong, backgroundColor: on ? C.cardSelected : C.card }}>
+                  <Text style={{ fontFamily: F.semi, fontSize: 15, color: on ? color.selected.text : C.ink }}>{t.label}</Text>
+                  <Text style={{ fontFamily: F.regular, fontSize: 13, color: on ? color.selected.text : C.muted, fontVariant: ['tabular-nums'] }}>{hourLabel(t.h)}</Text>
                 </Pressable>
               );
             })}
           </View>
-          <Text style={{ fontFamily: F.bold, fontSize: 22, lineHeight: 30, color: C.ink, textAlign: 'center' }}>
+          <Text style={{ fontFamily: F.medium, fontSize: 22, lineHeight: 31, color: C.ink, textAlign: 'center', letterSpacing: -0.3 }}>
             “I’ll water my trees every day at <Text style={{ color: C.teal }}>{hourLabel(hour)}</Text>, <Text style={{ color: C.teal }}>{minutes} minutes</Text> per subject, for{' '}
             <Text style={{ color: C.teal }}>{goal} days</Text> in a row.”
           </Text>
@@ -156,7 +157,7 @@ export default function Plan() {
           <Btn title="continue" mono onPress={finish} />
         ) : (
           <Pressable onPress={notNow} style={{ alignSelf: 'center', padding: 8 }}>
-            <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>Not now</Text>
+            <Text style={{ fontFamily: F.medium, fontSize: 15, color: C.muted }}>Not now</Text>
           </Pressable>
         )
       )}
@@ -168,9 +169,9 @@ function Option({ big, small, on, onPress }: { big: string; small: string; on: b
   return (
     <Pressable
       onPress={() => (tap('select'), onPress())}
-      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 16, borderRadius: 16, borderWidth: 2, borderBottomWidth: on ? 5 : 2, borderColor: C.brown, backgroundColor: on ? C.cardSelected : C.card }}>
-      <Text style={{ fontFamily: F.bold, fontSize: 22, color: C.teal }}>{big}</Text>
-      <Text style={{ fontFamily: F.bold, fontSize: 15, color: on ? C.green : C.muted }}>{small}</Text>
+      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 16, borderRadius: radius.lg, borderWidth: 1.5, borderBottomWidth: 4, borderColor: on ? color.selected.border : C.lineStrong, backgroundColor: on ? C.cardSelected : C.card }}>
+      <Text style={{ fontFamily: F.semi, fontSize: 22, color: on ? color.selected.text : C.ink, fontVariant: ['tabular-nums'] }}>{big}</Text>
+      <Text style={{ fontFamily: F.medium, fontSize: 15, color: on ? color.selected.text : C.muted }}>{small}</Text>
     </Pressable>
   );
 }
@@ -195,8 +196,8 @@ function HoldToPromise({ done, onDone }: { done: boolean; onDone: () => void }) 
   return (
     <Pressable onPressIn={start} onPressOut={stop} accessibilityRole="button" accessibilityLabel="Hold to promise">
       <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: C.white, borderWidth: 4, borderColor: C.teal, alignItems: 'center', justifyContent: 'center' }}>
-        <Animated.View style={[{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#5FB8DA' }, water]} />
-        <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.teal, textAlign: 'center' }}>{done ? 'Promised! 🌱' : 'Hold to\npromise 🌱'}</Text>
+        <Animated.View style={[{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: color.game.water }, water]} />
+        <Text style={{ fontFamily: F.semi, fontSize: 18, color: C.teal, textAlign: 'center' }}>{done ? 'Promised! 🌱' : 'Hold to\npromise 🌱'}</Text>
       </View>
     </Pressable>
   );

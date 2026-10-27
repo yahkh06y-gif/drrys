@@ -8,6 +8,8 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { autoDir } from '@/design/rtl';
+import { color, radius, shadow } from '@/design/tokens';
 import { CocoChatSheet } from '@/components/AskCoco';
 import { HookSheet } from '@/components/HookSheet';
 import { Enter, IconBtn, Pill, SessionHeader, T } from '@/components/ui';
@@ -146,10 +148,10 @@ export default function Cards() {
       )}
       <View style={{ flex: 1, padding: 20, gap: 14 }}>
         <Enter>
-          <Pill text={review ? 'SPACED REPETITION' : 'MADE FROM TODAY’S SESSION'} bg={C.sand} border={C.line} fg={C.goldInk} />
+          <Pill text={review ? 'Spaced repetition' : 'Made from today’s session'} bg={C.sand} border={C.sand} fg={C.body} />
           <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 6 }}>
             <T v="h2">Lock in what matters</T>
-            {!!cards.length && <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.muted }}>{i + 1} / {cards.length}</Text>}
+            {!!cards.length && <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted, fontVariant: ['tabular-nums'] }}>{i + 1} / {cards.length}</Text>}
           </View>
         </Enter>
 
@@ -160,7 +162,7 @@ export default function Cards() {
           </View>
         ) : !card ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.teal }}>No cards due — your memory is fresh </Text>
+            <Text style={{ fontFamily: F.semi, fontSize: 17, color: C.ink }}>No cards due — your memory is fresh </Text>
             <Pressable onPress={finish}>
               <Text style={{ fontFamily: F.bold, color: C.leaf }}>Continue</Text>
             </Pressable>
@@ -169,22 +171,22 @@ export default function Cards() {
           <>
             <Pressable onPress={reveal} style={{ height: 300 }}>
               <Animated.View style={[cardStyle, front]}>
-                <Pill text={card.reps ? 'REVIEW' : 'NEW'} bg="#FDE7C8" border={C.amber} fg="#8A4B0F" />
-                <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.muted, marginTop: 14 }}>QUESTION</Text>
-                <Text style={{ fontFamily: F.bold, fontSize: 21, lineHeight: 28, color: C.ink, marginTop: 4 }}>{card.q}</Text>
+                <Pill text={card.reps ? 'Review' : 'New'} bg={color.feedback.almost.picked} border={color.feedback.almost.picked} fg={color.feedback.almost.text} />
+                <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted, marginTop: 14 }}>Question</Text>
+                <Text style={[{ fontFamily: F.medium, fontSize: 21, lineHeight: 29, color: C.ink, marginTop: 4, letterSpacing: -0.2 }, autoDir(card.q)]}>{card.q}</Text>
                 <View style={{ flex: 1 }} />
                 <View style={{ alignItems: 'center', gap: 4 }}>
                   <Ionicons name="hand-left-outline" size={20} color={C.leaf} />
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.leaf }}>{revealed ? 'Tap to see the answer again' : 'Tap card to reveal answer'}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.leaf }}>{revealed ? 'Tap to see the answer again' : 'Tap card to reveal answer'}</Text>
                   {!revealed && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Recall it first, then check.</Text>}
                 </View>
               </Animated.View>
-              <Animated.View style={[cardStyle, back, { backgroundColor: '#F0F8E6', borderColor: C.mintBorder }]}>
-                <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.leaf }}>ANSWER</Text>
-                <Text style={{ fontFamily: F.bold, fontSize: 20, lineHeight: 28, color: C.teal, marginTop: 6 }}>{card.a}</Text>
+              <Animated.View style={[cardStyle, back, { backgroundColor: color.feedback.correct.bg, borderColor: C.mintBorder }]}>
+                <Text style={{ fontFamily: F.medium, fontSize: 13, color: color.feedback.correct.text }}>Answer</Text>
+                <Text style={[{ fontFamily: F.medium, fontSize: 20, lineHeight: 28, color: C.ink, marginTop: 6 }, autoDir(card.a)]}>{card.a}</Text>
                 <View style={{ flex: 1 }} />
                 <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted, textAlign: 'center' }}>How well did you remember?</Text>
-                <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.leaf, textAlign: 'center', marginTop: 4 }}>Tap to see the question again</Text>
+                <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.leaf, textAlign: 'center', marginTop: 4 }}>Tap to see the question again</Text>
               </Animated.View>
             </Pressable>
 
@@ -195,30 +197,30 @@ export default function Cards() {
                   onPress={() => (tap('select'), setAsk(true))}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
                   <Ionicons name="chatbubble-ellipses-outline" size={15} color={C.teal} />
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.teal }}>Ask Coco</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.teal }}>Ask Coco</Text>
                 </Pressable>
                 )}
                 <Pressable
                   onPress={() => (tap('select'), setHook({ card, go: () => {} }))}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.white, borderWidth: 1, borderColor: C.amber, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
                   <Ionicons name="bulb-outline" size={15} color={C.goldInk} />
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.goldInk }}>{card.mnemonic ? 'My memory hook' : 'Memory hook'}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.goldInk }}>{card.mnemonic ? 'My memory hook' : 'Memory hook'}</Text>
                 </Pressable>
               </View>
             )}
             {/* the ratings show up once the answer has been seen */}
             {revealed && (
               <Enter key="rate" style={{ gap: 14 }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.teal, textAlign: 'center' }}>Rate your answer</Text>
+                <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.ink, textAlign: 'center' }}>Rate your answer</Text>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                 {RATINGS.map((x) => (
                   <Pressable
                     key={x.r}
                     onPress={() => rate(x.r)}
-                    style={{ flex: 1, alignItems: 'center', gap: 2, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, borderRadius: 14, paddingVertical: 10 }}>
+                    style={{ flex: 1, alignItems: 'center', gap: 2, backgroundColor: C.white, borderWidth: 1.5, borderColor: C.lineStrong, borderBottomWidth: 4, borderRadius: radius.lg, paddingVertical: 10 }}>
                     <Image source={x.icon} style={{ width: 30, height: 30, marginBottom: 2 }} contentFit="contain" />
-                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.ink }}>{x.label}</Text>
-                    <Text style={{ fontFamily: F.medium, fontSize: 9, color: C.muted }}>{x.sub}</Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.ink }}>{x.label}</Text>
+                    <Text style={{ fontFamily: F.regular, fontSize: 11, color: C.muted }}>{x.sub}</Text>
                   </Pressable>
                 ))}
                 </View>
@@ -228,8 +230,8 @@ export default function Cards() {
         )}
       </View>
       {toast && (
-        <View pointerEvents="none" style={{ position: 'absolute', left: 16, right: 16, top: 70, backgroundColor: C.teal, borderRadius: 16, padding: 12 }}>
-          <Text style={{ fontFamily: F.bold, fontSize: 13, lineHeight: 19, color: C.white, textAlign: 'center' }}>⬆️ {toast}</Text>
+        <View pointerEvents="none" style={{ position: 'absolute', left: 16, right: 16, top: 70, backgroundColor: C.ink, borderRadius: radius.lg, padding: 12, ...shadow.float }}>
+          <Text style={{ fontFamily: F.medium, fontSize: 14, lineHeight: 20, color: C.white, textAlign: 'center' }}>{toast}</Text>
         </View>
       )}
       <HookSheet
@@ -302,9 +304,9 @@ const cardStyle = {
   position: 'absolute',
   inset: 0,
   backgroundColor: C.white,
-  borderRadius: 24,
+  borderRadius: radius.xl,
   borderWidth: 1.5,
   borderColor: C.lineStrong,
-  borderBottomWidth: 5,
+  borderBottomWidth: 4,
   padding: 20,
 } as const;

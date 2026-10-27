@@ -7,6 +7,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } fro
 
 import { Motion } from '@/components/Motion';
 import { play } from '@/lib/feedback';
+import { color } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 export default function Splash() {
@@ -35,7 +36,7 @@ export default function Splash() {
   const titleA = useAnimatedStyle(() => ({ opacity: title.value, transform: [{ translateY: (1 - title.value) * 12 }] }));
 
   return (
-    <Pressable style={{ flex: 1, backgroundColor: '#2F8476' }} onPress={next}>
+    <Pressable style={{ flex: 1, backgroundColor: color.bg.onboarding }} onPress={next}>
       <Motion video="splash" loop={false} playing={rolling} onEnd={next} style={{ flex: 1 }} />
       <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: height * 0.7, left: 0, right: 0, alignItems: 'center' }, titleA]}>
         <Text style={{ fontFamily: F.bold, fontSize: 64, color: C.white, letterSpacing: 1 }}>Drrys</Text>

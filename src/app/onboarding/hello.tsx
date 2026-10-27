@@ -71,12 +71,12 @@ export default function Hello() {
               value={name}
               onChangeText={setName}
               placeholder="Your name"
-              placeholderTextColor="#A69A8A"
+              placeholderTextColor={C.mutedLight}
               autoFocus
               autoCapitalize="words"
               returnKeyType="done"
               onSubmitEditing={next}
-              style={{ width: 240, textAlign: 'center', fontFamily: F.bold, fontSize: 18, color: C.ink, backgroundColor: C.white, borderWidth: 1.5, borderColor: C.teal, borderRadius: 14, paddingVertical: 10 }}
+              style={{ width: 240, textAlign: 'center', fontFamily: F.medium, fontSize: 18, color: C.ink, backgroundColor: C.white, borderWidth: 1.5, borderColor: C.teal, borderRadius: 16, paddingVertical: 12 }}
             />
           </Enter>
         )}

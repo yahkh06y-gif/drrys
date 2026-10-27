@@ -6,6 +6,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedReaction, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { color } from '@/design';
+import { palette } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 const H = 58; // one slot: item height 50 + gap 8
@@ -100,7 +101,7 @@ function Row({ id, label, pos, slot0, n, locked, mark, onEnd }: { id: number; la
           borderWidth: 1.5,
           borderColor: mark === undefined ? C.lineStrong : mark ? C.mintBorder : color.feedback.wrong.border,
           borderBottomWidth: 3,
-          shadowColor: '#000',
+          shadowColor: palette.neutral900,
           shadowRadius: 8,
           shadowOffset: { width: 0, height: 4 },
         },
@@ -111,7 +112,7 @@ function Row({ id, label, pos, slot0, n, locked, mark, onEnd }: { id: number; la
           <Ionicons name={locked ? (mark ? 'checkmark-circle' : 'close-circle') : 'reorder-three'} size={26} color={locked ? (mark ? C.leaf : C.orange) : C.muted} />
         </View>
       </GestureDetector>
-      <Text numberOfLines={2} style={{ flex: 1, fontFamily: F.bold, fontSize: 14, lineHeight: 18, color: C.ink, paddingRight: 12 }}>
+      <Text numberOfLines={2} style={{ flex: 1, fontFamily: F.medium, fontSize: 15, lineHeight: 20, color: C.ink, paddingEnd: 12 }}>
         {label}
       </Text>
     </Animated.View>

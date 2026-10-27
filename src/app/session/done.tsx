@@ -14,6 +14,7 @@ import { haptic, play } from '@/lib/feedback';
 import { cloudEnabled } from '@/lib/cloud';
 import { completeReferral } from '@/lib/together';
 import { useApp } from '@/store';
+import { color, radius, shadow } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 /** 0 → target over `ms`, starting after `delay` (a light tick on the way). */
@@ -80,7 +81,7 @@ export default function Done() {
         <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 24 }} showsVerticalScrollIndicator={false}>
           <View style={{ flex: 1 }}>
             <Enter>
-              <Text style={{ fontFamily: F.bold, fontSize: 38, lineHeight: 40, color: C.teal, textAlign: 'center' }}>Coco is proud of today’s work.</Text>
+              <Text accessibilityRole="header" style={{ fontFamily: F.semi, fontSize: 34, lineHeight: 40, letterSpacing: -0.7, color: C.teal, textAlign: 'center' }}>Coco is proud of today’s work.</Text>
             </Enter>
             {/* the middle is left free so Coco stays in view */}
             <View style={{ flex: 1, minHeight: Math.max(120, height * 0.32) }} />
@@ -96,7 +97,7 @@ export default function Done() {
               </Enter>
             </View>
             <View style={{ height: 14 }} />
-            <Btn title="Return to forest" icon="arrow-forward" kind="teal" sfx="grow" onPress={leave} />
+            <Btn title="Return to forest" icon="arrow-forward" kind="green" sfx="grow" onPress={leave} />
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -106,13 +107,13 @@ export default function Done() {
 
 function Box({ icon, stars, value, unit, label, gold }: { icon?: keyof typeof Ionicons.glyphMap; stars?: boolean; value: string; unit?: string; label: string; gold?: boolean }) {
   return (
-    <View style={{ backgroundColor: gold ? '#FDE9C4' : 'rgba(239,231,214,0.95)', borderRadius: 18, borderBottomWidth: 4, borderColor: 'rgba(90,66,37,0.2)', padding: 10, alignItems: 'center', gap: 2 }}>
-      {stars ? <XpStars size={20} /> : icon ? <Ionicons name={icon} size={18} color={gold ? C.orange : C.teal} /> : null}
-      <Text style={{ fontFamily: F.bold, fontSize: 20, color: C.teal }}>
+    <View style={{ backgroundColor: gold ? color.game.reward : color.bg.raised, borderRadius: radius.lg, padding: 10, alignItems: 'center', gap: 2, ...shadow.lift }}>
+      {stars ? <XpStars size={20} /> : icon ? <Ionicons name={icon} size={18} color={gold ? color.game.streak : C.teal} /> : null}
+      <Text style={{ fontFamily: F.semi, fontSize: 20, color: C.ink, fontVariant: ['tabular-nums'] }}>
         {value}
-        {unit ? <Text style={{ fontSize: 11 }}> {unit}</Text> : null}
+        {unit ? <Text style={{ fontSize: 12, fontFamily: F.medium, color: C.muted }}> {unit}</Text> : null}
       </Text>
-      <Text style={{ fontFamily: F.medium, fontSize: 10, color: C.muted, textAlign: 'center' }}>{label}</Text>
+      <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted, textAlign: 'center' }}>{label}</Text>
     </View>
   );
 }

@@ -17,6 +17,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { palette } from '@/design/tokens';
 import { COCO_ON_TREE, COCO_TREE, TREE, type CocoClip, TREE_ASPECT, TREE_MAX_BRANCHES, TREE_STAGES, type BranchAnchor } from '@/art';
 import type { Chapter } from '@/store';
 import { haptic, play } from '@/lib/feedback';
@@ -127,7 +128,7 @@ export function KnowledgeTree({
                   ? { right: width - a.l * width + 2, top: a.cy * height - 13 }
                   : { left: a.r * width + 2, top: a.cy * height - 13 }),
               zIndex: on ? 2 : 1,
-              backgroundColor: on ? C.teal : '#FDFCF7',
+              backgroundColor: on ? C.teal : palette.neutral25,
               borderWidth: 2,
               borderColor: on ? C.teal : C.barkSoft,
               borderBottomWidth: 4,
@@ -135,7 +136,7 @@ export function KnowledgeTree({
               paddingHorizontal: 8,
               paddingVertical: 2,
             }}>
-            <Text numberOfLines={1} style={{ fontFamily: F.bold, fontSize: 12, color: on ? C.white : C.ink }}>
+            <Text numberOfLines={1} style={{ fontFamily: F.medium, fontSize: 12, color: on ? C.white : C.ink }}>
               Ch {i + 1}
               {ch.mastery >= 1 ? ' ✓' : ''}
             </Text>

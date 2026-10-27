@@ -10,7 +10,7 @@ import { Btn, Coco, T } from '@/components/ui';
 import { tap } from '@/lib/feedback';
 
 import { autoDir, dirIcon } from './rtl';
-import { color, depth, font, layout, radius, S, size, type Space, type Tone } from './tokens';
+import { color, depth, font, layout, radius, S, shadow, size, type Space, type Tone } from './tokens';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -70,27 +70,27 @@ type SurfaceKind = 'card' | 'bark' | 'sunken' | 'raised' | 'flat' | Tone;
 
 /**
  * Anything that sits on the page as a block.
- *   card   : the white clay card with a soft bottom edge (default)
- *   bark   : the bold brown-edged game card (tree, stats, session cards)
- *   sunken : a well inside a card (inputs, quotes, the model answer)
- *   raised : paper-colored, for dialogs and sheets
- *   flat   : a hairline outline, no depth
+ *   card   : a card you read: white, one hairline, no edge, no shadow (default)
+ *   bark   : the tree's bark-edged game card (the one card that keeps a bottom edge)
+ *   sunken : a well inside a card (quotes, the model answer)
+ *   raised : above the page (dialogs, popovers): paper with a soft wide shadow
+ *   flat   : the same as card, with smaller corners
  *   correct / almost / wrong / info : tinted with that answer state
  */
 export function Surface({ kind = 'card', pad = 4, gap, children, style }: { kind?: SurfaceKind; pad?: Space; gap?: Space; children?: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   const base: ViewStyle = { padding: S[pad], gap: gap === undefined ? undefined : S[gap] };
   const look: ViewStyle =
     kind === 'card'
-      ? { backgroundColor: color.surface.card, borderRadius: radius.xxl, borderWidth: 1, borderColor: color.border.strong, borderBottomWidth: depth.md }
+      ? { backgroundColor: color.surface.card, borderRadius: radius.xl, borderWidth: 1, borderColor: color.border.default }
       : kind === 'bark'
         ? { backgroundColor: color.surface.cardWarm, borderRadius: radius.lg, borderWidth: 2, borderColor: color.border.bark, borderBottomWidth: depth.lg }
         : kind === 'sunken'
-          ? { backgroundColor: color.bg.sunken, borderRadius: radius.lg, borderWidth: 1, borderColor: color.border.subtle }
+          ? { backgroundColor: color.bg.sunken, borderRadius: radius.lg }
           : kind === 'raised'
-            ? { backgroundColor: color.bg.raised, borderRadius: radius.xxl, borderWidth: 2, borderColor: color.border.clay }
+            ? { backgroundColor: color.bg.raised, borderRadius: radius.xxl, ...shadow.float }
             : kind === 'flat'
               ? { backgroundColor: color.surface.card, borderRadius: radius.lg, borderWidth: 1, borderColor: color.border.default }
-              : { backgroundColor: color.feedback[kind].bg, borderRadius: radius.lg, borderWidth: 2, borderColor: color.feedback[kind].border, borderBottomWidth: depth.md };
+              : { backgroundColor: color.feedback[kind].bg, borderRadius: radius.lg };
   return <View style={[base, look, style]}>{children}</View>;
 }
 
@@ -125,21 +125,22 @@ export function Feedback({ tone, title, children, style }: { tone: Tone; title?:
  */
 export function answerTile(state: 'idle' | 'picked' | 'correct' | 'almost' | 'wrong'): ViewStyle {
   if (state === 'idle') return { backgroundColor: color.surface.card, borderColor: color.border.strong };
-  if (state === 'picked') return { backgroundColor: color.feedback.correct.picked, borderColor: color.action.leaf };
+  if (state === 'picked') return { backgroundColor: color.selected.bg, borderColor: color.selected.border };
   return { backgroundColor: color.feedback[state].bg, borderColor: color.feedback[state].border };
 }
 
 /* ---------- Badges ---------- */
 type BadgeTone = 'brand' | 'gold' | 'neutral' | 'dark' | Tone;
+// a badge is a tint and a word: no outline (the tint already separates it from the card)
 const BADGE: Record<BadgeTone, { bg: string; fg: string; border: string }> = {
-  brand: { bg: color.feedback.correct.bg, fg: color.feedback.correct.text, border: color.feedback.correct.border },
-  correct: { bg: color.feedback.correct.bg, fg: color.feedback.correct.text, border: color.feedback.correct.border },
-  almost: { bg: color.feedback.almost.bg, fg: color.feedback.almost.text, border: color.feedback.almost.border },
-  wrong: { bg: color.feedback.wrong.bg, fg: color.feedback.wrong.text, border: color.feedback.wrong.border },
-  info: { bg: color.feedback.info.bg, fg: color.feedback.info.text, border: color.feedback.info.border },
-  gold: { bg: color.game.reward, fg: color.text.label, border: color.game.xp },
-  neutral: { bg: color.surface.muted, fg: color.text.body, border: color.border.default },
-  dark: { bg: color.action.teal, fg: color.text.onAction, border: color.action.teal },
+  brand: { bg: color.feedback.correct.picked, fg: color.feedback.correct.text, border: color.feedback.correct.picked },
+  correct: { bg: color.feedback.correct.picked, fg: color.feedback.correct.text, border: color.feedback.correct.picked },
+  almost: { bg: color.feedback.almost.picked, fg: color.feedback.almost.text, border: color.feedback.almost.picked },
+  wrong: { bg: color.feedback.wrong.picked, fg: color.feedback.wrong.text, border: color.feedback.wrong.picked },
+  info: { bg: color.feedback.info.picked, fg: color.feedback.info.text, border: color.feedback.info.picked },
+  gold: { bg: color.game.reward, fg: color.feedback.almost.text, border: color.game.reward },
+  neutral: { bg: color.surface.muted, fg: color.text.body, border: color.surface.muted },
+  dark: { bg: color.text.brand, fg: color.text.onAction, border: color.text.brand },
 };
 
 /** A small status pill: "Full session", "COCO ASKS", "Strong recall", "save 33%". */
@@ -169,7 +170,7 @@ export function Segmented<K extends string>({
   style?: StyleProp<ViewStyle>;
 }) {
   return (
-    <View style={[{ flexDirection: 'row', backgroundColor: color.bg.sunken, borderRadius: radius.lg, padding: S[1], borderWidth: 1, borderColor: color.border.strong }, style]} accessibilityRole="tablist">
+    <View style={[{ flexDirection: 'row', backgroundColor: color.bg.sunken, borderRadius: radius.lg, padding: S[1] }, style]} accessibilityRole="tablist">
       {options.map((o) => {
         const on = o.key === value;
         return (
@@ -190,11 +191,10 @@ export function Segmented<K extends string>({
               justifyContent: 'center',
               borderRadius: radius.md,
               backgroundColor: on ? color.surface.card : 'transparent',
-              borderWidth: on ? 1 : 0,
-              borderColor: color.border.default,
+              ...(on ? shadow.lift : null),
             }}>
-            {o.icon && <Ionicons name={o.icon} size={size.icon.sm} color={on ? color.action.leaf : color.text.body} />}
-            <T v="caption" style={{ fontFamily: font.bold, color: on ? color.text.brand : color.text.body }}>
+            {o.icon && <Ionicons name={o.icon} size={size.icon.sm} color={on ? color.text.brand : color.text.muted} />}
+            <T v="subhead" style={{ color: on ? color.text.primary : color.text.muted }}>
               {o.label}
             </T>
             {o.badge && <Badge text={o.badge} tone="gold" />}
@@ -207,26 +207,29 @@ export function Segmented<K extends string>({
 
 /* ---------- Text field ---------- */
 /** The one text input. Arabic and English both read the right way round (direction follows what's typed). */
-export function Field({ label, hint, error, style, multiline, value, ...rest }: TextInputProps & { label?: string; hint?: string; error?: string }) {
+export function Field({ label, hint, error, style, multiline, value, onFocus, onBlur, ...rest }: TextInputProps & { label?: string; hint?: string; error?: string }) {
+  const [focused, setFocused] = React.useState(false);
   return (
     <View style={{ gap: S[1.5] }}>
       {label && <T v="label">{label}</T>}
       <TextInput
         {...rest}
         value={value}
+        onFocus={(e) => (setFocused(true), onFocus?.(e))}
+        onBlur={(e) => (setFocused(false), onBlur?.(e))}
         multiline={multiline}
         placeholderTextColor={color.text.subtle}
         style={[
           {
-            minHeight: multiline ? 110 : size.button.md,
-            backgroundColor: color.bg.sunken,
+            minHeight: multiline ? 110 : size.button.lg,
+            backgroundColor: color.surface.card,
             borderRadius: radius.lg,
-            borderWidth: 1,
-            borderColor: error ? color.feedback.wrong.border : color.border.subtle,
+            borderWidth: 1.5,
+            borderColor: error ? color.feedback.wrong.icon : focused ? color.border.focus : color.border.strong,
             paddingHorizontal: S[3.5],
             paddingVertical: S[3],
-            fontFamily: font.medium,
-            fontSize: 15,
+            fontFamily: font.regular,
+            fontSize: 16,
             lineHeight: 22,
             color: color.text.primary,
             textAlignVertical: multiline ? 'top' : 'center',
@@ -250,12 +253,12 @@ export function IconTile({ name, tone = 'brand', sz = 'sm' }: { name: IconName; 
   const d = size.iconTile[sz];
   const look =
     tone === 'teal'
-      ? { bg: color.action.teal, fg: color.text.onAction }
+      ? { bg: color.text.brand, fg: color.text.onAction }
       : tone === 'danger'
-        ? { bg: 'rgba(189,86,29,0.1)', fg: color.action.danger }
+        ? { bg: color.feedback.wrong.bg, fg: color.text.danger }
         : tone === 'muted'
           ? { bg: color.feedback.info.picked, fg: color.text.brand }
-          : { bg: color.feedback.correct.picked, fg: color.text.brand };
+          : { bg: color.selected.bg, fg: color.text.brand };
   return (
     <View style={{ width: d, height: d, borderRadius: sz === 'md' ? radius.md : 10, backgroundColor: look.bg, alignItems: 'center', justifyContent: 'center' }}>
       <Ionicons name={name} size={sz === 'md' ? size.icon.lg : size.icon.md} color={look.fg} />
@@ -302,7 +305,7 @@ export function ListRow({
       {leading ?? (icon && <IconTile name={icon} tone={danger ? 'danger' : 'brand'} />)}
       <View style={{ flex: 1, gap: S[0.5] }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: S[2.5] }}>
-          <T v="title" style={{ fontFamily: font.semi, color: danger ? color.action.danger : color.text.primary }}>
+          <T v="title" style={{ fontFamily: font.medium, color: danger ? color.text.danger : color.text.primary }}>
             {label}
           </T>
           <View style={{ flex: 1 }} />
@@ -320,12 +323,12 @@ export function ListRow({
         ) : (
           onPress && !danger && <Ionicons name={dirIcon('chevron-forward')} size={size.icon.md} color={color.text.subtle} />
         ))}
-      {!last && <View style={{ position: 'absolute', bottom: 0, end: 0, start: hasLead ? 64 : 16, height: 1, backgroundColor: color.border.default }} />}
+      {!last && <View style={{ position: 'absolute', bottom: 0, end: 0, start: hasLead ? 64 : 16, height: 1, backgroundColor: color.border.subtle }} />}
     </Pressable>
   );
 }
 
-/** A white card holding list rows, with an optional caps label above it. */
+/** A white card holding list rows, with an optional label above it. */
 export function ListGroup({ label, children, style }: { label?: string; children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[{ gap: S[2] }, style]}>
@@ -338,14 +341,14 @@ export function ListGroup({ label, children, style }: { label?: string; children
 }
 
 /* ---------- Headings ---------- */
-/** "TALK IT THROUGH WITH COCO": the small caps label above a group, with an optional action on the end. */
+/** "Talk it through with Coco": the small label above a group (sentence case), with an optional action on the end. */
 export function SectionLabel({ text, action, onAction }: { text: string; action?: string; onAction?: () => void }) {
   return (
     <Row justify="space-between" style={{ paddingHorizontal: S[1] }}>
       <T v="label">{text}</T>
       {action && onAction && (
         <Pressable onPress={() => (tap(), onAction())} hitSlop={8}>
-          <T v="caption" style={{ fontFamily: font.bold, color: color.text.brand }}>
+          <T v="subhead" style={{ color: color.text.brand }}>
             {action}
           </T>
         </Pressable>
@@ -369,7 +372,7 @@ export function ScreenTitle({ title, sub, actions }: { title: string; sub?: stri
           accessibilityLabel={a.label}
           onPress={() => (tap(), a.onPress())}
           hitSlop={8}
-          style={{ width: layout.tapMin, height: layout.tapMin, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface.muted, borderWidth: 1, borderColor: color.border.default, borderBottomWidth: depth.sm }}>
+          style={{ width: layout.tapMin, height: layout.tapMin, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: color.surface.muted }}>
           <Ionicons name={a.icon} size={size.icon.md} color={color.text.brand} />
         </Pressable>
       ))}
@@ -383,7 +386,7 @@ export function StatTile({ value, label, icon, gold, style }: { value: string | 
   return (
     <View
       style={[
-        { flex: 1, alignItems: 'center', gap: S[1], padding: S[2.5], borderRadius: radius.xl - 2, backgroundColor: gold ? color.game.reward : 'rgba(239,231,214,0.95)', borderBottomWidth: depth.md, borderColor: color.border.strong },
+        { flex: 1, alignItems: 'center', gap: S[1], padding: S[2.5], borderRadius: radius.lg, backgroundColor: gold ? color.game.reward : color.surface.muted },
         style,
       ]}>
       {icon}
@@ -402,7 +405,7 @@ export function EmptyState({ coco, title, body, action, onAction }: { coco?: Ima
   return (
     <Stack gap={3} align="center" pad={6}>
       {coco !== undefined && <Coco src={coco} size={120} />}
-      <T v="h3" style={{ color: color.text.brand, textAlign: 'center' }}>
+      <T v="h3" style={{ textAlign: 'center' }}>
         {title}
       </T>
       {body && <T style={{ textAlign: 'center', color: color.text.muted }}>{body}</T>}
@@ -417,10 +420,10 @@ export function Sheet({ visible, title, onClose, children }: { visible: boolean;
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable onPress={onClose} style={{ flex: 1, backgroundColor: color.overlay.scrim, justifyContent: 'flex-end' }}>
-        <Pressable style={{ backgroundColor: color.bg.raised, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, paddingHorizontal: layout.gutter, paddingTop: S[2.5], paddingBottom: S[8] + S[1], gap: S[3.5] }}>
-          <View style={{ alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: color.surface.track }} />
+        <Pressable style={{ ...shadow.sheet, backgroundColor: color.bg.raised, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, paddingHorizontal: layout.gutter, paddingTop: S[2.5], paddingBottom: S[8] + S[1], gap: S[3.5] }}>
+          <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: radius.xs, backgroundColor: color.surface.track }} />
           {title && (
-            <T v="h3" style={{ color: color.text.brand, textAlign: 'center' }}>
+            <T v="h3" style={{ textAlign: 'center' }}>
               {title}
             </T>
           )}

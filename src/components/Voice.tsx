@@ -20,6 +20,7 @@ import { readFileBase64 } from '@/lib/readfile';
 import { transcribe, voiceEnabled } from '@/lib/ai';
 import { liveEnabled, startDictation, type DictationHandle } from '@/lib/live';
 import { haptic } from '@/lib/feedback';
+import { alpha, color, palette } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 // Speech only: mono, 16 kHz, 32 kbps AAC → about 4 KB a second (a 5-minute brain dump ≈ 1.2 MB).
@@ -210,7 +211,7 @@ export function MicButton({ voice, size = 50, style }: { voice: ReturnType<typeo
       disabled={state === 'writing'}
       hitSlop={6}
       style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, style]}>
-      <Animated.View style={[{ position: 'absolute', width: size, height: size, borderRadius: size / 2, backgroundColor: 'rgba(229,107,107,0.28)' }, ring]} />
+      <Animated.View style={[{ position: 'absolute', width: size, height: size, borderRadius: size / 2, backgroundColor: alpha(palette.berry500, 0.28) }, ring]} />
       <View
         style={{
           width: size,
@@ -220,7 +221,7 @@ export function MicButton({ voice, size = 50, style }: { voice: ReturnType<typeo
           alignItems: 'center',
           justifyContent: 'center',
           borderBottomWidth: 4,
-          borderColor: recording ? '#9B2C2C' : C.shadow,
+          borderColor: recording ? color.feedback.wrong.text : palette.pine800,
         }}>
         {state === 'writing' ? <ActivityIndicator color={C.white} /> : <Ionicons name={recording ? 'stop' : 'mic'} size={size * 0.42} color={C.white} />}
       </View>

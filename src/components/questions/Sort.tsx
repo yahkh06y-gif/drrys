@@ -5,7 +5,8 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
 import { haptic, tap } from '@/lib/feedback';
-import { color } from '@/design';
+import { autoDir, color } from '@/design';
+import { palette } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 type Bucket = { name: string; items: string[] };
@@ -70,7 +71,7 @@ export function SortQ({
   const loose = items.filter((x) => !assigned[x]);
   return (
     <View style={{ gap: 12 }}>
-      {!locked && <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>Drag each word into its group, or tap a word and then tap its group.</Text>}
+      {!locked && <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.muted }}>Drag each word into its group, or tap a word and then tap its group.</Text>}
       <View
         ref={bank}
         style={{
@@ -84,7 +85,7 @@ export function SortQ({
         {loose.map((x) => (
           <Chip key={x} label={x} locked={locked} selected={picked === x} onLift={setLifted} onDrop={drop} onTap={() => (tap('select'), setPicked((p) => (p === x ? undefined : x)))} />
         ))}
-        {!loose.length && !locked && <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.leaf }}>All sorted ✓</Text>}
+        {!loose.length && !locked && <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.leaf }}>All sorted</Text>}
       </View>
       <View style={{ gap: 10 }}>
         {buckets.map((b, i) => (
@@ -97,7 +98,7 @@ export function SortQ({
             }}
             style={{
               zIndex: lifted && assigned[lifted] === b.name ? 30 : 1,
-              backgroundColor: picked ? '#EEF6E4' : color.bg.sunken,
+              backgroundColor: picked ? color.selected.bg : color.bg.sunken,
               borderRadius: 16,
               borderWidth: 1.5,
               borderStyle: 'dashed',
@@ -107,7 +108,7 @@ export function SortQ({
               minHeight: 84,
             }}
           >
-            <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.teal }}>{b.name}</Text>
+            <Text style={[{ fontFamily: F.semi, fontSize: 15, color: C.ink }, autoDir(b.name)]}>{b.name}</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {items
                 .filter((x) => assigned[x] === b.name)
@@ -188,7 +189,7 @@ function Chip({
             borderRadius: small ? 12 : 14,
             paddingHorizontal: small ? 10 : 12,
             paddingVertical: small ? 6 : 9,
-            shadowColor: '#000',
+            shadowColor: palette.neutral900,
             shadowRadius: 8,
             shadowOffset: { width: 0, height: 4 },
           },

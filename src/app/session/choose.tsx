@@ -11,6 +11,8 @@ import { play, tap } from '@/lib/feedback';
 import { checkPdf, fileLength, keepFile } from '@/lib/session';
 import { isSlides, LECTURE_TYPES } from '@/lib/slides';
 import { uid, useApp } from '@/store';
+import { autoDir } from '@/design/rtl';
+import { color, radius } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 export default function Choose() {
@@ -97,29 +99,31 @@ export default function Choose() {
               <Pressable
                 key={m.id}
                 onPress={() => (tap('select'), patchSession({ materialId: m.id }))}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.white, borderWidth: on ? 2 : 1, borderColor: on ? C.teal : C.lineStrong, borderBottomWidth: 4, borderRadius: 16, padding: 14 }}>
-                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: C.sand, alignItems: 'center', justifyContent: 'center' }}>
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: on ? color.selected.bg : C.white, borderWidth: 1.5, borderColor: on ? color.selected.border : C.lineStrong, borderBottomWidth: 4, borderRadius: radius.lg, padding: 14 }}>
+                <View style={{ width: 36, height: 36, borderRadius: radius.md, backgroundColor: on ? C.white : C.sand, alignItems: 'center', justifyContent: 'center' }}>
                   <Ionicons name="document-text" size={18} color={C.teal} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text numberOfLines={1} style={{ fontFamily: F.bold, fontSize: 14, color: C.teal }}>
+                  <Text numberOfLines={1} style={[{ fontFamily: F.medium, fontSize: 15, color: on ? color.selected.text : C.ink }, autoDir(m.name)]}>
                     {m.name}
                   </Text>
-                  {!!m.size && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>{m.sample ? 'Sample lecture by Drrys' : `${(m.size / 1e6).toFixed(1)} MB`} • {isSlides(m) ? 'PowerPoint' : 'PDF'}</Text>}
+                  {!!m.size && <Text style={{ fontFamily: F.regular, fontSize: 12, color: C.muted }}>{m.sample ? 'Sample lecture by Drrys' : `${(m.size / 1e6).toFixed(1)} MB`} • {isSlides(m) ? 'PowerPoint' : 'PDF'}</Text>}
                 </View>
-                <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={on ? C.teal : C.lineStrong} />
+                <Ionicons name={on ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={on ? color.selected.border : C.mutedLight} />
               </Pressable>
             );
           })}
-          <Pressable onPress={upload} style={{ borderWidth: 1, borderStyle: 'dashed', borderColor: C.title, borderRadius: 14, padding: 14, flexDirection: 'row', gap: 8, justifyContent: 'center' }}>
-            <Ionicons name="cloud-upload-outline" size={16} color={C.title} />
-            <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.title }}>Upload new file (PDF or PowerPoint)</Text>
+          <Pressable onPress={upload} accessibilityRole="button" style={{ borderWidth: 1.5, borderStyle: 'dashed', borderColor: C.lineStrong, borderRadius: radius.lg, padding: 14, flexDirection: 'row', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
+            <Ionicons name="cloud-upload-outline" size={18} color={C.teal} />
+            <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.teal }}>Upload new file (PDF or PowerPoint)</Text>
           </Pressable>
           <Pressable
             onPress={() => (tap('select'), patchSession({ materialId: undefined }))}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
             <Ionicons name={!session.materialId ? 'radio-button-on' : 'radio-button-off'} size={18} color={C.teal} />
-            <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.body }}>No file — Coco uses general knowledge of the topic</Text>
+            <Text style={{ flex: 1, fontFamily: F.regular, fontSize: 14, color: C.body }}>No file: Coco uses general knowledge of the topic</Text>
           </Pressable>
         </Enter>
 
@@ -131,9 +135,9 @@ export default function Choose() {
                 <Pressable
                   onPress={() => (tap('select'), patchSession({ fromPage: 1, toPage: total }))}
                   disabled={whole}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: whole ? C.mint : C.white, borderWidth: 1, borderColor: whole ? C.mintBorder : C.lineStrong, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 5 }}>
-                  {whole && <Ionicons name="checkmark" size={13} color={C.mossDark} />}
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: whole ? C.mossDark : C.teal }}>All {total}</Text>
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: whole ? C.mint : C.white, borderWidth: 1, borderColor: whole ? C.mint : C.lineStrong, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 6 }}>
+                  {whole && <Ionicons name="checkmark" size={13} color={C.moss} />}
+                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: whole ? C.moss : C.teal }}>All {total}</Text>
                 </Pressable>
               )}
             </View>
@@ -142,13 +146,13 @@ export default function Choose() {
                 const atMin = session[k] <= (k === 'toPage' ? session.fromPage : 1);
                 const atMax = k === 'fromPage' ? session.fromPage >= session.toPage : !!total && session.toPage >= total;
                 return (
-                  <View key={k} style={{ flex: 1, backgroundColor: C.white, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, borderRadius: 16, padding: 12 }}>
-                    <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>{k === 'fromPage' ? 'From' : 'To'}</Text>
+                  <View key={k} style={{ flex: 1, backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 16, padding: 12 }}>
+                    <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>{k === 'fromPage' ? 'From' : 'To'}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
                       <Pressable hitSlop={8} disabled={atMin} onPress={() => step(k, -1)} style={{ opacity: atMin ? 0.3 : 1 }}>
                         <Ionicons name="remove-circle-outline" size={24} color={C.teal} />
                       </Pressable>
-                      <Text style={{ fontFamily: F.bold, fontSize: 24, color: C.ink }}>{session[k]}</Text>
+                      <Text style={{ fontFamily: F.semi, fontSize: 24, color: C.ink, fontVariant: ['tabular-nums'] }}>{session[k]}</Text>
                       <Pressable hitSlop={8} disabled={atMax} onPress={() => step(k, 1)} style={{ opacity: atMax ? 0.3 : 1 }}>
                         <Ionicons name="add-circle-outline" size={24} color={C.teal} />
                       </Pressable>
@@ -157,17 +161,17 @@ export default function Choose() {
                 );
               })}
             </View>
-            <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.teal }}>
+            <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.muted }}>
               {counting && !total
                 ? `Counting the ${unit}s…`
-                : `⏱ ${n} ${n === 1 ? unit : `${unit}s`}${total ? ` of ${total}` : ''} • ~${Math.max(10, n * 3)} min session`}
+                : `${n} ${n === 1 ? unit : `${unit}s`}${total ? ` of ${total}` : ''} • ~${Math.max(10, n * 3)} min session`}
             </Text>
           </Enter>
         )}
       </ScrollView>
       <View style={{ padding: 20, gap: 6 }}>
-        <Btn title="Continue to recall" icon="arrow-forward" kind="teal" pill onPress={() => router.push('/session/recall')} />
-        <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted, textAlign: 'center' }}>Your material will be hidden during recall — that’s the point 😉</Text>
+        <Btn title="Continue to recall" icon="arrow-forward" kind="green" onPress={() => router.push('/session/recall')} />
+        <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.muted, textAlign: 'center' }}>Your material is hidden during recall. That’s the point.</Text>
       </View>
     </SafeAreaView>
   );

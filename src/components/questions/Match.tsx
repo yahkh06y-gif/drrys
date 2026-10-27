@@ -6,6 +6,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { haptic, tap } from '@/lib/feedback';
+import { color, radius } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 const RH = 52; // row height
@@ -83,7 +84,7 @@ export function MatchQ({ pairs, locked, marks, onChange }: { pairs: Pair[]; lock
       {w > 0 &&
         Object.entries(link).map(([l, r]) => {
           const m = locked ? marks?.[lefts[+l]] : undefined;
-          return <Line key={l} x0={xL} y0={+l * P + RH / 2} x1={xR} y1={r * P + RH / 2} color={m === undefined ? C.teal : m ? C.leaf : '#E56B6B'} />;
+          return <Line key={l} x0={xL} y0={+l * P + RH / 2} x1={xR} y1={r * P + RH / 2} color={m === undefined ? C.teal : m ? C.leaf : color.feedback.wrong.icon} />;
         })}
       {lefts.map((t, i) => (
         <LeftCard key={t} label={t} y={i * P} w={colW} x1={xL} locked={locked} selected={sel === i} linked={i in link} onTap={() => (tap('select'), setSel(sel === i ? undefined : i))} onDrop={(y) => drop(i, y)} />
@@ -93,8 +94,8 @@ export function MatchQ({ pairs, locked, marks, onChange }: { pairs: Pair[]; lock
           key={t}
           disabled={locked}
           onPress={() => sel !== undefined && connect(sel, i)}
-          style={{ position: 'absolute', right: 0, top: i * P, width: colW, height: RH, justifyContent: 'center', paddingHorizontal: 10, backgroundColor: Object.values(link).includes(i) ? '#EAF3F1' : C.white, borderRadius: 14, borderWidth: 1.5, borderColor: sel !== undefined ? C.mintBorder : C.lineStrong, borderBottomWidth: 3 }}>
-          <Text numberOfLines={3} style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 15, color: C.ink }}>
+          style={{ position: 'absolute', right: 0, top: i * P, width: colW, height: RH, justifyContent: 'center', paddingHorizontal: 10, backgroundColor: Object.values(link).includes(i) ? color.selected.bg : C.white, borderRadius: 14, borderWidth: 1.5, borderColor: sel !== undefined ? C.mintBorder : C.lineStrong, borderBottomWidth: 3 }}>
+          <Text numberOfLines={3} style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 16, color: C.ink }}>
             {t}
           </Text>
         </Pressable>
@@ -132,16 +133,16 @@ function LeftCard({ label, y, w, x1, locked, selected, linked, onTap, onDrop }: 
   });
   return (
     <>
-      <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: x1, top: y + RH / 2 - 1.5, height: 3, borderRadius: 2, backgroundColor: C.amber, transformOrigin: '0% 50%' }, band]} />
+      <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: x1, top: y + RH / 2 - 1.5, height: 3, borderRadius: 2, backgroundColor: color.selected.border, transformOrigin: '0% 50%' }, band]} />
       <GestureDetector gesture={pan}>
         <Pressable
           onPress={onTap}
           disabled={locked}
-          style={{ position: 'absolute', left: 0, top: y, width: w, height: RH, justifyContent: 'center', paddingHorizontal: 10, backgroundColor: selected ? C.teal : linked ? '#EAF3F1' : C.white, borderRadius: 14, borderWidth: 1.5, borderColor: selected ? C.teal : C.lineStrong, borderBottomWidth: 3 }}>
-          <Text numberOfLines={3} style={{ fontFamily: F.bold, fontSize: 12, lineHeight: 15, color: selected ? C.white : C.ink }}>
+          style={{ position: 'absolute', left: 0, top: y, width: w, height: RH, justifyContent: 'center', paddingHorizontal: 10, backgroundColor: selected || linked ? color.selected.bg : C.white, borderRadius: radius.md, borderWidth: 1.5, borderColor: selected ? color.selected.border : C.lineStrong, borderBottomWidth: 3 }}>
+          <Text numberOfLines={3} style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 16, color: selected ? color.selected.text : C.ink }}>
             {label}
           </Text>
-          <View style={{ position: 'absolute', right: -7, top: RH / 2 - 7, width: 14, height: 14, borderRadius: 7, backgroundColor: linked || selected ? C.teal : C.amber, borderWidth: 2, borderColor: C.white }} />
+          <View style={{ position: 'absolute', right: -7, top: RH / 2 - 7, width: 14, height: 14, borderRadius: 7, backgroundColor: linked || selected ? color.selected.border : C.mutedLight, borderWidth: 2, borderColor: C.white }} />
         </Pressable>
       </GestureDetector>
     </>

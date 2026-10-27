@@ -64,7 +64,7 @@ export default function Plant() {
       <SafeAreaView style={{ flex: 1, padding: 20 }} pointerEvents={stage === 'idle' ? 'auto' : 'none'}>
         <OnbBar value={progressOf('plant')} style={{ marginBottom: 20 }} />
         <Enter>
-          <T v="h1" style={{ color: C.tealSoft, fontSize: 34 }}>
+          <T v="h1" style={{ color: C.teal }}>
             Now let’s plant your first subject{name ? `, ${name}` : ''}.
           </T>
         </Enter>

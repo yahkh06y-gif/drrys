@@ -7,6 +7,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { autoDir } from '@/design/rtl';
+import { color, radius } from '@/design/tokens';
 import { COCO } from '@/art';
 import { AskCoco } from '@/components/AskCoco';
 import { Btn, Coco, Enter, Pill, SessionHeader, T } from '@/components/ui';
@@ -28,18 +30,18 @@ import { C, F } from '@/theme';
 
 // How each kind of idea is practised (PACER): the question type decides what the student is asked to do.
 const KIND: Record<QKind, { pill: string; line: string; placeholder: string }> = {
-  conceptual: { pill: 'CONNECT IT', line: 'Think about how the ideas relate, then explain it your way.', placeholder: 'It connects because…' },
+  conceptual: { pill: 'Connect it', line: 'Think about how the ideas relate, then explain it your way.', placeholder: 'It connects because…' },
   procedural: { pill: 'WORK IT OUT', line: 'Write the steps in order, or work a tiny example.', placeholder: 'Step 1…, then…' },
-  analogous: { pill: 'TEST THE COMPARISON', line: 'Say where the comparison fits and where it stops working.', placeholder: 'It fits because… but it breaks when…' },
-  evidence: { pill: 'USE IT', line: 'Use the idea on a new, short situation.', placeholder: 'In this case…' },
+  analogous: { pill: 'Test the comparison', line: 'Say where the comparison fits and where it stops working.', placeholder: 'It fits because… but it breaks when…' },
+  evidence: { pill: 'Use it', line: 'Use the idea on a new, short situation.', placeholder: 'In this case…' },
 };
 
 // What the student is asked to do, for the question formats that aren't "explain".
 const FORMAT_LINE: Partial<Record<QFormat, { pill: string; line: string }>> = {
-  order: { pill: 'PUT IN ORDER', line: 'Hold the handle and drag the steps into the right order.' },
-  sort: { pill: 'SORT IT', line: 'Drag each item into the group it belongs to.' },
-  blank: { pill: 'FILL THE GAPS', line: 'Tap the words that belong in the gaps.' },
-  match: { pill: 'CONNECT THE PAIRS', line: 'Drag from a card on the left to its partner on the right.' },
+  order: { pill: 'Put in order', line: 'Hold the handle and drag the steps into the right order.' },
+  sort: { pill: 'Sort it', line: 'Drag each item into the group it belongs to.' },
+  blank: { pill: 'Fill the gaps', line: 'Tap the words that belong in the gaps.' },
+  match: { pill: 'Connect the pairs', line: 'Drag from a card on the left to its partner on the right.' },
   work: { pill: 'WORK IT OUT', line: 'Solve it below. Type your working.' },
 };
 
@@ -124,7 +126,7 @@ function QuestionNav({ i, n, open, results, onGo }: { i: number; n: number; open
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}>
       {arrow('chevron-back', i > 0, i - 1, 'Previous question')}
       <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
-        <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.teal }}>
+        <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.teal }}>
           Question {i + 1} of {n}
         </Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 5 }}>
@@ -264,8 +266,8 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
 
         {/* 1 · the question */}
         <Enter delay={grade ? 0 : 120}>
-          <View style={{ backgroundColor: C.white, borderRadius: 22, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, padding: 18 }}>
-            <Text style={{ fontFamily: F.bold, fontSize: grade ? 16 : 18, lineHeight: grade ? 23 : 26, color: C.teal, textAlign: 'center' }}>{q.q}</Text>
+          <View style={{ backgroundColor: C.white, borderRadius: radius.xl, borderWidth: 1, borderColor: C.line, padding: 18 }}>
+            <Text style={[{ fontFamily: F.medium, fontSize: grade ? 16 : 18, lineHeight: grade ? 24 : 27, color: C.ink, textAlign: 'center', letterSpacing: -0.1 }, autoDir(q.q)]}>{q.q}</Text>
           </View>
         </Enter>
 
@@ -273,8 +275,9 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
 
         {hint && !grade && (
           <Enter>
-            <View style={{ backgroundColor: '#FFF6E3', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: C.amber }}>
-              <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.goldInk }}>{q.hint}</Text>
+            <View style={{ backgroundColor: color.feedback.almost.bg, borderRadius: radius.lg, padding: 12, flexDirection: 'row', gap: 8 }}>
+              <Ionicons name="bulb-outline" size={16} color={color.feedback.almost.icon} style={{ marginTop: 2 }} />
+              <Text style={[{ flex: 1, fontFamily: F.regular, fontSize: 14, lineHeight: 21, color: color.feedback.almost.text }, autoDir(q.hint)]}>{q.hint}</Text>
             </View>
           </Enter>
         )}
@@ -291,9 +294,9 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
 
         {/* 2 · the answer: written */}
         {!grade && !marked && (
-          <View style={{ backgroundColor: C.white, borderRadius: 20, borderWidth: 1, borderColor: C.lineStrong, padding: 12, gap: 8 }}>
+          <View style={{ backgroundColor: C.white, borderRadius: radius.lg, borderWidth: 1.5, borderColor: C.lineStrong, padding: 12, gap: 8 }}>
             {voice.state !== 'idle' && (
-              <Text style={{ fontFamily: F.bold, fontSize: 11, color: voice.state === 'recording' ? C.red : C.leaf }}>
+              <Text style={{ fontFamily: F.medium, fontSize: 12, color: voice.state === 'recording' ? C.red : C.leaf, fontVariant: ['tabular-nums'] }}>
                 {voice.state === 'recording' ? `● ${voice.seconds}s · tap ■ to stop` : 'Writing it down…'}
               </Text>
             )}
@@ -304,44 +307,45 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
                 onChangeText={(t) => voice.state !== 'recording' && setAnswer(t)}
                 multiline
                 placeholder={fmt === 'work' ? 'Write your working, line by line…' : `${KIND[q.kind ?? 'conceptual'].placeholder}  (or tap the mic)`}
-                placeholderTextColor="#A69A8A"
-                style={{ flex: 1, minHeight: fmt === 'work' ? 150 : 90, fontFamily: F.medium, fontSize: 15, lineHeight: 22, color: C.ink, textAlignVertical: 'top' }}
+                placeholderTextColor={C.mutedLight}
+                style={[{ flex: 1, minHeight: fmt === 'work' ? 150 : 90, fontFamily: F.regular, fontSize: 16, lineHeight: 24, color: C.ink, textAlignVertical: 'top' }, autoDir(answer)]}
               />
               <MicButton voice={voice} size={44} />
             </View>
             {sample && !answer && voice.state === 'idle' && (
               <Pressable
                 onPress={() => (tap('select'), (stopTyping.current = typeOut(sampleAnswer(q, i), setAnswer)))}
-                style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.mint, borderWidth: 1, borderColor: C.mintBorder, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.mossDark }}>✨ Fill sample answer</Text>
+                style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.mint, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
+                <Ionicons name="sparkles-outline" size={14} color={C.moss} />
+                <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.moss }}>Fill sample answer</Text>
               </Pressable>
             )}
             {fmt === 'work' && (
               <View style={{ gap: 8 }}>
                 <Pressable onPress={() => (tap('select'), setSketching((v) => !v))} style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: sketching ? C.teal : C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
                   <Ionicons name="brush-outline" size={14} color={sketching ? C.white : C.body} />
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: sketching ? C.white : C.body }}>{sketching ? 'Hide the sketch pad' : 'Sketch or write by hand'}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: sketching ? C.white : C.body }}>{sketching ? 'Hide the sketch pad' : 'Sketch or write by hand'}</Text>
                 </Pressable>
                 {sketching && <SketchPad ref={pad} height={260} onInk={setInk} onDrawing={setDrawing} />}
               </View>
             )}
           </View>
         )}
-        {!!err && <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#C2452B', textAlign: 'center' }}>{err}</Text>}
+        {!!err && <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 18, color: color.text.danger, textAlign: 'center' }}>{err}</Text>}
 
         {grade && tone && res && (
           <Enter style={{ gap: 12 }}>
             {/* 3 · how it went (and the right answer, only when it was missed) */}
-            <View style={{ backgroundColor: tone.bg, borderRadius: 20, borderWidth: 2, borderColor: tone.border, padding: 16, gap: 8 }}>
+            <View style={{ backgroundColor: tone.bg, borderRadius: radius.lg, padding: 16, gap: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Ionicons name={tone.icon} size={24} color={tone.color} />
-                <Text style={{ fontFamily: F.bold, fontSize: 17, color: tone.text }}>{tone.title}</Text>
+                <Text style={{ fontFamily: F.semi, fontSize: 18, lineHeight: 24, color: tone.text }}>{tone.title}</Text>
               </View>
-              <Text style={{ fontFamily: F.medium, fontSize: 14, lineHeight: 21, color: C.ink }}>{grade.feedback}</Text>
+              <Text style={[{ fontFamily: F.regular, fontSize: 15, lineHeight: 23, color: C.ink }, autoDir(grade.feedback)]}>{grade.feedback}</Text>
               {!grade.correct && (
                 <View style={{ borderTopWidth: 1, borderColor: tone.border, paddingTop: 8, gap: 2 }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 11, color: tone.text }}>The answer</Text>
-                  <Text style={{ fontFamily: F.semi, fontSize: 14, lineHeight: 20, color: C.ink }}>{solution(q)}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: tone.text }}>The answer</Text>
+                  <Text style={[{ fontFamily: F.medium, fontSize: 15, lineHeight: 22, color: C.ink }, autoDir(solution(q))]}>{solution(q)}</Text>
                 </View>
               )}
             </View>
@@ -351,21 +355,21 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
               <Pressable
                 onPress={() => (tap('select'), setAsk({}))}
                 accessibilityRole="button"
-                style={{ flex: 1, height: 48, borderRadius: 24, borderWidth: 1.5, borderColor: C.teal, backgroundColor: C.white, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                style={({ pressed }) => ({ flex: 1, height: 48, borderRadius: radius.lg, borderWidth: 1, borderBottomWidth: 4, transform: [{ translateY: pressed ? 2 : 0 }], borderColor: C.lineStrong, backgroundColor: C.white, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 })}>
                 <Ionicons name="chatbubble-ellipses-outline" size={18} color={C.teal} />
-                <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.teal }}>{talks ? 'Continue with Coco' : 'Ask Coco'}</Text>
+                <Text style={{ fontFamily: F.semi, fontSize: 15, color: C.teal }}>{talks ? 'Continue with Coco' : 'Ask Coco'}</Text>
               </Pressable>
               <Pressable
                 accessibilityLabel="Ask Coco by voice"
                 onPress={() => (tap('select'), setAsk({ voice: true }))}
-                style={{ width: 48, height: 48, borderRadius: 24, borderWidth: 1.5, borderColor: C.teal, backgroundColor: C.white, alignItems: 'center', justifyContent: 'center' }}>
+                style={({ pressed }) => ({ width: 48, height: 48, borderRadius: radius.lg, borderWidth: 1, borderBottomWidth: 4, transform: [{ translateY: pressed ? 2 : 0 }], borderColor: C.lineStrong, backgroundColor: C.white, alignItems: 'center', justifyContent: 'center' })}>
                 <Ionicons name="mic-outline" size={20} color={C.teal} />
               </Pressable>
             </View>
 
             <Pressable onPress={openHook} style={{ alignSelf: 'center', flexDirection: 'row', gap: 6, alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6 }}>
               <Ionicons name="bulb-outline" size={15} color={C.goldInk} />
-              <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.goldInk }}>{existing?.mnemonic ? 'My memory hook' : 'Make a memory hook'}</Text>
+              <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.goldInk }}>{existing?.mnemonic ? 'My memory hook' : 'Make a memory hook'}</Text>
             </Pressable>
           </Enter>
         )}
@@ -378,18 +382,18 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
             {/* shows up once there's an answer to send (like "continue" in onboarding) */}
             {(marked ? fmt === 'order' || ready : (!!answer.trim() || (fmt === 'work' && ink)) && voice.state === 'idle') || busy ? (
               <Enter key="finish">
-                <Btn title={marked ? 'Check my answer' : fmt === 'work' ? 'Check my working' : 'Check my answer'} iconLeft="checkmark-circle" kind="teal" pill loading={busy} onPress={submit} />
+                <Btn title={marked ? 'Check my answer' : fmt === 'work' ? 'Check my working' : 'Check my answer'} iconLeft="checkmark-circle" kind="green" loading={busy} onPress={submit} />
               </Enter>
             ) : null}
             {!hint && (
               <Pressable onPress={() => (tap(), setHint(true))} style={{ alignSelf: 'center', flexDirection: 'row', gap: 4, alignItems: 'center', backgroundColor: C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 6 }}>
                 <Ionicons name="bulb-outline" size={14} color={C.body} />
-                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.body }}>Need a hint?</Text>
+                <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.body }}>Need a hint?</Text>
               </Pressable>
             )}
           </>
         ) : (
-          <Btn title={last ? 'Lock it in' : 'Next question'} icon="arrow-forward" kind="teal" pill onPress={onNext} />
+          <Btn title={last ? 'Lock it in' : 'Next question'} icon="arrow-forward" kind="green" onPress={onNext} />
         )}
       </View>
       <HookSheet card={hook} onClose={() => setHook(undefined)} />

@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "dependencies": {
     "@expo-google-fonts/iosevka-charon": "^0.4.0",
+    "@expo-google-fonts/readex-pro": "^0.4.1",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
     "@expo/ui": "~57.0.20",
     "@expo/vector-icons": "^15.0.2",

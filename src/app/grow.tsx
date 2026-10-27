@@ -4,11 +4,12 @@ import { useCallback, useEffect, useRef } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { color } from '@/design/tokens';
 import { Motion } from '@/components/Motion';
 import { useBack } from '@/lib/back';
 import { haptic } from '@/lib/feedback';
 import { finishOnboarding } from '@/lib/finish';
-import { F } from '@/theme';
+import { C, F } from '@/theme';
 
 export default function Grow() {
   const { onboarding } = useLocalSearchParams<{ onboarding?: string }>();
@@ -43,8 +44,8 @@ export default function Grow() {
     <Pressable style={{ flex: 1 }} onPress={go}>
       <Motion video="seedClose" loop={false} onEnd={go} style={{ flex: 1 }} />
       <SafeAreaView pointerEvents="none" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', paddingBottom: 16 }}>
-        <View style={{ backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 99, paddingHorizontal: 14, paddingVertical: 6 }}>
-          <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#fff' }}>Tap to skip</Text>
+        <View style={{ backgroundColor: color.overlay.shade, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 6 }}>
+          <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.white }}>Tap to skip</Text>
         </View>
       </SafeAreaView>
     </Pressable>

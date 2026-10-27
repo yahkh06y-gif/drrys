@@ -108,13 +108,13 @@ export default function SignIn() {
               <Ionicons name="cloud-done-outline" size={18} color={C.leaf} />
             </View>
             <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.leaf }}>Your forest is backed up to this account.</Text>
-            <Btn title="Save" kind="teal" disabled={!name.trim()} onPress={() => (setProfile({ name: name.trim() }), router.back())} />
+            <Btn title="Save" kind="green" disabled={!name.trim()} onPress={() => (setProfile({ name: name.trim() }), router.back())} />
             <Btn title="Sign out" kind="light" height={46} onPress={() => setAskOut(true)} />
           </Enter>
         ) : !cloudEnabled ? (
           <Enter style={{ gap: 12 }}>
             <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.body }}>Accounts aren’t switched on in this build yet — your forest is saved on this phone.</Text>
-            <Btn title={editing && !saving ? 'Back' : 'Continue'} kind="teal" onPress={() => (editing && !saving ? router.back() : goOn())} />
+            <Btn title={editing && !saving ? 'Back' : 'Continue'} kind="green" onPress={() => (editing && !saving ? router.back() : goOn())} />
           </Enter>
         ) : (
           <Enter style={{ gap: 12 }}>
@@ -124,7 +124,7 @@ export default function SignIn() {
             {!!error && <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.red }}>{error}</Text>}
             <Btn
               title={mode === 'signup' ? 'Create account' : 'Sign in'}
-              kind="teal"
+              kind="green"
               icon="arrow-forward"
               loading={busy}
               disabled={!valid}
@@ -183,7 +183,7 @@ function Field({
         value={value}
         onChangeText={onChange}
         placeholder={placeholder}
-        placeholderTextColor="#A69A8A"
+        placeholderTextColor={C.mutedLight}
         keyboardType={keyboard}
         autoCapitalize={keyboard || secret ? 'none' : 'words'}
         autoCorrect={false}

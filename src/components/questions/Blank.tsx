@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { haptic, tap } from '@/lib/feedback';
-import { color } from '@/design';
+import { autoDir, color, radius } from '@/design';
 import { C, F } from '@/theme';
 
 /** "The [[mitochondrion]] makes [[ATP]]." → pieces: text, gap, text, gap, text. */
@@ -67,7 +67,7 @@ export function BlankQ({ text, extras, locked, marks, onChange }: { text: string
   return (
     <View style={{ gap: 16 }}>
       {/* the sentence */}
-      <View style={{ backgroundColor: C.white, borderRadius: 20, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, padding: 16, flexDirection: rtl ? 'row-reverse' : 'row', flexWrap: 'wrap', alignItems: 'center', rowGap: 10 }}>
+      <View style={{ backgroundColor: C.white, borderRadius: 20, borderWidth: 1, borderColor: C.line, padding: 16, flexDirection: rtl ? 'row-reverse' : 'row', flexWrap: 'wrap', alignItems: 'center', rowGap: 10 }}>
         {parts.map((p, i) => {
           if (p.gap === undefined) return p.t.split(/(\s+)/).filter(Boolean).map((w, k) => (
             <Text key={`${i}-${k}`} style={{ fontFamily: F.medium, fontSize: 17, lineHeight: 28, color: C.ink }}>
@@ -92,9 +92,9 @@ export function BlankQ({ text, extras, locked, marks, onChange }: { text: string
                 borderWidth: 1.5,
                 borderStyle: id === undefined ? 'dashed' : 'solid',
                 borderColor: m === undefined ? (pick === g ? C.leaf : id === undefined ? C.lineStrong : C.teal) : m ? C.mintBorder : color.feedback.wrong.border,
-                backgroundColor: m === undefined ? (pick === g ? color.feedback.correct.picked : id === undefined ? color.bg.sunken : '#E6F2EF') : m ? color.feedback.correct.bg : color.feedback.wrong.bg,
+                backgroundColor: m === undefined ? (pick === g ? color.feedback.correct.picked : id === undefined ? color.bg.sunken : color.selected.bg) : m ? color.feedback.correct.bg : color.feedback.wrong.bg,
               }}>
-              <Text style={{ fontFamily: F.bold, fontSize: 16, lineHeight: 24, textAlign: 'center', color: C.ink }}>
+              <Text style={{ fontFamily: F.medium, fontSize: 16, lineHeight: 24, textAlign: 'center', color: C.ink }}>
                 {m === undefined ? '' : m ? '✓ ' : '✗ '}
                 {word || ' '}
               </Text>
@@ -106,7 +106,7 @@ export function BlankQ({ text, extras, locked, marks, onChange }: { text: string
       {/* the word bank */}
       {!locked && (
         <View style={{ gap: 8 }}>
-          <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>Tap a word to put it in the next gap. {extras?.length ? 'Not every word is used.' : ''}</Text>
+          <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.muted }}>Tap a word to put it in the next gap. {extras?.length ? 'Not every word is used.' : ''}</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, minHeight: 44 }}>
             {bank.map((b) => {
               const on = used.has(b.id);
@@ -115,8 +115,8 @@ export function BlankQ({ text, extras, locked, marks, onChange }: { text: string
                   key={b.id}
                   disabled={on}
                   onPress={() => put(b.id)}
-                  style={{ backgroundColor: on ? C.sand : C.white, borderWidth: 1.5, borderColor: C.lineStrong, borderBottomWidth: on ? 1.5 : 3, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 9, opacity: on ? 0.35 : 1 }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 15, color: C.ink }}>{b.w}</Text>
+                  style={{ backgroundColor: on ? C.sand : C.white, borderWidth: 1.5, borderColor: C.lineStrong, borderBottomWidth: on ? 1.5 : 3, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 9, opacity: on ? 0.35 : 1 }}>
+                  <Text style={[{ fontFamily: F.medium, fontSize: 16, color: C.ink }, autoDir(b.w)]}>{b.w}</Text>
                 </Pressable>
               );
             })}

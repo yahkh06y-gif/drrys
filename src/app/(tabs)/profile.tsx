@@ -7,6 +7,8 @@ import { useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, Switch, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { autoDir, dirIcon } from '@/design/rtl';
+import { color, radius, shadow } from '@/design/tokens';
 import { COCO, STAT_ICONS } from '@/art';
 import { Confirm, Progress, XpStars } from '@/components/ui';
 import { aiLabel } from '@/lib/ai';
@@ -68,7 +70,7 @@ export default function Profile() {
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: C.paper }}>
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 48, gap: 28 }} showsVerticalScrollIndicator={false}>
-        <Text accessibilityRole="header" style={{ fontFamily: F.bold, fontSize: 30, lineHeight: 36, color: C.teal, letterSpacing: -0.6 }}>
+        <Text accessibilityRole="header" style={{ fontFamily: F.semi, fontSize: 28, lineHeight: 34, color: C.ink, letterSpacing: -0.5 }}>
           Profile
         </Text>
 
@@ -80,24 +82,24 @@ export default function Profile() {
             onPress={() => (tap(), router.push('/account'))}
             style={({ pressed }) => [card, { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 }, pressed && pressedStyle]}>
             <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: C.mint, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontFamily: F.bold, fontSize: 20, color: C.teal }}>{initials}</Text>
+              <Text style={{ fontFamily: F.semi, fontSize: 20, color: C.moss }}>{initials}</Text>
             </View>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text numberOfLines={1} style={{ fontFamily: F.bold, fontSize: 18, color: C.ink }}>
+              <Text numberOfLines={1} style={[{ fontFamily: F.semi, fontSize: 18, color: C.ink }, autoDir(name)]}>
                 {name}
               </Text>
               {profile.uid ? (
-                <Text numberOfLines={1} style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>
+                <Text numberOfLines={1} style={{ fontFamily: F.regular, fontSize: 14, color: C.muted }}>
                   {profile.email}
                 </Text>
               ) : (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                   <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.orange }} />
-                  <Text style={{ fontFamily: F.semi, fontSize: 13, color: C.orange }}>Sign in to back up your forest</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.orange }}>Sign in to back up your forest</Text>
                 </View>
               )}
             </View>
-            <Ionicons name="chevron-forward" size={18} color={C.mutedLight} />
+            <Ionicons name={dirIcon('chevron-forward')} size={18} color={C.mutedLight} />
           </Pressable>
 
           {/* how you're doing, at a glance */}
@@ -112,26 +114,26 @@ export default function Profile() {
         <View style={[card, { padding: 16, gap: 12 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ fontFamily: F.bold, fontSize: 17, color: C.ink }}>{isPro ? 'Drrys Pro' : 'Free plan'}</Text>
-              <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>
+              <Text style={{ fontFamily: F.semi, fontSize: 17, color: C.ink }}>{isPro ? 'Drrys Pro' : 'Free plan'}</Text>
+              <Text style={{ fontFamily: F.regular, fontSize: 14, color: C.muted }}>
                 {used} of {limit} subject {limit === 1 ? 'tree' : 'trees'}
               </Text>
             </View>
             {isPro ? (
               <View style={{ backgroundColor: C.mint, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.mossDark }}>Active</Text>
+                <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.moss }}>Active</Text>
               </View>
             ) : (
               <Pressable
                 accessibilityRole="button"
                 onPress={() => (tap(), router.push('/paywall'))}
                 hitSlop={6}
-                style={({ pressed }) => ({ backgroundColor: C.teal, borderRadius: 999, paddingHorizontal: 16, height: 36, justifyContent: 'center', opacity: pressed ? 0.85 : 1 })}>
-                <Text style={{ fontFamily: F.bold, fontSize: 14, color: C.white }}>Upgrade</Text>
+                style={({ pressed }) => ({ backgroundColor: C.green, borderRadius: radius.md, paddingHorizontal: 16, height: 38, justifyContent: 'center', borderBottomWidth: 3, borderColor: C.greenShadow, transform: [{ translateY: pressed ? 2 : 0 }] })}>
+                <Text style={{ fontFamily: F.semi, fontSize: 14, color: C.white }}>Upgrade</Text>
               </Pressable>
             )}
           </View>
-          <Progress value={subjects.length / limit} height={6} track={C.track} fill={C.teal} />
+          <Progress value={subjects.length / limit} height={6} track={C.track} />
           {resting > 0 && (
             <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 18, color: C.orange }}>
               {resting} {resting === 1 ? 'tree is' : 'trees are'} resting. Renew Pro to study {resting === 1 ? 'it' : 'them'} again.
@@ -230,15 +232,15 @@ export default function Profile() {
 
 /* ---------- pieces ---------- */
 
-// one card style for the whole screen: quiet border, a soft clay edge underneath
-const card: ViewStyle = { backgroundColor: C.white, borderRadius: 20, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 3 };
+// one card style for the whole screen: a card you read is flat (one hairline, no edge)
+const card: ViewStyle = { backgroundColor: C.white, borderRadius: radius.xl, borderWidth: 1, borderColor: C.line };
 const pressedStyle: ViewStyle = { backgroundColor: C.sand };
 
 function Stat({ icon, value, label }: { icon: React.ReactNode; value: number; label: string }) {
   return (
     <View accessible accessibilityLabel={`${value} ${label}`} style={[card, { flex: 1, alignItems: 'center', paddingVertical: 14, gap: 6 }]}>
       <View style={{ height: 26, justifyContent: 'center' }}>{icon}</View>
-      <Text style={{ fontFamily: F.bold, fontSize: 20, lineHeight: 24, color: C.ink }}>{compact(value)}</Text>
+      <Text style={{ fontFamily: F.semi, fontSize: 20, lineHeight: 24, color: C.ink, fontVariant: ['tabular-nums'] }}>{compact(value)}</Text>
       <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>{label}</Text>
     </View>
   );
@@ -247,7 +249,7 @@ function Stat({ icon, value, label }: { icon: React.ReactNode; value: number; la
 function Group({ title, children, style }: { title: string; children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   return (
     <View style={[{ gap: 8 }, style]}>
-      <Text accessibilityRole="header" style={{ fontFamily: F.semi, fontSize: 14, color: C.muted, paddingHorizontal: 4 }}>
+      <Text accessibilityRole="header" style={{ fontFamily: F.medium, fontSize: 14, color: C.muted, paddingHorizontal: 4 }}>
         {title}
       </Text>
       <View style={[card, { overflow: 'hidden' }]}>{children}</View>
@@ -287,25 +289,25 @@ function Row({
       onPress={() => (tap(), onPress?.())}
       style={({ pressed }) => [{ minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 12 }, pressed && pressedStyle]}>
       {leading ?? (icon && (
-        <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: danger ? 'rgba(189,86,29,0.1)' : C.mint, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: danger ? color.feedback.wrong.bg : color.selected.bg, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name={icon} size={18} color={tint} />
         </View>
       ))}
       <View style={{ flex: 1, gap: 2 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Text style={{ fontFamily: F.semi, fontSize: 16, color: danger ? C.orange : C.ink }}>{label}</Text>
+          <Text style={{ fontFamily: F.medium, fontSize: 16, color: danger ? C.orange : C.ink }}>{label}</Text>
           {value ? (
-            <Text numberOfLines={1} style={{ flex: 1, textAlign: 'right', fontFamily: F.medium, fontSize: 14, color: C.muted }}>
+            <Text numberOfLines={1} style={{ flex: 1, textAlign: 'right', fontFamily: F.regular, fontSize: 15, color: C.muted }}>
               {value}
             </Text>
           ) : (
             <View style={{ flex: 1 }} />
           )}
         </View>
-        {sub && <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 18, color: C.muted }}>{sub}</Text>}
+        {sub && <Text style={{ fontFamily: F.regular, fontSize: 13, lineHeight: 18, color: C.muted }}>{sub}</Text>}
       </View>
-      {children ?? (selected !== undefined ? (selected ? <Ionicons name="checkmark" size={20} color={C.teal} /> : <View style={{ width: 20 }} />) : onPress && !danger && <Ionicons name="chevron-forward" size={18} color={C.mutedLight} />)}
-      {!last && <View style={{ position: 'absolute', bottom: 0, right: 0, left: leading || icon ? 64 : 16, height: 1, backgroundColor: C.line }} />}
+      {children ?? (selected !== undefined ? (selected ? <Ionicons name="checkmark" size={20} color={C.teal} /> : <View style={{ width: 20 }} />) : onPress && !danger && <Ionicons name={dirIcon('chevron-forward')} size={18} color={C.mutedLight} />)}
+      {!last && <View style={{ position: 'absolute', bottom: 0, right: 0, left: leading || icon ? 64 : 16, height: 1, backgroundColor: color.border.subtle }} />}
     </Pressable>
   );
 }
@@ -314,10 +316,10 @@ function Row({
 function Sheet({ visible, title, onClose, children }: { visible: boolean; title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable onPress={onClose} style={{ flex: 1, backgroundColor: 'rgba(24,36,28,0.4)', justifyContent: 'flex-end' }}>
-        <Pressable style={{ backgroundColor: C.paper, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 36, gap: 14 }}>
-          <View style={{ alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: C.track }} />
-          <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.teal, textAlign: 'center' }}>{title}</Text>
+      <Pressable onPress={onClose} style={{ flex: 1, backgroundColor: color.overlay.scrim, justifyContent: 'flex-end' }}>
+        <Pressable style={{ ...shadow.sheet, backgroundColor: C.paper, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 36, gap: 14 }}>
+          <View style={{ alignSelf: 'center', width: 36, height: 4, borderRadius: radius.xs, backgroundColor: C.track }} />
+          <Text style={{ fontFamily: F.semi, fontSize: 19, color: C.ink, textAlign: 'center' }}>{title}</Text>
           <View style={[card, { overflow: 'hidden' }]}>{children}</View>
         </Pressable>
       </Pressable>

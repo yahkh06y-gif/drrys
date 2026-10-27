@@ -10,7 +10,7 @@ import { OPTION_ICONS } from '@/art';
 import { Btn, Choice, Enter, OnbBar, T } from '@/components/ui';
 import { FIELDS, progressOf, SUBFIELDS } from '@/lib/onboarding';
 import { useApp } from '@/store';
-import { C, F } from '@/theme';
+import { C } from '@/theme';
 
 export default function Study() {
   return <StudyView />;
@@ -47,7 +47,7 @@ export function StudyView({ editing = false }: { editing?: boolean }) {
           <T v="h1" style={{ marginBottom: 8 }}>
             What do you study?
           </T>
-          <T v="small" style={{ color: C.title, fontFamily: F.bold, marginBottom: 22 }}>
+          <T v="bodySm" style={{ color: C.muted, marginBottom: 22 }}>
             So Coco understands what you study.
           </T>
         </Enter>
@@ -60,7 +60,7 @@ export function StudyView({ editing = false }: { editing?: boolean }) {
         </View>
         {!!field && (
           <Enter key={field} style={{ marginTop: 26 }}>
-            <T v="h3" style={{ color: C.teal, marginBottom: 14 }}>
+            <T v="h3" style={{ marginBottom: 14 }}>
               Which one?
             </T>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
