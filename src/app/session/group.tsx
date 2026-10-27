@@ -119,7 +119,7 @@ export default function Group() {
               <T v="h2" style={{ marginTop: 6 }}>
                 Cover and recall
               </T>
-              <T>The ideas are hidden. Look at each group’s name and write what was inside it, from memory.</T>
+              <T>Write what was in each group, from memory.</T>
             </Enter>
             {used.map((g, gi) => (
               <View key={gi} style={{ backgroundColor: C.white, borderRadius: 18, borderWidth: 1, borderColor: C.line, padding: 12, gap: 8 }}>
@@ -177,7 +177,7 @@ export default function Group() {
               Group these in your own way
             </T>
             <T>
-              Drag each idea into the group it belongs to. Name each group by what connects its ideas. Coco won’t do it for you — he’ll just check your thinking.
+              Drag each idea into a group, then name what connects them. Coco only checks your thinking.
             </T>
           </Enter>
 
@@ -283,7 +283,7 @@ export default function Group() {
           )}
           {failed && (
             <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted, textAlign: 'center' }}>
-              Coco couldn’t check this time — but making the groups already did the work. Carry on.
+              Coco couldn’t check this time. Making the groups already helped, so carry on.
             </Text>
           )}
         </ScrollView>

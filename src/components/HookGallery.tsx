@@ -21,7 +21,7 @@ export function HookGallery({ title, cards, onClose }: { title?: string; cards: 
           </View>
           {cards.length === 0 ? (
             <Text style={{ fontFamily: F.medium, fontSize: 14, lineHeight: 21, color: C.body, paddingVertical: 12 }}>
-              No hooks on this branch yet. When a flashcard keeps slipping, make a hook for it and it will live here.
+              No hooks on this branch yet.
             </Text>
           ) : (
             <ScrollView contentContainerStyle={{ gap: 10, paddingBottom: 8 }}>

@@ -78,7 +78,7 @@ export default function Paywall() {
       if (ok) {
         play('celebrate');
         haptic('success');
-        Alert.alert('Welcome to Drrys Pro 🌳', 'Your forest can now grow up to 5 trees.', [{ text: 'Let’s grow', onPress: () => router.back() }]);
+        Alert.alert('Welcome to Drrys Pro', 'Your forest can now grow up to 5 trees.', [{ text: 'Let’s grow', onPress: () => router.back() }]);
       }
     } catch (e) {
       haptic('error');
@@ -101,7 +101,6 @@ export default function Paywall() {
           <T v="h2" style={{ textAlign: 'center' }}>
             Grow your knowledge
           </T>
-          <T style={{ textAlign: 'center' }}>Nurture your curiosity with deep, calm focus and mindful study habits.</T>
         </Enter>
 
         {isPro ? (
@@ -181,7 +180,7 @@ export default function Paywall() {
             <View style={{ backgroundColor: C.white, borderRadius: radius.xl, borderWidth: 1.5, borderColor: color.selected.border, padding: 18, gap: 12, ...shadow.float }}>
               <View>
                 <Text style={{ fontFamily: F.semi, fontSize: 22, color: C.ink, letterSpacing: -0.3 }}>Drrys Pro</Text>
-                <Text style={{ fontFamily: F.regular, fontSize: 14, lineHeight: 20, color: C.muted }}>For students with a full semester: every subject and every chapter in one forest.</Text>
+                <Text style={{ fontFamily: F.regular, fontSize: 14, lineHeight: 20, color: C.muted }}>Every subject and every chapter in one forest.</Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, backgroundColor: C.paper, borderRadius: 12, padding: 10 }}>
                 <Text style={{ fontFamily: F.semi, fontSize: 30, color: C.ink, fontVariant: ['tabular-nums'] }}>{plan?.perMonth ?? '—'}</Text>
@@ -242,13 +241,13 @@ export default function Paywall() {
           onPress={async () => {
             tap();
             const ok = await restore();
-            Alert.alert(ok ? 'Pro restored 🌳' : 'No active subscription found');
+            Alert.alert(ok ? 'Pro restored' : 'No active subscription found');
           }}
           style={{ alignSelf: 'center' }}>
           <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.teal, padding: 6 }}>Restore purchases</Text>
         </Pressable>
         <Text style={{ fontFamily: F.regular, fontSize: 12, lineHeight: 17, color: C.muted, textAlign: 'center' }}>
-          {rcEnabled ? 'Payments processed securely via the App Store / Google Play, powered by RevenueCat.' : 'Demo mode — add a RevenueCat key to enable real purchases.'}
+          {rcEnabled ? 'Secure payment through Google Play or the App Store.' : 'Demo mode — add a RevenueCat key to enable real purchases.'}
         </Text>
       </ScrollView>
     </SafeAreaView>

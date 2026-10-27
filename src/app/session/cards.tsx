@@ -107,7 +107,7 @@ export default function Cards() {
       st.patchCard(id, { due: Date.now() + 3 * 86_400_000 });
       st.patchCard(c.id, { leveled: true });
       play('success');
-      setToast('Level up! You’ve mastered that card, so Coco added a harder question on it.');
+      setToast('Mastered! Coco added a harder version of that card.');
       setTimeout(() => setToast(undefined), 4000);
     } catch {
       // no connection: it will graduate the next time it is answered right
@@ -180,15 +180,13 @@ export default function Cards() {
                 <View style={{ alignItems: 'center', gap: 4 }}>
                   <Ionicons name="hand-left-outline" size={20} color={C.leaf} />
                   <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.leaf }}>{revealed ? 'Tap to see the answer again' : 'Tap card to reveal answer'}</Text>
-                  {!revealed && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Recall it first, then check.</Text>}
                 </View>
               </Animated.View>
               <Animated.View style={[cardStyle, back, { backgroundColor: color.feedback.correct.bg, borderColor: C.mintBorder }]}>
                 <Text style={{ fontFamily: F.medium, fontSize: 13, color: color.feedback.correct.text }}>Answer</Text>
                 <Text style={[{ fontFamily: F.medium, fontSize: 20, lineHeight: 28, color: C.ink, marginTop: 6 }, autoDir(card.a)]}>{card.a}</Text>
                 <View style={{ flex: 1 }} />
-                <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted, textAlign: 'center' }}>How well did you remember?</Text>
-                <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.leaf, textAlign: 'center', marginTop: 4 }}>Tap to see the question again</Text>
+                <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.leaf, textAlign: 'center' }}>Tap to see the question again</Text>
               </Animated.View>
             </Pressable>
             </Enter>

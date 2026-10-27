@@ -174,9 +174,9 @@ export default function TreeScreen() {
   // the lawn-to-soil edge fills only what's left of the first screen under the tree, so the
   // insights further down sit on plain earth
   const band = Math.max(90, (viewH || treeH + 90) - treeH);
-  // a strip of lawn under the tree holds today's card, so the card sits between the tree and
-  // "Subject insights" instead of over the trunk (the chip stays in view on the first screen)
-  const lift = Math.min(84, Math.max(24, band - 56));
+  // a thin strip of lawn under the tree lets today's card sit a little lower, off the trunk,
+  // with "Subject insights" right under it
+  const lift = 18;
   const pagerH = treeH + lift;
 
   return (
@@ -241,12 +241,9 @@ export default function TreeScreen() {
               <T v="h3" style={{ color: C.white }}>
                 {subject.name} Learning Progress
               </T>
-              <Text style={{ fontFamily: F.regular, fontSize: 13, lineHeight: 18, color: color.overlay.onDark, textAlign: 'center', marginTop: 4 }}>
-                Measurable learning activity, memory recall rates, and study completion metrics
-              </Text>
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-              <Stat icon={STAT_ICONS.fire} label="Daily Study Streak" value={`Day ${st} of ${streakGoal}`} note={stats.studyDays.includes(today()) ? 'Tree watered today ✓' : 'Study today to keep it'} noteColor={C.orange}>
+              <Stat icon={STAT_ICONS.fire} label="Daily Study Streak" value={`Day ${st} of ${streakGoal}`} note={stats.studyDays.includes(today()) ? 'Watered today' : 'Study today to keep it'} noteColor={C.orange}>
                 <WeekFlames days={stats.studyDays} />
               </Stat>
               <Stat icon={STAT_ICONS.cards} label="Cards Mastered" value={`${mastered} / ${subjectCards.length}`} note={`${subjectCards.length - mastered} remaining in pool`}>
@@ -335,7 +332,7 @@ function TreePage({ clock, subjectId, width, height, topInset, near, coco, onIns
       {near && hooks.length > 0 && !hookTipSeen && (
         <Enter delay={600} style={{ position: 'absolute', top: topInset + 58, left: 24, right: 24 }}>
           <Pressable onPress={() => setApp({ hookTipSeen: true })} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.teal, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 10 }}>
-            <Text style={{ flex: 1, fontFamily: F.medium, fontSize: 14, lineHeight: 20, color: C.white }}>Your first memory hook! Hold any branch to see all your hooks for that chapter.</Text>
+            <Text style={{ flex: 1, fontFamily: F.medium, fontSize: 14, lineHeight: 20, color: C.white }}>Hold a branch to see its memory hooks.</Text>
             <Ionicons name="close" size={16} color={C.white} />
           </Pressable>
         </Enter>
@@ -502,8 +499,8 @@ function DueBadge({ count, label, onPress }: { count: number; label: string; onP
 
 // Coco's one-time explainer over the tree: three short lines, pointing down at today's card.
 const COACH_LINES: { text: string; icons?: { src: number; label: string }[] }[] = [
-  { text: 'Your tree needs watering every day 💧' },
-  { text: 'I’ll tell you right here what it needs today 👇' },
+  { text: 'Water your tree a little every day.' },
+  { text: 'This card shows what it needs today.' },
   {
     text: 'Here’s the week at a glance:',
     icons: [
@@ -513,7 +510,7 @@ const COACH_LINES: { text: string; icons?: { src: number; label: string }[] }[] 
   },
 ];
 const CARD_H = 158; // today's card height, measured from its layout (header + week strip + button + padding)
-const CARD_GAP = 8; // space under today's card, above the soil
+const CARD_GAP = 10; // space under today's card, above the soil
 
 function CoachTip({ width, height, onDone }: { width: number; height: number; onDone: () => void }) {
   const [i, setI] = useState(0);
@@ -646,10 +643,10 @@ function GuideTip({ subject, step, width, height }: { subject: Subject; step: 'f
             <Image source={COCO.classic} style={{ width: 44, height: 55 }} contentFit="contain" />
             <Text style={{ flex: 1, fontFamily: F.medium, fontSize: 16, lineHeight: 23, color: C.teal }}>
               {later
-                ? 'After your next lecture, tap ✏️ at the top and add it to this branch.'
+                ? 'After your next lecture, tap the pencil at the top to add it.'
                 : step === 'files'
-                  ? `This is your ${subject.name} tree 🌱 Add your last lecture. I’ll quiz you only from those pages.`
-                  : 'Your lecture is in! Here’s how your days work:'}
+                  ? `This is your ${subject.name} tree. Add your last lecture and I’ll quiz you on it.`
+                  : 'Your lecture is in. Here’s your week:'}
             </Text>
           </View>
           {later ? (
@@ -668,8 +665,8 @@ function GuideTip({ subject, step, width, height }: { subject: Subject; step: 'f
           ) : (
             <View style={{ gap: 10 }}>
               {[
-                { src: STAT_ICONS.book, label: `Lecture day: a full session, about ${minutes} minutes.` },
-                { src: STAT_ICONS.water, label: 'Other days: just a few flashcards to keep it green.' },
+                { src: STAT_ICONS.book, label: `Lecture day: a full session, about ${minutes} min` },
+                { src: STAT_ICONS.water, label: 'Other days: a few flashcards' },
               ].map((ic) => (
                 <View key={ic.label} style={{ flexDirection: 'row', gap: 10, alignItems: 'center', backgroundColor: C.cream, borderRadius: radius.lg, padding: 10 }}>
                   <Image source={ic.src} style={{ width: 30, height: 30 }} contentFit="contain" />
@@ -701,7 +698,7 @@ function PlantPage({ width, height, topInset, locked }: { width: number; height:
           {locked ? 'Grow a whole forest' : 'Room for another tree'}
         </T>
         <T style={{ textAlign: 'center', color: C.ink }}>
-          {locked ? 'Drrys Pro lets you care for up to 5 subject trees at once.' : 'Plant a new subject and swipe between your trees.'}
+          {locked ? 'Pro gives you up to 5 trees.' : 'Plant a new subject here.'}
         </T>
       </View>
       <Coco src={COCO.shovel} size={Math.min(190, width * 0.48)} style={{ position: 'absolute', top: height * 0.4, alignSelf: 'center' }} />
@@ -748,7 +745,7 @@ function EmptyForest() {
       <T v="h1" style={{ color: C.teal, textAlign: 'center' }}>
         Your forest is waiting
       </T>
-      <T style={{ textAlign: 'center', marginTop: 8 }}>Plant a subject and Coco will grow it with you, one branch per chapter.</T>
+      <T style={{ textAlign: 'center', marginTop: 8 }}>One tree per subject, one branch per chapter.</T>
       <Coco src={COCO.shovel} size={220} />
       <Btn title="Plant my first tree" kind="leaf" icon="leaf" sfx="grow" onPress={() => router.push('/subject')} />
     </LinearGradient>

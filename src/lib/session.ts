@@ -17,11 +17,14 @@ export async function keepFile(uri: string, name?: string): Promise<string> {
     dir.create({ intermediates: true, idempotent: true });
     const ext = /\.(pptx|ppsx)$/i.exec(name ?? '')?.[1]?.toLowerCase() ?? 'pdf';
     const dest = new File(dir, `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.${ext}`);
+    const kind = ext === 'pdf' ? undefined : 'zip';
     try {
       await new File(uri).copy(dest);
     } catch {
-      dest.write(await readFileBase64(uri), { encoding: 'base64' }); // the copy was refused: write it from the content
+      dest.write(await readFileBase64(uri, kind), { encoding: 'base64' }); // the copy was refused: write it from the content
     }
+    // a PowerPoint must still open from the kept copy; if it doesn't, write it again from the picked file
+    if (kind && !countSlides(await readFileBase64(dest.uri, kind).catch(() => ''))) dest.write(await readFileBase64(uri, kind), { encoding: 'base64' });
     return dest.uri;
   } catch {
     return uri;
@@ -45,7 +48,7 @@ async function pdfPages(uri: string): Promise<number | undefined> {
 export async function fileLength(m: { uri: string; name?: string | null; mime?: string | null }): Promise<number | undefined> {
   if (isSlides(m)) {
     try {
-      return countSlides(await readFileBase64(m.uri));
+      return countSlides(await readFileBase64(m.uri, 'zip'));
     } catch {
       return undefined;
     }
@@ -68,7 +71,7 @@ export async function checkPdf(
     if (f.size && f.size > SLIDE_LIMITS.maxMB * 1e6) return `This deck is ${(f.size / 1e6).toFixed(0)} MB. Decks up to ${SLIDE_LIMITS.maxMB} MB work — in PowerPoint use File → Compress Pictures, or save it as PDF.`;
     let n: number | undefined;
     try {
-      n = countSlides(await readFileBase64(f.uri));
+      n = countSlides(await readFileBase64(f.uri, 'zip'));
     } catch {}
     if (!n) return 'Drrys could not open this PowerPoint file. Save it again as .pptx (or as PDF) and upload that.';
     const maxS = opts.isPro ? SLIDE_LIMITS.proSlides : SLIDE_LIMITS.freeSlides;
@@ -145,7 +148,7 @@ export async function sessionContext(withPdf = true): Promise<Context> {
     slides = slideCache.get(key);
     if (!slides) {
       try {
-        slides = readSlides(await readFileBase64(mat.uri), d.fromPage, d.toPage);
+        slides = readSlides(await readFileBase64(mat.uri, 'zip'), d.fromPage, d.toPage);
         slideCache.set(key, slides);
       } catch (e) {
         why = String((e as Error)?.message ?? e).slice(0, 90);

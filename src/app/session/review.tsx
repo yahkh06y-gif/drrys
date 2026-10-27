@@ -56,9 +56,9 @@ export default function Review() {
             <Image source={HERO[page === 'nailed' ? 'celebrate' : page === 'forgotten' ? 'magnifier' : 'trash']} style={{ width: '100%', aspectRatio: 1.62, marginBottom: 6 }} contentFit="cover" transition={250} />
             {page === 'nailed' && (
               <>
-                <Pill icon="leaf" text={`${a.nailed.length} Key Concepts Rooted Firmly`} bg={color.feedback.correct.picked} border={color.feedback.correct.picked} />
+                <Pill icon="leaf" text={`${a.nailed.length} key ${a.nailed.length === 1 ? 'idea' : 'ideas'}`} bg={color.feedback.correct.picked} border={color.feedback.correct.picked} />
                 <T v="h3" style={{ textAlign: 'center' }}>
-                  Spot on! You nailed these
+                  You nailed these
                 </T>
                 <T v="small" style={{ textAlign: 'center' }}>
                   {a.summary}
@@ -67,23 +67,17 @@ export default function Review() {
             )}
             {page === 'forgotten' && (
               <>
-                <Pill icon="search" text={`${a.forgotten.length} Forgotten Concepts`} bg={color.feedback.almost.picked} border={color.feedback.almost.picked} fg={color.feedback.almost.text} />
+                <Pill icon="search" text={`${a.forgotten.length} forgotten`} bg={color.feedback.almost.picked} border={color.feedback.almost.picked} fg={color.feedback.almost.text} />
                 <T v="h3" style={{ textAlign: 'center' }}>
-                  Slipped your mind (and that’s okay!)
-                </T>
-                <T v="small" style={{ textAlign: 'center' }}>
-                  Active recall reveals exactly where to focus.
+                  Slipped your mind
                 </T>
               </>
             )}
             {page === 'corrections' && (
               <>
-                <Pill icon="build" text={`${a.corrections.length} Needs Correction`} bg={color.feedback.wrong.picked} border={color.feedback.wrong.picked} fg={color.feedback.wrong.text} />
+                <Pill icon="build" text={`${a.corrections.length} to fix`} bg={color.feedback.wrong.picked} border={color.feedback.wrong.picked} fg={color.feedback.wrong.text} />
                 <T v="h3" style={{ textAlign: 'center' }}>
-                  Let’s adjust these concepts
-                </T>
-                <T v="small" style={{ textAlign: 'center' }}>
-                  A quick tweak here turns a common mix-up into long-term mastery.
+                  Mix-ups to fix
                 </T>
               </>
             )}

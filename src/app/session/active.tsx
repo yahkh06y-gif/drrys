@@ -102,7 +102,7 @@ export default function Active() {
         step={5}
         title="Active learning"
         onBack={onBack}
-        leaveBody="Your tree won’t be watered yet, but your answers are saved. Next time you open today’s session, you’ll pick up at this question."
+        leaveBody="Your answers are saved. Next time you’ll pick up at this question."
       />
       <QuestionNav i={i} n={qs.length} open={open} results={results} onGo={go} />
       <QuestionView key={i} i={i} n={qs.length} q={q} res={results?.[i] ?? undefined} onNext={next} />

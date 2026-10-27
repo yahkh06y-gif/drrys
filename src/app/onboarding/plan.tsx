@@ -93,7 +93,7 @@ export default function Plan() {
           <View style={{ backgroundColor: C.white, borderRadius: radius.lg, borderWidth: 1.5, borderColor: C.lineStrong, paddingHorizontal: 12, paddingVertical: 10 }}>
             <Text style={{ fontFamily: F.medium, fontSize: 16, lineHeight: 22, color: C.teal }}>
               {promised
-                ? `I’ll ping you at ${hourLabel(hour)}. 🌱`
+                ? `I’ll remind you at ${hourLabel(hour)}.`
                 : step === 0
                   ? 'How long can you study each subject a day?'
                   : step === 1
@@ -205,7 +205,7 @@ function HoldToPromise({ done, onDone }: { done: boolean; onDone: () => void }) 
     <Pressable onPressIn={start} onPressOut={stop} accessibilityRole="button" accessibilityLabel="Hold to promise">
       <Animated.View style={[{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: done ? color.selected.bg : C.white, borderWidth: 4, borderColor: color.action.primary, alignItems: 'center', justifyContent: 'center' }, body]}>
         <Animated.View style={[{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: color.game.water }, water]} />
-        <Text style={{ fontFamily: F.semi, fontSize: 18, lineHeight: 24, color: done ? color.selected.text : color.text.primary, textAlign: 'center' }}>{done ? 'Promised! 🌱' : 'Hold to\npromise 🌱'}</Text>
+        <Text style={{ fontFamily: F.semi, fontSize: 18, lineHeight: 24, color: done ? color.selected.text : color.text.primary, textAlign: 'center' }}>{done ? 'Promised!' : 'Hold to\npromise'}</Text>
       </Animated.View>
     </Pressable>
   );

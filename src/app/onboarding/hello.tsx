@@ -23,7 +23,7 @@ export default function Hello() {
   const [step, setStep] = useState(0);
   const [name, setName] = useState(useApp.getState().profile.name);
   const first = name.trim().split(' ')[0];
-  const lines = ['Hi, I am Coco! 👋', 'What should I call you?', `Nice to meet you, ${first}! Let’s build your world. It takes one minute. 🌍`];
+  const lines = ['Hi, I’m Coco!', 'What should I call you?', `Nice to meet you, ${first}! This takes a minute.`];
   const next = () => {
     if (step === 1) {
       if (!name.trim()) return;

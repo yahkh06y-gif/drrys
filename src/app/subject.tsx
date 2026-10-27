@@ -17,7 +17,7 @@ import { uid, useApp, type Chapter, type Material } from '@/store';
 import { color, palette, radius } from '@/design/tokens';
 import { C, F } from '@/theme';
 
-const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function SubjectForm() {
   const { onboarding, id } = useLocalSearchParams<{ onboarding?: string; id?: string }>();
@@ -72,7 +72,7 @@ export default function SubjectForm() {
   const addChapter = () => {
     if (chapters.length >= maxCh) {
       if (canInvite)
-        Alert.alert('Want a 2nd branch?', 'Invite a friend to Drrys: when they finish their first session, your trees get a free 2nd branch. Or go Pro for 5.', [
+        Alert.alert('Want a 2nd branch?', 'Invite a friend for a free 2nd branch, or go Pro for 5.', [
           { text: 'Not now', style: 'cancel' },
           { text: 'See Pro', onPress: () => router.push('/paywall') },
           { text: 'Invite a friend', onPress: () => router.push('/together') },
@@ -109,7 +109,7 @@ export default function SubjectForm() {
             )}
           </View>
           <Enter>
-            <Label>Subject name:</Label>
+            <Label>Subject name</Label>
             <TextInput
               value={name}
               onChangeText={setName}
@@ -120,7 +120,7 @@ export default function SubjectForm() {
           </Enter>
 
           <Enter delay={60}>
-            <Label>Lecture day:</Label>
+            <Label>Lecture day</Label>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               {DAYS.map((d, i) => {
                 const on = days.includes(i);
@@ -143,10 +143,10 @@ export default function SubjectForm() {
           {!onboarding && (
           <Enter delay={120}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <Label>{onboarding ? 'First chapter:' : 'Chapters:'}</Label>
+              <Label>{onboarding ? 'First chapter' : 'Chapters'}</Label>
               {!onboarding && (
                 <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.teal }}>
-                  {chapters.length > maxCh ? `${maxCh} OPEN · ${chapters.length - maxCh} RESTING` : `${chapters.length} / ${maxCh} BRANCHES`}
+                  {chapters.length > maxCh ? `${maxCh} open · ${chapters.length - maxCh} resting` : `${chapters.length} of ${maxCh} branches`}
                 </Text>
               )}
             </View>
@@ -182,7 +182,7 @@ export default function SubjectForm() {
                     ))}
                     <Pressable onPress={() => pick(c.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 4 }}>
                       <Ionicons name="cloud-upload-outline" size={14} color={C.title} />
-                      <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.teal }}>{c.materials.length ? 'Add file' : 'Upload lecture slides (PDF or PowerPoint)'}</Text>
+                      <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.teal }}>{c.materials.length ? 'Add file' : 'Upload a PDF or PowerPoint'}</Text>
                     </Pressable>
                   </View>
                   {chapters.length > 1 && (
@@ -216,9 +216,9 @@ export default function SubjectForm() {
           ) : (
           <Enter delay={180}>
             <View style={{ gap: 2 }}>
-              <Label>Course files:</Label>
+              <Label>Course files</Label>
               <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted, marginBottom: 8 }}>
-                Optional. They help Coco focus on what your exams ask. They don’t add branches.
+                Optional. Helps Coco aim at your exams.
               </Text>
             </View>
             <View style={{ borderWidth: 1, borderColor: C.line, borderRadius: radius.xl, padding: 12, gap: 12, backgroundColor: C.white }}>

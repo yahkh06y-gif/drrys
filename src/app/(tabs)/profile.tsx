@@ -175,7 +175,7 @@ export default function Profile() {
             label="Restore purchases"
             onPress={async () => {
               const ok = await restore();
-              Alert.alert(ok ? 'Welcome back to Pro 🌳' : 'No active subscription found');
+              Alert.alert(ok ? 'Welcome back to Pro' : 'No active subscription found');
             }}
           />
           <Row icon="trash-outline" label="Reset app" danger onPress={() => setResetting(true)} last />

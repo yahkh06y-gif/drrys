@@ -44,11 +44,8 @@ export function StudyView({ editing = false }: { editing?: boolean }) {
       </View>
       <ScrollView ref={scroller} contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
         <Enter>
-          <T v="h1" style={{ marginBottom: 8 }}>
+          <T v="h1" style={{ marginBottom: 22 }}>
             What do you study?
-          </T>
-          <T v="bodySm" style={{ color: C.muted, marginBottom: 22 }}>
-            So Coco understands what you study.
           </T>
         </Enter>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>

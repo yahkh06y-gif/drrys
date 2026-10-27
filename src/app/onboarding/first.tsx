@@ -68,7 +68,7 @@ export default function First() {
           <Image source={COCO.classic} style={{ width: 72, height: 90 }} contentFit="contain" />
           <Enter key={usual ? 'u' : 'w'} style={{ flex: 1, marginBottom: 18 }}>
             <View style={{ backgroundColor: C.white, borderRadius: 18, borderBottomLeftRadius: 4, borderWidth: 1.5, borderColor: C.lineStrong, paddingHorizontal: 14, paddingVertical: 12 }}>
-              <Text style={{ fontFamily: F.medium, fontSize: 18, lineHeight: 25, color: C.teal }}>{usual ? 'See the difference? 😏' : 'Let me show you how we’ll study.'}</Text>
+              <Text style={{ fontFamily: F.medium, fontSize: 18, lineHeight: 25, color: C.teal }}>{usual ? 'See the difference?' : 'Let me show you how we’ll study.'}</Text>
             </View>
           </Enter>
         </View>

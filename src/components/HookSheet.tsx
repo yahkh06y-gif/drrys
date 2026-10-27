@@ -151,7 +151,7 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
                   />
                   {ideas.length > 0 ? (
                     <View style={{ gap: 6 }}>
-                      <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>Coco’s ideas: tap one, then make it yours</Text>
+                      <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted }}>Coco’s ideas</Text>
                       {ideas.map((h, k) => (
                         <Enter key={k} delay={k * 60}>
                           <Squeeze
@@ -170,7 +170,7 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
                       outer={{ alignSelf: 'flex-start' }}
                       style={{ flexDirection: 'row', gap: 6, alignItems: 'center', opacity: tried ? 1 : 0.6, backgroundColor: palette.sun50, borderWidth: 1, borderColor: palette.sun200, borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 7 }}>
                       {busy ? <ActivityIndicator size="small" color={palette.sun700} /> : <Ionicons name="sparkles-outline" size={14} color={palette.sun700} />}
-                      <Text style={{ fontFamily: F.medium, fontSize: 13, color: palette.sun800 }}>{tried ? 'Need ideas? Ask Coco' : 'Try one yourself first, then Coco can add ideas'}</Text>
+                      <Text style={{ fontFamily: F.medium, fontSize: 13, color: palette.sun800 }}>{tried ? 'Need ideas? Ask Coco' : 'Write one first, then ask Coco'}</Text>
                     </Squeeze>
                   )}
                 </View>

@@ -6,6 +6,8 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { RangePicker } from '@/design/RangePicker';
+
 import { Btn, Enter, SessionHeader, T } from '@/components/ui';
 import { play, tap } from '@/lib/feedback';
 import { checkPdf, fileLength, keepFile } from '@/lib/session';
@@ -71,16 +73,8 @@ export default function Choose() {
     play('select');
   };
 
-  const step = (k: 'fromPage' | 'toPage', d: number) => {
-    tap();
-    const v = Math.min(total ?? Infinity, Math.max(1, session[k] + d));
-    if (k === 'fromPage') patchSession({ fromPage: Math.min(v, session.toPage) });
-    else patchSession({ toPage: Math.max(v, session.fromPage) });
-  };
-
   const unit = mat && isSlides(mat) ? 'slide' : 'page';
   const n = session.toPage - session.fromPage + 1;
-  const whole = !!total && session.fromPage === 1 && session.toPage === total;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
@@ -88,11 +82,11 @@ export default function Choose() {
       <ScrollView contentContainerStyle={{ padding: 20, gap: 18 }}>
         <Enter>
           <T v="h2">Choose what to study</T>
-          <T>Select the material for today’s session on “{chapter.title}”.</T>
+          <T>For “{chapter.title}”</T>
         </Enter>
 
         <Enter delay={80} style={{ gap: 10 }}>
-          <T v="label">Select from uploaded files</T>
+          <T v="label">Your files</T>
           {chapter.materials.map((m) => {
             const on = session.materialId === m.id;
             return (
@@ -117,61 +111,30 @@ export default function Choose() {
           })}
           <Pressable onPress={upload} accessibilityRole="button" style={{ borderWidth: 1.5, borderStyle: 'dashed', borderColor: C.lineStrong, borderRadius: radius.lg, padding: 14, flexDirection: 'row', gap: 8, justifyContent: 'center', alignItems: 'center' }}>
             <Ionicons name="cloud-upload-outline" size={18} color={C.teal} />
-            <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.teal }}>Upload new file (PDF or PowerPoint)</Text>
+            <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.teal }}>Upload a PDF or PowerPoint</Text>
           </Pressable>
           <Pressable
             onPress={() => (tap('select'), patchSession({ materialId: undefined }))}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
             <Ionicons name={!session.materialId ? 'radio-button-on' : 'radio-button-off'} size={18} color={C.teal} />
-            <Text style={{ flex: 1, fontFamily: F.regular, fontSize: 14, color: C.body }}>No file: Coco uses general knowledge of the topic</Text>
+            <Text style={{ flex: 1, fontFamily: F.regular, fontSize: 14, color: C.body }}>No file, Coco uses what it knows</Text>
           </Pressable>
         </Enter>
 
         {session.materialId && (
           <Enter style={{ gap: 10 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <T v="label">{unit === 'slide' ? 'Slides for today' : 'Pages for today'}</T>
-              {!!total && (
-                <Pressable
-                  onPress={() => (tap('select'), patchSession({ fromPage: 1, toPage: total }))}
-                  disabled={whole}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: whole ? C.mint : C.white, borderWidth: 1, borderColor: whole ? C.mint : C.lineStrong, borderRadius: 99, paddingHorizontal: 12, paddingVertical: 6 }}>
-                  {whole && <Ionicons name="checkmark" size={13} color={C.moss} />}
-                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: whole ? C.moss : C.teal }}>All {total}</Text>
-                </Pressable>
-              )}
-            </View>
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              {(['fromPage', 'toPage'] as const).map((k) => {
-                const atMin = session[k] <= (k === 'toPage' ? session.fromPage : 1);
-                const atMax = k === 'fromPage' ? session.fromPage >= session.toPage : !!total && session.toPage >= total;
-                return (
-                  <View key={k} style={{ flex: 1, backgroundColor: C.white, borderWidth: 1, borderColor: C.line, borderRadius: 16, padding: 12 }}>
-                    <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>{k === 'fromPage' ? 'From' : 'To'}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
-                      <Pressable hitSlop={8} disabled={atMin} onPress={() => step(k, -1)} style={{ opacity: atMin ? 0.3 : 1 }}>
-                        <Ionicons name="remove-circle-outline" size={24} color={C.teal} />
-                      </Pressable>
-                      <Text style={{ fontFamily: F.semi, fontSize: 24, color: C.ink, fontVariant: ['tabular-nums'] }}>{session[k]}</Text>
-                      <Pressable hitSlop={8} disabled={atMax} onPress={() => step(k, 1)} style={{ opacity: atMax ? 0.3 : 1 }}>
-                        <Ionicons name="add-circle-outline" size={24} color={C.teal} />
-                      </Pressable>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-            <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.muted }}>
-              {counting && !total
-                ? `Counting the ${unit}s…`
-                : `${n} ${n === 1 ? unit : `${unit}s`}${total ? ` of ${total}` : ''} • ~${Math.max(10, n * 3)} min session`}
-            </Text>
+            <T v="label">{unit === 'slide' ? 'Slides for today' : 'Pages for today'}</T>
+            {counting && !total ? (
+              <T v="caption">Counting the {unit}s…</T>
+            ) : (
+              <RangePicker total={total} from={session.fromPage} to={session.toPage} unit={unit} onChange={(fromPage, toPage) => patchSession({ fromPage, toPage })} />
+            )}
+            <T v="caption">About {Math.max(10, n * 3)} min</T>
           </Enter>
         )}
       </ScrollView>
       <View style={{ padding: 20, gap: 6 }}>
         <Btn title="Continue to recall" icon="arrow-forward" kind="green" onPress={() => router.push('/session/recall')} />
-        <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.muted, textAlign: 'center' }}>Your material is hidden during recall. That’s the point.</Text>
       </View>
     </SafeAreaView>
   );

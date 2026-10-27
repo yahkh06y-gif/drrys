@@ -25,11 +25,11 @@ type Q = {
 const QUESTIONS: Q[] = [
   {
     key: 'field',
-    title: 'I Study .....',
+    title: 'I study…',
     layout: 'grid',
     options: () => FIELDS.map((label) => ({ label })),
   },
-  { key: 'subfield', title: 'I Study .....', layout: 'grid', options: (p) => SUBFIELDS[p.field ?? 'Other'] ?? SUBFIELDS.Other },
+  { key: 'subfield', title: 'I study…', layout: 'grid', options: (p) => SUBFIELDS[p.field ?? 'Other'] ?? SUBFIELDS.Other },
   {
     key: 'goal',
     title: 'What would you like us to help you with?',
@@ -41,7 +41,7 @@ const QUESTIONS: Q[] = [
   {
     key: 'interests',
     title: 'What are you into?',
-    subtitle: 'That helps Coco connect tricky ideas to things you already enjoy.',
+    subtitle: 'So Coco can explain with things you enjoy.',
     layout: 'grid',
     multi: true,
     other: 'Something else? e.g. chess, cooking…',

@@ -70,8 +70,8 @@ export default function Plant() {
         </Enter>
         <View style={{ flex: 1 }} />
         <View style={{ gap: 10 }}>
-          <Btn title="Plant Now" kind="leaf" mono onPress={startCatch} />
-          <Btn title="Not now" kind="green" height={46} mono onPress={finishOnboarding} />
+          <Btn title="Plant now" kind="leaf" mono onPress={startCatch} />
+          <Btn title="Not now" kind="light" height={46} mono onPress={finishOnboarding} />
         </View>
       </SafeAreaView>
 

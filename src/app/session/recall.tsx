@@ -55,7 +55,7 @@ export default function Recall() {
         <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
           <View>
             <T v="h2">Brain Dump & Recall</T>
-            <T>Tell Coco what you remember about today’s lesson… Take your time and try to remember everything.</T>
+            <T>Tell Coco everything you remember from today’s lesson.</T>
           </View>
 
           {/* mode toggle */}
@@ -80,7 +80,7 @@ export default function Recall() {
             {mode === 'speak' && (
               <View style={{ alignItems: 'center', paddingVertical: 8, gap: 8 }}>
                 <MicButton voice={voice} size={72} style={{ marginVertical: 14 }} />
-                <VoiceHint voice={voice} idle={recall ? 'Tap the mic to add more.' : 'Tap the mic and just talk — Arabic or English.'} />
+                <VoiceHint voice={voice} idle={recall ? 'Tap the mic to add more.' : 'Tap and talk, in Arabic or English.'} />
               </View>
             )}
 
@@ -127,7 +127,6 @@ export default function Recall() {
               <Btn title="Analyze & compare with lecture" icon="arrow-forward" kind="green" onPress={() => router.push('/session/analyze')} />
             </Enter>
           ) : null}
-          <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.muted, textAlign: 'center' }}>Coco will highlight what you nailed and where memory gaps are.</Text>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

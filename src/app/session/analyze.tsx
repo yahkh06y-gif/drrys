@@ -10,6 +10,7 @@ import { Btn, Coco, Enter, SessionHeader, T } from '@/components/ui';
 import { prepareSession } from '@/lib/ai';
 import { haptic, play } from '@/lib/feedback';
 import { sessionContext } from '@/lib/session';
+import { color } from '@/design/tokens';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
 
@@ -81,6 +82,8 @@ export default function Analyze() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt, patchSession]);
 
+  const fileErr = !!err?.startsWith('File problem');
+  const reason = (fileErr ? /\(([^)]*)\)/.exec(err ?? '')?.[1] : err) ?? '';
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
       <SessionHeader step={3} title="Analyze" onBack={() => (router.canGoBack() ? router.back() : router.replace('/session/recall'))} />
@@ -89,7 +92,7 @@ export default function Analyze() {
           <T v="h2" style={{ textAlign: 'center' }}>
             Coco’s analyzing your recall.
           </T>
-          <T style={{ textAlign: 'center' }}>This usually takes less than a minute.</T>
+          <T style={{ textAlign: 'center' }}>Usually under a minute.</T>
         </Enter>
         <View style={{ flex: 1, justifyContent: 'center' }}>
           <Coco src={COCO.reading} size={190} />
@@ -99,6 +102,8 @@ export default function Analyze() {
             <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }}>
               {i < done ? (
                 <Ionicons name="checkmark-circle" size={20} color={C.leaf} />
+              ) : i === done && err ? (
+                <Ionicons name="alert-circle" size={20} color={color.feedback.wrong.icon} />
               ) : i === done ? (
                 <ActivityIndicator size="small" color={C.leaf} style={{ width: 20 }} />
               ) : (
@@ -109,12 +114,28 @@ export default function Analyze() {
           ))}
         </View>
         {err ? (
-          <View style={{ marginTop: 14, gap: 8 }}>
-            <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 18, color: C.orange, textAlign: 'center' }}>{err.startsWith('File problem') ? err.slice(0, 240) : `Coco couldn’t reach the cloud: ${err.slice(0, 120)}`}</Text>
-            <Btn title="Try again" kind="green" onPress={() => setAttempt((a) => a + 1)} />
-          </View>
+          <Enter style={{ marginTop: 14, gap: 10 }}>
+            {/* short and plain; the technical reason stays in small print for when something needs fixing */}
+            <View style={{ backgroundColor: color.feedback.wrong.bg, borderRadius: 16, padding: 14, gap: 4 }}>
+              <T v="subhead" style={{ color: color.feedback.wrong.text }}>
+                {fileErr ? 'Coco couldn’t open your lecture file' : 'Coco couldn’t connect'}
+              </T>
+              <T v="caption">{fileErr ? 'Add the file again, then continue. Your recall is saved.' : 'Check your internet and try again. Your recall is saved.'}</T>
+              <T v="caption" numberOfLines={2} style={{ color: C.mutedLight }}>
+                {reason}
+              </T>
+            </View>
+            {fileErr ? (
+              <>
+                <Btn title="Choose the file again" iconLeft="document-attach-outline" kind="green" onPress={() => router.dismissTo('/session/choose')} />
+                <Btn title="Try again" kind="light" height={46} onPress={() => setAttempt((a) => a + 1)} />
+              </>
+            ) : (
+              <Btn title="Try again" kind="green" onPress={() => setAttempt((a) => a + 1)} />
+            )}
+          </Enter>
         ) : (
-          <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.muted, textAlign: 'center', marginTop: 14 }}>Your notes and recall are safely stored.</Text>
+          <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.muted, textAlign: 'center', marginTop: 14 }}>Your recall is saved.</Text>
         )}
       </View>
     </SafeAreaView>

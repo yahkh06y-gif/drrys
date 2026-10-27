@@ -121,8 +121,7 @@ export default function Together() {
         <Enter style={{ alignItems: "center", gap: 4 }}>
           <Coco src={COCO.hi} size={100} />
           <T style={{ textAlign: "center" }}>
-            Forests grow better together. Bring your classmates and Drrys gets
-            better for all of you.
+            Study with classmates and unlock discounts together.
           </T>
         </Enter>
 
