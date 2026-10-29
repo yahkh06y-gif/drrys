@@ -91,9 +91,12 @@ function Writing({ onBack }: { onBack: () => void }) {
   );
 }
 
+// one shared empty list: a new [] on every read would make the store re-render forever
+const NO_QUESTIONS: ActiveQuestion[] = [];
+
 export default function Active() {
   const ready = useApp((s) => s.session?.questions !== undefined); // undefined: Coco is still writing them
-  const qs = useApp((s) => s.session?.questions ?? []);
+  const qs = useApp((s) => s.session?.questions ?? NO_QUESTIONS);
   const results = useApp((s) => s.session?.results);
   const saved = useApp((s) => s.session?.qIndex);
   const patchSession = useApp((s) => s.patchSession);
@@ -275,7 +278,9 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
         record(r, JSON.stringify(matched), Object.entries(matched).map(([l, rr]) => `${l}  =  ${rr}`).join('\n'));
       } else {
         const img = fmt === 'work' && ink ? await pad.current?.capture() : undefined;
-        const g = await gradeAnswer(await sessionContext(false), q, answer, img);
+        // with the lecture pages (kept in memory, so usually instant): Coco grades against the page the question comes from
+        const ctx = await sessionContext().catch(() => sessionContext(false));
+        const g = await gradeAnswer(ctx, q, answer, img);
         const said = answer || (img ? '(sketch)' : '');
         record(g, said, said);
       }

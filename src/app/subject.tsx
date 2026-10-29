@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Btn, Enter, IconBtn, T } from '@/components/ui';
 import { haptic, play, tap } from '@/lib/feedback';
 import { finishOnboarding } from '@/lib/finish';
-import { checkPdf, keepFile } from '@/lib/session';
+import { checkPdf, keepFile, realType } from '@/lib/session';
 import { LECTURE_TYPES } from '@/lib/slides';
 import { chapterLimit, LIMITS } from '@/lib/purchases';
 import { friendBranches } from '@/lib/together';
@@ -45,7 +45,7 @@ export default function SubjectForm() {
   const pick = async (cid: string) => {
     const r = await DocumentPicker.getDocumentAsync({ type: LECTURE_TYPES, copyToCacheDirectory: true, multiple: false });
     if (r.canceled) return;
-    const f = r.assets[0];
+    const f = await realType(r.assets[0]);
     const bad = await checkPdf(f, { chapter: true, isPro });
     if (bad) return Alert.alert('Can’t use this file', bad);
     play('select');

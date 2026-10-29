@@ -10,7 +10,7 @@ import { RangePicker } from '@/design/RangePicker';
 
 import { Btn, Enter, SessionHeader, T } from '@/components/ui';
 import { play, tap } from '@/lib/feedback';
-import { checkPdf, fileLength, keepFile } from '@/lib/session';
+import { checkPdf, fileLength, keepFile, realType } from '@/lib/session';
 import { isSlides, LECTURE_TYPES } from '@/lib/slides';
 import { uid, useApp } from '@/store';
 import { autoDir } from '@/design/rtl';
@@ -64,7 +64,7 @@ export default function Choose() {
   const upload = async () => {
     const r = await DocumentPicker.getDocumentAsync({ type: LECTURE_TYPES, copyToCacheDirectory: true });
     if (r.canceled) return;
-    const f = r.assets[0];
+    const f = await realType(r.assets[0]);
     const bad = await checkPdf(f, { chapter: true, isPro: useApp.getState().isPro });
     if (bad) return Alert.alert('Can’t use this file', bad);
     const m = { id: uid(), name: f.name, uri: await keepFile(f.uri, f.name), size: f.size, mime: f.mimeType };

@@ -9,6 +9,8 @@
  * The AI keys never ship in the app: every call goes through Drrys' server function (supabase/functions/ai),
  * which holds the keys as Supabase secrets.
  */
+import { PDFDocument } from 'pdf-lib';
+
 import { cloudEnabled, fetchFunction } from './cloud';
 import { DEMO } from './demo';
 import { plainMath } from './plain';
@@ -52,6 +54,7 @@ export type ActiveQuestion = {
   text?: string; // blank: a sentence from the lecture; the words to fill in are written [[like this]]
   extras?: string[]; // blank: extra (wrong) words in the word bank
   figure?: FigureRef; // the picture of the lecture this question is about (chosen by the AI)
+  page?: number; // the page of the session's lecture pages (1 = the first chosen page) where the answer is written
   picture?: QPicture; // that picture, cut out and saved, shown under the question
 };
 /** Where a question's picture is in the lecture: the page, and on a PDF page the box around it ([top, left, bottom, right],
@@ -84,14 +87,46 @@ type Block =
   | { type: 'image'; source: { type: 'base64'; media_type: 'image/png' | 'image/jpeg' | 'image/webp'; data: string } } // a student's sketch, or a picture to check
   | { type: 'audio'; mime: string; data: string }; // Gemini only (voice → text)
 
-async function call(system: string, content: Block[], maxTokens = 2000): Promise<string> {
-  return aiProvider === 'gemini' ? callGemini(system, content, maxTokens) : callClaude(system, content, maxTokens);
+/* ---------- timing: how long each request takes (shown in the Metro console as [timing] lines) ---------- */
+
+/** One timed step: an AI request (with its model and tokens) or a step without AI (reading the file, cutting pictures). */
+export type Timing = { label: string; ms: number; ok: boolean; model?: string; note?: string; inTokens?: number; outTokens?: number; thinkTokens?: number; cutOff?: boolean; at: number };
+/** The last 50 timed steps, newest last. */
+export const timings: Timing[] = [];
+
+export function logTiming(t: Omit<Timing, 'at'>) {
+  timings.push({ ...t, at: Date.now() });
+  if (timings.length > 50) timings.shift();
+  const tokens = t.inTokens != null ? ` · in ${t.inTokens} / out ${t.outTokens ?? 0} / thinking ${t.thinkTokens ?? 0} tokens` : '';
+  console.log(`[timing] ${t.label}${t.model ? ` · ${t.model}` : ''} · ${(t.ms / 1000).toFixed(1)}s · ${t.ok ? 'ok' : 'failed'}${tokens}${t.cutOff ? ' · CUT OFF (hit the length limit)' : ''}${t.note ? ` · ${t.note}` : ''}`);
 }
 
-async function callClaude(system: string, content: Block[], maxTokens: number): Promise<string> {
+/** Time a step that is not an AI request (one [timing] line when it ends). */
+export async function timed<T>(label: string, run: () => Promise<T>): Promise<T> {
+  const t0 = Date.now();
+  try {
+    const out = await run();
+    logTiming({ label, ms: Date.now() - t0, ok: true });
+    return out;
+  } catch (e) {
+    logTiming({ label, ms: Date.now() - t0, ok: false, note: String((e as Error)?.message ?? e).slice(0, 120) });
+    throw e;
+  }
+}
+
+async function call(system: string, content: Block[], maxTokens = 2000, label = 'ai'): Promise<string> {
+  return aiProvider === 'gemini' ? callGemini(system, content, maxTokens, { label }) : callClaude(system, content, maxTokens, label);
+}
+
+async function callClaude(system: string, content: Block[], maxTokens: number, label = 'ai'): Promise<string> {
+  const t0 = Date.now();
   const res = await fetchFunction('ai', { action: 'claude', model: MODEL, max_tokens: maxTokens, system, content });
-  if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) {
+    logTiming({ label, model: MODEL, ms: Date.now() - t0, ok: false, note: `status ${res.status}` });
+    throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
   const json = await res.json();
+  logTiming({ label, model: MODEL, ms: Date.now() - t0, ok: true, inTokens: json.usage?.input_tokens, outTokens: json.usage?.output_tokens, cutOff: json.stop_reason === 'max_tokens' });
   return (json.content ?? []).filter((b: { type: string }) => b.type === 'text').map((b: { text: string }) => b.text).join('');
 }
 
@@ -115,7 +150,7 @@ const noThinking = new Set<string>(); // models that rejected the thinking setti
 // Flash models. Thinking is kept to a minimum — writing down speech needs no reasoning.
 const TRANSCRIBE_CHAIN = ['gemini-3.5-transcribe', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.5-flash'];
 
-type GeminiOpts = { chain?: string[]; thinking?: 'minimal' | 'low'; temperature?: number; timeoutMs?: number };
+type GeminiOpts = { chain?: string[]; thinking?: 'minimal' | 'low'; temperature?: number; timeoutMs?: number; label?: string };
 
 async function callGemini(system: string, content: Block[], maxTokens: number, opts: GeminiOpts = {}): Promise<string> {
   const parts = content.map((b) =>
@@ -152,12 +187,16 @@ async function callGemini(system: string, content: Block[], maxTokens: number, o
       const ctrl = new AbortController();
       // the full-session request (PDF in, analysis + questions + cards out) legitimately takes a while
       const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? (hasPdf ? 120000 : hasAudio ? 45000 : 30000));
+      const t0 = Date.now();
+      const label = opts.label ?? (opts.chain ? 'transcribe' : 'ai');
       try {
         const res = await fetchFunction('ai', bodyFor(model), ctrl.signal);
         if (res.ok) {
           const json = await res.json();
           const out = json.candidates?.[0]?.content?.parts ?? [];
           const text = out.filter((p: { text?: string; thought?: boolean }) => p.text && !p.thought).map((p: { text: string }) => p.text).join('');
+          const use = json.usageMetadata ?? {};
+          logTiming({ label, model, ms: Date.now() - t0, ok: !!text, inTokens: use.promptTokenCount, outTokens: use.candidatesTokenCount, thinkTokens: use.thoughtsTokenCount, cutOff: json.candidates?.[0]?.finishReason === 'MAX_TOKENS', note: text ? undefined : 'empty reply' });
           if (text) {
             if (opts.chain) lastVoiceGood = model;
             else lastGood = model;
@@ -168,6 +207,7 @@ async function callGemini(system: string, content: Block[], maxTokens: number, o
         }
         const errText = (await res.text()).slice(0, 300);
         last = `Gemini API ${res.status} (${model}): ${errText.slice(0, 160)}`;
+        logTiming({ label, model, ms: Date.now() - t0, ok: false, note: `status ${res.status}, trying the next model` });
         if (res.status === 400 && /thinking/i.test(errText) && !noThinking.has(model)) {
           noThinking.add(model); // this model doesn't take the thinking setting — same model again without it
           continue;
@@ -185,6 +225,7 @@ async function callGemini(system: string, content: Block[], maxTokens: number, o
         // timed out (RN reports an aborted fetch as "Fetch request has been canceled") or the network
         // dropped: try the next model rather than failing the whole session
         last = ctrl.signal.aborted ? `${model}: timed out` : `${model}: ${(e as Error).message}`;
+        logTiming({ label, model, ms: Date.now() - t0, ok: false, note: ctrl.signal.aborted ? 'timed out, trying the next model' : String((e as Error).message).slice(0, 80) });
         cooldown.set(model, Date.now() + 120000);
         break;
       } finally {
@@ -327,14 +368,23 @@ export type MapIdea = { idea: string; page?: number; weight: number; status: 'na
 export type Lesson = { analysis: Analysis; map: MapIdea[] };
 
 const NO_PAGES = `NO PAGE NUMBERS IN WHAT THE STUDENT READS: questions, hints, answers, cards and the analysis texts never mention a page or slide number and never send the student to the lecture ("on page 4…", "see slide 2", "go back to page 3"). The student answers from memory; page numbers belong only in "src", "page" and "figure".`;
+const NO_PICTURE_TALK = `NO PICTURES HERE: the student sees this text WITHOUT any picture of the lecture, so it must make sense on its own. Never refer to a figure, diagram, graph, chart, table, image or drawing ("in the diagram", "the table below", "as shown above", "في الشكل التالي"): say in words what it shows instead.`;
+
+// Words that point at a picture the student would have to see ("in the diagram below", "Figure 3", "في الرسمة").
+// A question or card without its picture that says this can't be answered, so it is left out.
+const PICTURE_TALK =
+  /\b(?:in|on|from|using|see|look at|refer to|based on|according to)\s+(?:the|this|that)\s+(?:above\s+|following\s+|given\s+|attached\s+)?(?:figure|fig\.?|diagram|graph|chart|table|image|picture|illustration|drawing|plot|screenshot)\b|\b(?:the|this)\s+(?:figure|diagram|image|picture|illustration|screenshot|chart)\s+(?:below|above|shown)\b|\b(?:shown|pictured|illustrated|depicted)\s+(?:below|above)\b|\bfig(?:ure)?\.?\s*\d|(?:في|من|على|ب)\s*ال(?:رسمة|رسم البياني|صورة|مخطط)|(?:الشكل|الرسمة|الرسم|الصورة|المخطط|الجدول)\s+(?:التالي|التالية|أدناه|المرفق|المرفقة|المقابل|المقابلة|الموضح|الموضحة|السابق|السابقة|رقم)/i;
+/** The text points at a picture of the lecture. */
+export const mentionsPicture = (t?: string) => !!t && PICTURE_TALK.test(t);
+
 const grounding = (c: Context) =>
   `GROUNDING (the most important rule): everything comes from the lecture pages above and nothing else. Never use your own knowledge, the syllabus or the past papers as a source of facts. "src" is the page number of the lecture document (1 to ${c.pageCount ?? 'the last page'}) where the answer or fact is actually written. If you cannot point to a page, leave that item out.`;
 
 /** Ask once more when the answer came back cut off or as broken JSON (a dense lecture makes a long answer). */
-async function callJSON<T>(system: string, content: Block[], maxTokens: number, retryNote: string): Promise<T> {
+async function callJSON<T>(system: string, content: Block[], maxTokens: number, retryNote: string, label = 'ai'): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
-      const raw = await call(system, attempt ? [...content, { type: 'text', text: `YOUR PREVIOUS ANSWER WAS CUT OFF OR NOT VALID JSON. Answer again with COMPLETE, valid JSON. ${retryNote}` }] : content, maxTokens);
+      const raw = await call(system, attempt ? [...content, { type: 'text', text: `YOUR PREVIOUS ANSWER WAS CUT OFF OR NOT VALID JSON. Answer again with COMPLETE, valid JSON. ${retryNote}` }] : content, maxTokens, attempt ? `${label} (again: the first answer was cut off or broken)` : label);
       return parseJSON<T>(raw);
     } catch (e) {
       if (!(e instanceof SyntaxError) || attempt >= 1) throw e;
@@ -377,6 +427,7 @@ Return ONLY JSON with this shape:
 Rules:
 - ${NO_PAGES}
 - ${grounding(c)}
+- The analysis texts (summary, details, why, truth) are read without pictures. ${NO_PICTURE_TALK}
 - map (do this FIRST, it is your working list): walk through the lecture pages in order and list EVERY distinct idea, definition, formula, number, example or picture worth knowing, whether or not the student mentioned it. "page": where it is (1 to ${c.pageCount ?? 'the last page'}). weight: 3 = core and likely examined, 2 = important support, 1 = detail. status compares it with the brain dump: nailed (stated correctly), missed (not mentioned), wrong (stated incorrectly). Names only, no explanations here. The LECTURE decides what matters, never the student's text.
 - "shape" says how the idea is built in the lecture. Look at each one honestly; Drrys picks how to practise it from this:
     visual — the idea is taught with a picture the student must SEE: a diagram, automaton, graph, chart, table, circuit, map, labelled drawing, code screenshot. Lectures that are mostly pictures have many of these.
@@ -393,6 +444,7 @@ Rules:
     ],
     8000,
     'Keep every "detail" short (one sentence) and the map entries minimal, but keep all the ideas.',
+    'analysis',
   );
   const a = out.analysis;
   if (!a) throw new Error('Coco’s answer came back incomplete');
@@ -511,6 +563,7 @@ Rules:
 - ${grounding(c)}
 - Keep the format of each item. Only an item with a picture may change it: to "match", "order" or "blank" when the picture itself holds those pairs, steps or terms (e.g. several automata and the languages they accept → match).
 - A question with a picture is about that picture and points at it ("In the diagram below, …"); everything it needs is in the picture.
+- A question WITHOUT a picture in the plan is shown with no picture at all. ${NO_PICTURE_TALK} If the idea can't be asked without seeing the picture, ask about what it means instead.
 - Never write an explain or work question that asks the student to match, connect, order, sort or fill gaps.
 - For order, sort, match and blank, "ideal" is ONE sentence saying why it is that way (it becomes the student's flashcard if they miss it).
 - "kind": conceptual (how ideas relate), procedural (a process or calculation), analogous (a comparison and where it stops working) or evidence (use a fact or example on a new case). Mix them.
@@ -519,6 +572,7 @@ Rules:
     ],
     9000,
     'Keep every "ideal" short (one sentence), but write every question of the plan.',
+    'questions',
   );
   const KINDS: QKind[] = ['conceptual', 'procedural', 'analogous', 'evidence'];
   const byN = new Map(plan.map((p) => [p.n, p]));
@@ -529,7 +583,14 @@ Rules:
       // the picture comes from the plan (the analysis found it); the AI only keeps the format or picks one for a picture
       const format = p?.figure ? q.format : (p?.format ?? q.format);
       const clean = cleanQuestion({ ...q, format, kind: KINDS.includes(q.kind as QKind) ? q.kind : 'conceptual', figure: p?.figure, src: q.src ?? p?.page } as ActiveQuestion);
-      return clean ? [{ ...clean, src: q.src ?? p?.page }] : [];
+      if (!clean) return [];
+      // no picture in the plan, but the text points at one: the student couldn't answer it
+      if (!clean.figure && (mentionsPicture(clean.q) || mentionsPicture(clean.hint))) {
+        console.log(`[check] question left out: it talks about a picture it doesn't have: "${clean.q.slice(0, 80)}"`);
+        return [];
+      }
+      const src = Number(q.src ?? p?.page);
+      return [{ ...clean, src: q.src ?? p?.page, ...(Number.isInteger(src) && src >= 1 ? { page: src } : {}) }];
     });
   return grounded(c, written);
 }
@@ -550,14 +611,18 @@ Return ONLY JSON: [{"q": "short question", "a": "short, accurate answer", "src":
 Rules:
 - ${NO_PAGES}
 - ${grounding(c)}
+- Cards are shown without any picture. ${NO_PICTURE_TALK}
 - Only REFERENCE material: terms, definitions, numbers, formulas, lists, labels: the things that are simply remembered. Ideas that are better practised by explaining do not get a card. Built from the LECTURE content, not from the student's wording: the mixed-up ideas first, then the forgotten reference facts, then the other key reference facts of these pages.
 - No fixed number: one card per fact worth memorising, as many as the material holds; dense pages get many cards, light pages few. Never pad with trivia, never skip a key fact, never add facts that aren't in the lecture.`,
       },
     ],
     6000,
     'Keep every answer short, but keep all the cards.',
+    'cards',
   );
-  return grounded(c, (Array.isArray(raw) ? raw : []).filter((x) => x?.q && x?.a)).map((x) => ({ q: noPages(x.q), a: noPages(x.a) }));
+  return grounded(c, (Array.isArray(raw) ? raw : []).filter((x) => x?.q && x?.a))
+    .map((x) => ({ q: noPages(x.q), a: noPages(x.a) }))
+    .filter((x) => !(mentionsPicture(x.q) || mentionsPicture(x.a)) || (console.log(`[check] card left out: it talks about a picture: "${x.q.slice(0, 80)}"`), false));
 }
 
 /** The picture reference, if it points at something this session's pages can show. */
@@ -658,6 +723,39 @@ Return ONLY JSON: [{"q": "...", "hint": "a nudge, not the answer", "ideal": "mod
   return parseJSON<ActiveQuestion[]>(raw);
 }
 
+const pageCache = new Map<string, string>();
+/** The one lecture page a question comes from, for Coco to grade against (nothing if there is no file or no page).
+ *  A PDF page is cut out of the session's pages (small, fast); a slide is sent as its text and pictures. */
+async function sourcePage(c: Context, page?: number): Promise<Block[]> {
+  if (!page || page < 1) return [];
+  const note: Block = { type: 'text', text: 'The lecture page above is the one this question comes from.' };
+  try {
+    const sl = c.slides?.[page - 1];
+    if (sl) {
+      return [
+        { type: 'text', text: `=== LECTURE PAGE ===\n${sl.text || '(no text, only pictures)'}` },
+        ...sl.images.slice(0, 3).map((im): Block => ({ type: 'image', source: { type: 'base64', media_type: im.mime, data: im.data } })),
+        note,
+      ];
+    }
+    if (!c.pdfBase64 || page > (c.pageCount ?? Infinity)) return [];
+    const key = `${c.pdfBase64.length}:${c.pdfBase64.slice(-64)}:${page}`;
+    let data = pageCache.get(key);
+    if (!data) {
+      const src = await PDFDocument.load(c.pdfBase64, { ignoreEncryption: true });
+      if (page > src.getPageCount()) return [];
+      const out = await PDFDocument.create();
+      const [p] = await out.copyPages(src, [page - 1]);
+      out.addPage(p);
+      data = await out.saveAsBase64();
+      pageCache.set(key, data);
+    }
+    return [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } }, note];
+  } catch {
+    return []; // grade from the model answer alone
+  }
+}
+
 /** The question's picture, for Coco to look at while grading or talking about it (nothing if it can't be read). */
 async function pictureOf(q: ActiveQuestion): Promise<Block[]> {
   if (!q.picture?.uri) return [];
@@ -679,20 +777,22 @@ export async function gradeAnswer(c: Context, q: ActiveQuestion, answer: string,
     const words = answer.trim().split(/\s+/).filter(Boolean).length;
     return { correct: words >= 5, close: words >= 3 && words < 5, feedback: words >= 5 ? DEMO.goodFeedback : DEMO.tryFeedback };
   }
+  const page = await sourcePage(c, q.page);
   const raw = await call(persona(c), [
+    ...page,
     ...(await pictureOf(q)),
     ...(sketch ? ([{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: sketch } }] as Block[]) : []),
     {
       type: 'text',
       text: `${sketch ? 'The image above is what the student sketched or wrote by hand for this question.\n' : ''}Question (${q.kind ?? 'conceptual'}): ${q.q}\nModel answer: ${q.ideal}\nStudent answer: """${answer}"""
-${q.format === 'work' ? 'This is a worked problem: judge the method, each step and the final answer (from the typed working and/or the sketch). If only the final answer is wrong, say which step to recheck.\n' : ''}${q.kind === 'analogous' ? 'This is a comparison question: the answer must say where the comparison fits AND where it stops working.\n' : ''}${q.kind === 'procedural' ? 'This is a procedure question: the steps must be right and in the right order.\n' : ''}Judge if the student's explanation captures the key idea (be fair, not pedantic). Give a "verdict": "right" (the key idea is there), "close" (the student is on the right track and says part of it correctly, but it is incomplete or imprecise: not yet the answer wanted), or "wrong" (the key idea is missing or mixed up). The model answer comes from the lecture: judge against it and add nothing from outside it.
+${q.format === 'work' ? 'This is a worked problem: judge the method, each step and the final answer (from the typed working and/or the sketch). If only the final answer is wrong, say which step to recheck.\n' : ''}${q.kind === 'analogous' ? 'This is a comparison question: the answer must say where the comparison fits AND where it stops working.\n' : ''}${q.kind === 'procedural' ? 'This is a procedure question: the steps must be right and in the right order.\n' : ''}Judge if the student's explanation captures the key idea (be fair, not pedantic). Give a "verdict": "right" (the key idea is there), "close" (the student is on the right track and says part of it correctly, but it is incomplete or imprecise: not yet the answer wanted), or "wrong" (the key idea is missing or mixed up). The model answer comes from the lecture: judge against it and add nothing from outside it.${page.length ? ' The lecture page above is where this question comes from. The model answer is only a short summary of it: anything correct the student says that this page supports counts as correct, even if the model answer leaves it out.' : ''}
 Also spot the gap: if the answer is wrong, incomplete or mixes something up, write ONE flashcard aimed at exactly that
 missing or confused point (not the whole question again), answered from the lecture. If the answer is fully right, "card" is null.
 The student will see the model answer right under your feedback, so the feedback must NOT repeat it, praise, or explain the whole idea.
 Return ONLY JSON: {"verdict": "right|close|wrong", "feedback": "if right: one short line (max 10 words) on what they got. If close or wrong: ONLY what is missing or mixed up in their answer, as a short phrase (max 15 words, no praise, no intro), e.g. 'That λ is a move in the graph, not a symbol on the tape.' Same language as the student's answer",
 "card": {"q": "short question on the exact gap", "a": "short, accurate answer"} | null}`,
     },
-  ], 700);
+  ], 700, 'grade');
   const g = parseJSON<Grade & { verdict?: string }>(raw);
   const verdict = g.verdict ?? (g.correct ? 'right' : 'wrong');
   return { ...g, correct: verdict === 'right', close: verdict === 'close' };
@@ -707,10 +807,11 @@ export async function makeCards(c: Context, a: Analysis): Promise<FlashCard[]> {
 the corrected misconceptions first, then the missed ideas, then the other key ideas. One card per idea worth remembering,
 as many as the material needs (no fixed number), no filler, nothing that isn't in the lecture.
 ${JSON.stringify(a)}
+Cards are shown without any picture: never refer to a figure, diagram, graph, table or picture.
 Return ONLY JSON: [{"q": "short question", "a": "short, accurate answer"}]`,
     },
-  ]);
-  return parseJSON<FlashCard[]>(raw);
+  ], 2000, 'cards (fallback)');
+  return parseJSON<FlashCard[]>(raw).filter((x) => x?.q && x?.a && !mentionsPicture(x.q) && !mentionsPicture(x.a));
 }
 
 export async function chatCoco(c: Context, history: { role: 'user' | 'assistant'; text: string }[]): Promise<string> {
@@ -760,7 +861,7 @@ export async function transcribe(base64: string, mime: string): Promise<string> 
       { type: 'audio', mime, data: base64 },
     ],
     1500,
-    { chain: TRANSCRIBE_CHAIN, thinking: 'minimal', temperature: 0, timeoutMs: 25000 },
+    { chain: TRANSCRIBE_CHAIN, thinking: 'minimal', temperature: 0, timeoutMs: 25000, label: 'transcribe' },
   );
   const text = out.trim();
   return /^\[silence\]$/i.test(text) ? '' : text;

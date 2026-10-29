@@ -6,7 +6,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
 
-import type { ActiveQuestion, Context, QPicture } from './ai';
+import { timed, type ActiveQuestion, type Context, type QPicture } from './ai';
 import { callFunction, cloudEnabled } from './cloud';
 
 /** Save one picture (base64) and return where it is: a file in the app's documents, or a data URI on the web. */
@@ -25,19 +25,22 @@ type Cut = { data: string; width: number; height: number } | null;
 /** Cut the questions' pictures out of the PDF pages (one request for all of them). */
 async function cutFromPdf(pdf: string, qs: ActiveQuestion[]): Promise<(QPicture | undefined)[]> {
   if (!cloudEnabled) return qs.map(() => undefined);
-  try {
-    const { images } = await callFunction<{ images: Cut[] }>('figures', { pdf, crops: qs.map((q) => ({ page: q.figure!.page, box: q.figure!.box })) }, 45000);
-    return qs.map((_, k) => {
-      const im = images?.[k];
-      return im?.data ? { uri: save(im.data, 'image/jpeg'), ratio: im.width / im.height } : undefined;
-    });
-  } catch {
-    return qs.map(() => undefined); // the server could not cut them: these questions are left out below
+  const crops = qs.map((q) => ({ page: q.figure!.page, box: q.figure!.box }));
+  // the picture server may be waking up (its PDF engine loads on the first request after a quiet while): one more try
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { images } = await timed(attempt ? 'pictures (again)' : 'pictures', () => callFunction<{ images: Cut[] }>('figures', { pdf, crops }, 45000));
+      return qs.map((_, k) => {
+        const im = images?.[k];
+        return im?.data ? { uri: save(im.data, 'image/jpeg'), ratio: im.width / im.height } : undefined;
+      });
+    } catch {}
   }
+  return qs.map(() => undefined); // the server could not cut them: these questions are left out below
 }
 
-/** Give every question that is about a picture its picture. Questions whose picture can't be made are left out
- *  (unless that would leave no questions at all). */
+/** Give every question that is about a picture its picture. Questions whose picture can't be made are left out,
+ *  always: a question about a picture the student can't see can't be answered. */
 export async function attachPictures(c: Context, questions: ActiveQuestion[]): Promise<ActiveQuestion[]> {
   const want = questions.filter((q) => q.figure);
   if (!want.length) return questions;
@@ -55,10 +58,10 @@ export async function attachPictures(c: Context, questions: ActiveQuestion[]): P
     const cuts = await cutFromPdf(c.pdfBase64, want);
     want.forEach((q, k) => made.set(q, cuts[k]));
   }
-  const out = questions.flatMap((q) => {
+  return questions.flatMap((q) => {
     if (!q.figure) return [q];
     const picture = made.get(q);
+    if (!picture) console.log(`[check] question left out: its picture could not be made: "${q.q.slice(0, 80)}"`);
     return picture ? [{ ...q, picture }] : [];
   });
-  return out.length ? out : questions;
 }

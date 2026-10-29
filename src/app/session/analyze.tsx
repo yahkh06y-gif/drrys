@@ -19,15 +19,23 @@ export default function Analyze() {
   const [done, setDone] = useState(0);
   const [err, setErr] = useState<string>();
   const [attempt, setAttempt] = useState(0);
+  const [clock, setClock] = useState({ step: -1, secs: 0 }); // time on the current step
 
   const pages = s?.materialId ? `pages ${s.fromPage}–${s.toPage}` : 'the topic';
+  // the real parts of the work, in order: each one is ticked when it is actually done
   const steps = [
     'Reading your recall',
-    s?.materialId ? `Opening your lecture (${pages})` : 'Recalling the key ideas of the topic',
-    `Comparing your recall with ${pages}`,
-    'Finding what you nailed',
-    'Spotting gaps and mix-ups',
+    s?.materialId ? `Opening your lecture (${pages})` : 'Getting the topic ready',
+    `Comparing your recall with ${pages}: what you nailed, missed and mixed up`,
   ];
+  const working = !err && done < steps.length;
+  useEffect(() => {
+    if (!working) return;
+    const t0 = Date.now();
+    const t = setInterval(() => setClock({ step: done, secs: Math.floor((Date.now() - t0) / 1000) }), 1000);
+    return () => clearInterval(t);
+  }, [done, working]);
+  const secs = clock.step === done ? clock.secs : 0;
 
   useEffect(() => {
     let alive = true;
@@ -41,24 +49,16 @@ export default function Analyze() {
       };
     }
     setErr(undefined);
-    setDone(0);
-    // one request does all of this, so the checklist moves on a timer that slows down as it goes
-    // (quick at first, then patient), and waits on the last step until the answer is in. The questions and the
+    setDone(1); // the recall is already here
+    // each step is ticked when that part of the work is really done (lib/prep tells us). The questions and the
     // flashcards are written afterwards, in the background, while the student reads the analysis (lib/prep).
     const timers: ReturnType<typeof setTimeout>[] = [];
-    let at = 0;
-    [2500, 3500, 5000, 7000].forEach((gap) => {
-      at += gap;
-      timers.push(setTimeout(() => alive && setDone((d) => Math.min(d + 1, steps.length - 1)), at));
-    });
     const tick = { stop: () => timers.forEach(clearTimeout) };
     (async () => {
       try {
-        setTimeout(() => alive && setDone((d) => Math.max(d, 1)), 700);
         const st1 = useApp.getState().session!;
-        await analyse(`${st1.recall}|${st1.materialId ?? ''}|${st1.fromPage}-${st1.toPage}`);
+        await analyse(`${st1.recall}|${st1.materialId ?? ''}|${st1.fromPage}-${st1.toPage}`, (step) => alive && setDone(step + 1));
         if (!alive) return;
-        tick.stop();
         setDone(steps.length);
         play('success');
         haptic('success');
@@ -85,7 +85,7 @@ export default function Analyze() {
           <T v="h2" style={{ textAlign: 'center' }}>
             Coco’s analyzing your recall.
           </T>
-          <T style={{ textAlign: 'center' }}>Usually under a minute.</T>
+          <T style={{ textAlign: 'center' }}>Longer lectures take a little longer.</T>
         </Enter>
         <View style={{ flex: 1, justifyContent: 'center' }}>
           <Coco src={COCO.reading} size={190} />
@@ -102,7 +102,8 @@ export default function Analyze() {
               ) : (
                 <Ionicons name="ellipse-outline" size={20} color={C.mutedLight} />
               )}
-              <Text style={{ fontFamily: i === done ? F.medium : F.regular, fontSize: 15, color: i <= done ? C.ink : C.muted }}>{label}</Text>
+              <Text style={{ flex: 1, fontFamily: i === done ? F.medium : F.regular, fontSize: 15, color: i <= done ? C.ink : C.muted }}>{label}</Text>
+              {i === done && working && secs >= 3 && <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted, fontVariant: ['tabular-nums'] }}>{`${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`}</Text>}
             </View>
           ))}
         </View>
@@ -128,7 +129,9 @@ export default function Analyze() {
             )}
           </Enter>
         ) : (
-          <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.muted, textAlign: 'center', marginTop: 14 }}>Your recall is saved.</Text>
+          <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.muted, textAlign: 'center', marginTop: 14 }}>
+            {working && done === steps.length - 1 && secs >= 45 ? 'Coco is still reading carefully. Your recall is saved.' : 'Your recall is saved.'}
+          </Text>
         )}
       </View>
     </SafeAreaView>

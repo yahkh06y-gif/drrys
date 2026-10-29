@@ -31,6 +31,19 @@ export async function keepFile(uri: string, name?: string): Promise<string> {
   }
 }
 
+/** Some phones describe a real .pptx as the old .ppt format (or drop the file ending). Look at the file itself:
+ *  a .pptx is a zip with slides inside, so it gets its proper name and type and is treated as a PowerPoint. */
+export async function realType<T extends { uri: string; name?: string | null; mimeType?: string | null }>(f: T): Promise<T> {
+  if (isSlides(f) || !isOldPpt(f)) return f;
+  try {
+    if (!countSlides(await readFileBase64(f.uri, 'zip'))) return f;
+  } catch {
+    return f; // not a zip: really the old format
+  }
+  const name = `${(f.name ?? 'Lecture').replace(/\.(ppt|pps)$/i, '')}.pptx`;
+  return { ...f, name, mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' };
+}
+
 /** Upload limits. The AI takes at most ~20 MB per request, and one chapter rarely runs past 40 pages —
  *  so a free tree can't be "5 chapters in one file"; Pro gets roomier chapters. */
 export const PDF_LIMITS = { maxMB: 15, freePages: 40, proPages: 150 };
