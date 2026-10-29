@@ -5,3 +5,4 @@ export * from './tokens';
 export * from './rtl';
 export * from './components';
 export { Bubble, Btn, Card, Choice, Coco, Confirm, Enter, IconBtn, OnbBar, Pill, Progress, Screen, SessionHeader, SESSION_STEPS, T, XpStars } from '@/components/ui';
+export * from './keyboard';

@@ -16,6 +16,7 @@ import { Squeeze } from '@/components/SessionMotion';
 import { Enter, IconBtn, Pill, SessionHeader, T } from '@/components/ui';
 import { askAboutCard, levelUp, makeCards } from '@/lib/ai';
 import { haptic, play, tap } from '@/lib/feedback';
+import { cardsReady } from '@/lib/prep';
 import { cardContext, sessionContext } from '@/lib/session';
 import { isDue, useApp, type Card, type ChatMsg, type Rating } from '@/store';
 import { C, F } from '@/theme';
@@ -55,8 +56,10 @@ export default function Cards() {
     if (!loading || !session?.analysis) return;
     (async () => {
       try {
-        // usually ready already (made with the analysis); otherwise ask Coco now
-        const general = session.draftCards?.length ? session.draftCards : await makeCards(await sessionContext(false), session.analysis!);
+        // usually ready already (written in the background while the student practised); otherwise ask Coco now
+        await cardsReady();
+        const drafts = useApp.getState().session?.draftCards;
+        const general = drafts?.length ? drafts : await makeCards(await sessionContext(false), session.analysis!);
         // the gaps from active learning come first, then the lecture cards (without repeating a question)
         const gaps = session.gapCards ?? [];
         const seen = new Set(gaps.map((c) => c.q.trim().toLowerCase()));

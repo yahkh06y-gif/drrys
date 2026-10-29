@@ -77,6 +77,7 @@ npx expo start
 
 - Qloo (server side): `npx supabase functions deploy qloo --no-verify-jwt`, then `npx supabase secrets set QLOO_API_KEY=your-key`.
 - AI (server side): `npx supabase secrets set GEMINI_API_KEY=your-key YOUCAM_API_KEY=your-key` (and `ANTHROPIC_API_KEY` for Claude), then `npx supabase functions deploy ai --no-verify-jwt`.
+- Question pictures (server side, no key): `npx supabase functions deploy figures --no-verify-jwt`. It cuts the diagram a question is about out of the lecture's PDF page. Without it, questions that need a picture are left out of the session.
 - With `EXPO_PUBLIC_COCO_AI=demo`, Coco runs a built-in demo session so every screen can still be tried.
 - Android APK: `npx eas-cli build -p android --profile preview`.
 
@@ -101,6 +102,7 @@ src/
 supabase/functions/
   ai/               holds the AI keys: Claude, Gemini and YouCam calls go through it
   qloo/             holds the Qloo key: taste data for the onboarding
+  figures/          cuts a question's picture out of a lecture PDF page (no key)
 ```
 
 ## Known limits

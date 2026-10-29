@@ -55,7 +55,11 @@ One family: **Readex Pro** (Arabic and Latin, built on Lexend for reading ease).
 6. Blocks: `Surface` (card / bark / sunken / raised / flat / a tone), `Btn` (one main button per screen),
    `Feedback` + `answerTile()` for every answer state, `Badge` for small status pills, `Segmented` for two to
    four options, `Field` for text, `ListGroup` + `ListRow` for settings-style lists, `Sheet` for bottom sheets,
-   `Confirm` for "are you sure?", `StatTile` for numbers, `EmptyState` for empty lists.
+   `Confirm` for "are you sure?", `StatTile` for numbers, `EmptyState` for empty lists, `Figure` for a picture
+   from the student's lecture (tap to open it full screen, pinch to zoom). Inside an answer card: `FeedbackPart`
+   for each short labeled part ("What's missing", "The answer"; never a paragraph of AI text) and `FixedSentence`
+   for a fill-the-gaps sentence written out with the right words in green. `RecallCard` shows what a memory hook
+   is for. A sheet with a text box sits on the keyboard with `useKeyboardLift()`, not KeyboardAvoidingView.
 7. Answers use the four tones only: `correct · almost · wrong · info`, with the words "Nailed it!",
    "Almost there", "Not yet". A tone is a tint and a word, never color alone (always an icon too).
 8. Disabled is grey (`color.action.disabled`), not see-through.

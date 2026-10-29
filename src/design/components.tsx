@@ -5,7 +5,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image, type ImageSource } from 'expo-image';
 import React from 'react';
 import { Modal, Pressable, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from 'react-native';
-import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring } from 'react-native-reanimated';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Btn, Coco, T } from '@/components/ui';
 import { tap } from '@/lib/feedback';
@@ -117,6 +119,55 @@ export function Feedback({ tone, title, children, style }: { tone: Tone; title?:
       </Row>
       {typeof children === 'string' ? <T style={{ color: color.text.primary }}>{children}</T> : children}
     </Surface>
+  );
+}
+
+/**
+ * One labeled part of an answer card: "What's missing", "The answer". A hairline in the card's color sits above
+ * every part but the first, so the card reads as short, separate pieces instead of one block of text.
+ */
+export function FeedbackPart({ tone, label, first, children }: { tone: Tone; label: string; first?: boolean; children: React.ReactNode }) {
+  const t = color.feedback[tone];
+  return (
+    <View style={{ gap: S[1], ...(first ? null : { borderTopWidth: 1, borderColor: t.border, paddingTop: S[2] }) }}>
+      <T v="label" style={{ color: t.text }}>
+        {label}
+      </T>
+      {typeof children === 'string' ? (
+        <T v="bodyLg" auto style={{ color: color.text.primary }}>
+          {children}
+        </T>
+      ) : (
+        children
+      )}
+    </View>
+  );
+}
+
+/**
+ * A sentence written out again with its right words: the words the student got wrong are shown in green (the
+ * right word, highlighted), the ones they got right in plain bold. Used after fill-the-gaps.
+ *   parts: the sentence in pieces; a gap has `gap` (its number) · marks: right / wrong for each gap
+ */
+export function FixedSentence({ parts, marks }: { parts: { t: string; gap?: number }[]; marks: boolean[] }) {
+  const all = parts.map((p) => p.t).join('');
+  const fix = color.feedback.correct;
+  return (
+    <T v="bodyLg" style={[{ color: color.text.primary }, autoDir(all)]}>
+      {parts.map((p, i) =>
+        p.gap === undefined ? (
+          p.t
+        ) : marks[p.gap] ? (
+          <T key={i} v="bodyLg" style={{ fontFamily: font.semi, color: color.text.primary }}>
+            {p.t}
+          </T>
+        ) : (
+          <T key={i} v="bodyLg" style={{ fontFamily: font.semi, color: fix.text, backgroundColor: fix.picked }}>
+            {` ${p.t} `}
+          </T>
+        ),
+      )}
+    </T>
   );
 }
 
@@ -437,6 +488,29 @@ export function EmptyState({ coco, title, body, action, onAction }: { coco?: Ima
   );
 }
 
+/* ---------- Recall ---------- */
+/**
+ * What a memory hook is for: the answer to remember, big, with the question it answers above it in small type.
+ * `compact` (while the student types): only the answer, on two lines at most, so the writing has the room.
+ */
+export function RecallCard({ q, a, compact, style }: { q: string; a: string; compact?: boolean; style?: StyleProp<ViewStyle> }) {
+  return (
+    <Surface kind="sunken" pad={3} gap={1} style={style}>
+      {!compact && (
+        <T v="caption" auto numberOfLines={3}>
+          {q}
+        </T>
+      )}
+      <Row gap={1.5} align="flex-start">
+        <Ionicons name="bookmark" size={size.icon.sm} color={color.text.brand} style={{ marginTop: 4 }} />
+        <T v="subhead" auto numberOfLines={compact ? 2 : 6} style={{ flex: 1, color: color.text.primary }}>
+          {a}
+        </T>
+      </Row>
+    </Surface>
+  );
+}
+
 /* ---------- Sheets ---------- */
 /** The bottom sheet: a scrim you can tap to close, a grab handle, a title and anything under it. */
 export function Sheet({ visible, title, onClose, children }: { visible: boolean; title?: string; onClose: () => void; children: React.ReactNode }) {
@@ -461,4 +535,113 @@ export function Sheet({ visible, title, onClose, children }: { visible: boolean;
 /** A clay picture (icons from assets/art) at one of the standard sizes. */
 export function ClayIcon({ src, sz = 34 }: { src: ImageSource | number; sz?: number }) {
   return <Image source={src} style={{ width: sz, height: sz }} contentFit="contain" />;
+}
+
+/* ---------- Lecture pictures ---------- */
+/** A picture from the student's lecture (a diagram, an automaton, a chart, a table…) shown with a question.
+ *  A flat card you can tap: the picture opens full screen, where it can be pinched and moved.
+ *  `ratio`: width / height, when known (otherwise it is read from the picture once it loads). */
+export function Figure({ source, ratio, style }: { source: ImageSource | string | number; ratio?: number; style?: StyleProp<ViewStyle> }) {
+  const [open, setOpen] = React.useState(false);
+  const [found, setFound] = React.useState<number>();
+  const r = Math.max(0.6, Math.min(2.4, ratio ?? found ?? 4 / 3)); // very tall or very wide pictures stay readable
+  return (
+    <>
+      <Pressable
+        onPress={() => (tap('select'), setOpen(true))}
+        accessibilityRole="imagebutton"
+        accessibilityLabel="Picture from your lecture. Double tap to open it full screen."
+        style={({ pressed }) => [{ transform: [{ scale: pressed ? motion.pressScale : 1 }] }, style]}>
+        <Surface kind="card" pad={2} gap={1.5}>
+          <Image
+            source={source}
+            style={{ width: '100%', aspectRatio: r, borderRadius: radius.md }}
+            contentFit="contain"
+            onLoad={(e) => !ratio && e.source.height > 0 && setFound(e.source.width / e.source.height)}
+          />
+          <Row gap={1} justify="center">
+            <Ionicons name="expand-outline" size={size.icon.sm} color={color.text.muted} />
+            <T v="caption" style={{ color: color.text.muted }}>
+              Tap to see it bigger
+            </T>
+          </Row>
+        </Surface>
+      </Pressable>
+      <FigureViewer source={source} visible={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+/** A picture full screen on a dark backdrop: pinch to zoom, drag to move, double tap to zoom in or back out. */
+export function FigureViewer({ source, visible, onClose }: { source: ImageSource | string | number; visible: boolean; onClose: () => void }) {
+  const insets = useSafeAreaInsets();
+  const reduce = useReducedMotion();
+  const scale = useSharedValue(1);
+  const start = useSharedValue(1);
+  const x = useSharedValue(0);
+  const y = useSharedValue(0);
+  const sx = useSharedValue(0);
+  const sy = useSharedValue(0);
+  const settle = (to: number) => {
+    'worklet';
+    const t = { duration: reduce ? 0 : motion.result };
+    scale.value = withTiming(to, t);
+    if (to === 1) {
+      x.value = withTiming(0, t);
+      y.value = withTiming(0, t);
+    }
+  };
+  const pinch = Gesture.Pinch()
+    .onStart(() => {
+      start.value = scale.value;
+    })
+    .onUpdate((e) => {
+      scale.value = Math.max(0.8, Math.min(5, start.value * e.scale));
+    })
+    .onEnd(() => {
+      if (scale.value < 1) settle(1);
+    });
+  const pan = Gesture.Pan()
+    .averageTouches(true)
+    .onStart(() => {
+      sx.value = x.value;
+      sy.value = y.value;
+    })
+    .onUpdate((e) => {
+      if (scale.value <= 1) return;
+      x.value = sx.value + e.translationX;
+      y.value = sy.value + e.translationY;
+    });
+  const twice = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => settle(scale.value > 1 ? 1 : 2.5));
+  const look = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }, { translateY: y.value }, { scale: scale.value }] }));
+  const close = () => {
+    scale.set(1);
+    x.set(0);
+    y.set(0);
+    onClose();
+  };
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={close} statusBarTranslucent>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: color.overlay.viewer }}>
+        <GestureDetector gesture={Gesture.Simultaneous(pinch, pan, twice)}>
+          <Animated.View style={[{ flex: 1, paddingTop: insets.top + S[12], paddingBottom: insets.bottom + S[8], paddingHorizontal: S[2] }, look]}>
+            <Image source={source} style={{ flex: 1 }} contentFit="contain" accessibilityLabel="Picture from your lecture" />
+          </Animated.View>
+        </GestureDetector>
+        <Pressable
+          onPress={() => (tap(), close())}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Close the picture"
+          style={{ position: 'absolute', top: insets.top + S[2], end: layout.gutter, width: layout.tapMin, height: layout.tapMin, borderRadius: radius.pill, backgroundColor: color.overlay.viewerButton, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="close" size={size.icon.lg} color={color.text.onAction} />
+        </Pressable>
+        <T v="caption" style={{ position: 'absolute', bottom: insets.bottom + S[3], alignSelf: 'center', color: color.overlay.onDark }}>
+          Pinch to zoom · double tap to zoom in
+        </T>
+      </GestureHandlerRootView>
+    </Modal>
+  );
 }

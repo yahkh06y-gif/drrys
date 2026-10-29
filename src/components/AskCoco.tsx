@@ -4,17 +4,20 @@
 // as soon as Coco has written it down. "Next question" is never on the sheet: asking and moving on stay apart.
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useKeyboardLift } from '@/design/keyboard';
+import { autoDir } from '@/design/rtl';
 import { color } from '@/design/tokens';
 import { COCO } from '@/art';
 import { Coco } from '@/components/ui';
 import { useVoice, VoiceWave, withLive } from '@/components/Voice';
 import { discussAnswer, type ActiveQuestion } from '@/lib/ai';
 import { tap } from '@/lib/feedback';
+import { plainMath } from '@/lib/plain';
 import { saveResult, sessionContext } from '@/lib/session';
 import { useApp, type ChatMsg } from '@/store';
 import { C, F } from '@/theme';
@@ -55,6 +58,12 @@ export function CocoChatSheet({
   const height = useSharedValue(HALF);
   const down = useSharedValue(H);
   const start = useSharedValue(HALF);
+  // the keyboard: the sheet sits on top of it and is never taller than the room left above it
+  const { ref: kbRef, onLayout: kbLayout, lift: kbLift, room: kbRoom, open: kbOpen } = useKeyboardLift();
+  const cap = useSharedValue(FULL);
+  useEffect(() => {
+    cap.set(kbRoom ? Math.min(FULL, kbRoom - insets.top - 12) : FULL);
+  }, [kbRoom, FULL, insets.top, cap]);
   useEffect(() => {
     if (!open) return;
     height.value = HALF;
@@ -117,7 +126,7 @@ export function CocoChatSheet({
       height.value = withTiming(up ? FULL : HALF, EASE);
     });
 
-  const sheet = useAnimatedStyle(() => ({ height: height.value, transform: [{ translateY: down.value }] }));
+  const sheet = useAnimatedStyle(() => ({ height: Math.min(height.value, cap.value), transform: [{ translateY: down.value }] }));
   const shade = useAnimatedStyle(() => ({ opacity: 1 - Math.min(1, down.value / HALF) }));
 
   // opened from a mic: listen straight away
@@ -132,7 +141,7 @@ export function CocoChatSheet({
 
   useEffect(() => {
     if (open) setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 80);
-  }, [open, thread.length, waiting]);
+  }, [open, thread.length, waiting, kbOpen]);
 
   const recording = voice.state === 'recording';
   const busyVoice = voice.state !== 'idle';
@@ -144,8 +153,8 @@ export function CocoChatSheet({
         <Animated.View style={[{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: color.overlay.scrim }, shade]}>
           <Pressable accessibilityLabel="Close" style={{ flex: 1 }} onPress={dismiss} />
         </Animated.View>
-        <KeyboardAvoidingView behavior="padding" pointerEvents="box-none" style={{ flex: 1, justifyContent: 'flex-end', paddingTop: insets.top + 12 }}>
-          <Animated.View style={[{ maxHeight: '100%', backgroundColor: C.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' }, sheet]}>
+        <View ref={kbRef} onLayout={kbLayout} pointerEvents="box-none" style={{ flex: 1, justifyContent: 'flex-end', paddingBottom: kbLift }}>
+          <Animated.View style={[{ backgroundColor: C.paper, borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' }, sheet]}>
             {/* the top bar: the handle to pull, the title, what it's about, and ✕ */}
             <GestureDetector gesture={pan}>
               <View style={{ paddingHorizontal: 18, paddingTop: 8, paddingBottom: 12, borderBottomWidth: 1, borderColor: C.line }}>
@@ -186,8 +195,8 @@ export function CocoChatSheet({
                     </View>
                   ) : (
                     // Coco's replies read like text on the page, not boxes
-                    <Text key={k} style={{ alignSelf: 'flex-start', maxWidth: '92%', fontFamily: F.medium, fontSize: 15, lineHeight: 23, color: C.ink }}>
-                      {m.text}
+                    <Text key={k} style={[{ alignSelf: 'flex-start', maxWidth: '92%', fontFamily: F.medium, fontSize: 15, lineHeight: 23, color: C.ink }, autoDir(m.text)]}>
+                      {plainMath(m.text)}
                     </Text>
                   ),
                 )
@@ -196,7 +205,7 @@ export function CocoChatSheet({
             </ScrollView>
 
             {/* the message bar: while recording it turns into a timer */}
-            <View style={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: Math.max(insets.bottom, 10) }}>
+            <View style={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: kbOpen ? 10 : Math.max(insets.bottom, 10) }}>
               <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, backgroundColor: C.white, borderWidth: 1, borderColor: recording ? C.red : C.lineStrong, borderRadius: 24, paddingLeft: 16, paddingRight: 5, paddingVertical: 5, minHeight: 48 }}>
                 {busyVoice ? (
                   <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, height: 38 }}>
@@ -241,7 +250,7 @@ export function CocoChatSheet({
               </View>
             </View>
           </Animated.View>
-        </KeyboardAvoidingView>
+        </View>
       </GestureHandlerRootView>
     </Modal>
   );

@@ -74,7 +74,6 @@ export default function Choose() {
   };
 
   const unit = mat && isSlides(mat) ? 'slide' : 'page';
-  const n = session.toPage - session.fromPage + 1;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
@@ -123,13 +122,11 @@ export default function Choose() {
 
         {session.materialId && (
           <Enter style={{ gap: 10 }}>
-            <T v="label">{unit === 'slide' ? 'Slides for today' : 'Pages for today'}</T>
             {counting && !total ? (
               <T v="caption">Counting the {unit}s…</T>
             ) : (
               <RangePicker total={total} from={session.fromPage} to={session.toPage} unit={unit} onChange={(fromPage, toPage) => patchSession({ fromPage, toPage })} />
             )}
-            <T v="caption">About {Math.max(10, n * 3)} min</T>
           </Enter>
         )}
       </ScrollView>

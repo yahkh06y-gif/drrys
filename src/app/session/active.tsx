@@ -4,7 +4,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { autoDir } from '@/design/rtl';
@@ -12,18 +12,19 @@ import { color, radius } from '@/design/tokens';
 import { COCO } from '@/art';
 import { AskCoco } from '@/components/AskCoco';
 import { Btn, Coco, Enter, Pill, SessionHeader, T } from '@/components/ui';
-import { toneOf as toneFor } from '@/design';
+import { FeedbackPart, Figure, FixedSentence, Stack, toneOf as toneFor } from '@/design';
 import { MicButton, useVoice, VoiceWave, withLive } from '@/components/Voice';
 import { gradeAnswer, type ActiveQuestion, type Grade, type QFormat, type QKind } from '@/lib/ai';
 import { HookSheet, type HookTarget } from '@/components/HookSheet';
 import { HookEntry, Verdict } from '@/components/SessionMotion';
 import { SketchPad, type SketchHandle } from '@/components/SketchPad';
-import { BlankQ } from '@/components/questions/Blank';
+import { BlankQ, parseBlanks } from '@/components/questions/Blank';
 import { MatchQ } from '@/components/questions/Match';
 import { OrderQ } from '@/components/questions/Order';
 import { SortQ } from '@/components/questions/Sort';
 import { gradeBlank, gradeMatch, gradeOrder, gradeSort } from '@/lib/grade';
 import { haptic, play, tap } from '@/lib/feedback';
+import { questionsReady } from '@/lib/prep';
 import { onSample, sampleAnswer, typeOut } from '@/lib/sample';
 import { firstOpen, missedIdeas, ORGANIZE_MIN, saveResult, sessionContext } from '@/lib/session';
 import { useApp, type QResult } from '@/store';
@@ -64,7 +65,34 @@ const solution = (q: ActiveQuestion) =>
           ? q.buckets.map((b) => `${b.name}: ${b.items.join(', ')}`).join('\n')
           : q.ideal;
 
+/** The questions are still being written (lib/prep): Coco reading, a line saying so, and a retry if it failed. */
+function Writing({ onBack }: { onBack: () => void }) {
+  const [err, setErr] = useState(false);
+  const [tries, setTries] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    questionsReady().catch(() => alive && setErr(true));
+    return () => {
+      alive = false;
+    };
+  }, [tries]);
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: color.bg.app }}>
+      <SessionHeader step={5} title="Active learning" onBack={onBack} />
+      <Stack gap={4} align="center" justify="center" pad={5} flex={1}>
+        <Coco src={COCO.reading} size={160} />
+        <T v="h3" style={{ textAlign: 'center' }}>
+          {err ? 'Coco couldn’t finish your questions' : 'Coco is writing your questions'}
+        </T>
+        <T style={{ textAlign: 'center' }}>{err ? 'Check your internet, then try again.' : 'Almost there: one idea at a time, made from your lecture.'}</T>
+        {err ? <Btn title="Try again" kind="green" onPress={() => (setErr(false), setTries((n) => n + 1))} /> : <ActivityIndicator color={color.text.brand} />}
+      </Stack>
+    </SafeAreaView>
+  );
+}
+
 export default function Active() {
+  const ready = useApp((s) => s.session?.questions !== undefined); // undefined: Coco is still writing them
   const qs = useApp((s) => s.session?.questions ?? []);
   const results = useApp((s) => s.session?.results);
   const saved = useApp((s) => s.session?.qIndex);
@@ -74,8 +102,8 @@ export default function Active() {
   const q = qs[i];
   // no questions this time: go straight on to the flashcards instead of a blank screen
   useEffect(() => {
-    if (!q) router.replace('/session/cards');
-  }, [q]);
+    if (ready && !q) router.replace('/session/cards');
+  }, [ready, q]);
 
   const go = (k: number) => {
     play('flip');
@@ -94,6 +122,7 @@ export default function Active() {
     if (o < qs.length) go(o); // a question was skipped over somehow: answer it first
     else router.replace('/session/cards');
   };
+  if (!ready) return <Writing onBack={goBack} />;
   if (!q) return null;
 
   return (
@@ -192,7 +221,9 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
   const marked = fmt === 'order' || fmt === 'sort' || fmt === 'match' || fmt === 'blank'; // the app marks these itself
   const grade = res?.grade;
   const tone = grade ? toneOf(grade) : undefined;
+  const tkey = grade?.correct ? 'correct' : grade?.close ? 'almost' : 'wrong';
   const live = !grade || !!marks; // the drag/tap answer is on screen (not answered yet, or marked just now)
+  const gapsOnly = live && fmt === 'blank' && !!q.text; // the sentence with gaps says it all: no question line above it
   const talks = res?.thread?.filter((m) => m.role === 'user').length ?? 0;
   const last = i + 1 >= n;
 
@@ -261,18 +292,27 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
         {!grade && (
           <Enter>
             <Pill text={(FORMAT_LINE[fmt] ?? KIND[q.kind ?? 'conceptual']).pill} />
-            {marked && <T style={{ marginTop: 8 }}>{FORMAT_LINE[fmt]?.line}</T>}
+            {marked && !gapsOnly && <T style={{ marginTop: 8 }}>{FORMAT_LINE[fmt]?.line}</T>}
           </Enter>
         )}
 
-        {/* 1 · the question */}
-        <Enter delay={grade ? 0 : 120}>
-          <View style={{ backgroundColor: C.white, borderRadius: radius.xl, borderWidth: 1, borderColor: C.line, padding: 18 }}>
-            <Text style={[{ fontFamily: F.medium, fontSize: grade ? 16 : 18, lineHeight: grade ? 24 : 27, color: C.ink, textAlign: 'center', letterSpacing: -0.1 }, autoDir(q.q)]}>{q.q}</Text>
-          </View>
-        </Enter>
+        {/* 1 · the question (fill the gaps needs none: the sentence with its gaps is the question) */}
+        {!gapsOnly && (
+          <Enter delay={grade ? 0 : 120}>
+            <View style={{ backgroundColor: C.white, borderRadius: radius.xl, borderWidth: 1, borderColor: C.line, padding: 18 }}>
+              <Text style={[{ fontFamily: F.medium, fontSize: grade ? 16 : 18, lineHeight: grade ? 24 : 27, color: C.ink, textAlign: 'center', letterSpacing: -0.1 }, autoDir(q.q)]}>{q.q}</Text>
+            </View>
+          </Enter>
+        )}
 
-        {!grade && fmt === 'explain' && <Coco src={last ? COCO.pointer : COCO.stand} size={130} />}
+        {/* the picture of the lecture this question is about (a diagram, a chart, a table…) */}
+        {!!q.picture && (
+          <Enter delay={grade ? 0 : 160}>
+            <Figure source={q.picture.uri} ratio={q.picture.ratio} />
+          </Enter>
+        )}
+
+        {!grade && fmt === 'explain' && !q.picture && <Coco src={last ? COCO.pointer : COCO.stand} size={130} />}
 
         {hint && !grade && (
           <Enter>
@@ -340,13 +380,21 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
         {grade && tone && res && (
           <Enter style={{ gap: 12 }}>
             {/* 3 · how it went (and the right answer, only when it was missed) */}
-            <Verdict kind={grade.correct ? 'correct' : grade.close ? 'almost' : 'wrong'} tone={tone}>
-              <Text style={[{ fontFamily: F.regular, fontSize: 15, lineHeight: 23, color: C.ink }, autoDir(grade.feedback)]}>{grade.feedback}</Text>
-              {!grade.correct && (
-                <View style={{ borderTopWidth: 1, borderColor: tone.border, paddingTop: 8, gap: 2 }}>
-                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: tone.text }}>The answer</Text>
-                  <Text style={[{ fontFamily: F.medium, fontSize: 15, lineHeight: 22, color: C.ink }, autoDir(solution(q))]}>{solution(q)}</Text>
-                </View>
+            <Verdict kind={tkey} tone={tone}>
+              {/* right: one short line. Missed: what's missing (from Coco, in a few words), then the answer. */}
+              {grade.correct ? (
+                !!grade.feedback && <Text style={[{ fontFamily: F.regular, fontSize: 15, lineHeight: 23, color: C.ink }, autoDir(grade.feedback)]}>{grade.feedback}</Text>
+              ) : (
+                <>
+                  {!!grade.feedback && (
+                    <FeedbackPart tone={tkey} label={marked ? 'Your answer' : 'What’s missing'} first>
+                      {grade.feedback}
+                    </FeedbackPart>
+                  )}
+                  <FeedbackPart tone={tkey} label="The answer" first={!grade.feedback}>
+                    {fmt === 'blank' && q.text ? <FixedSentence parts={parseBlanks(q.text).parts} marks={marks?.gaps ?? gradeBlank(q, res.summary.split(' | ')).marks} /> : solution(q)}
+                  </FeedbackPart>
+                </>
               )}
             </Verdict>
 

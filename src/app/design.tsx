@@ -7,6 +7,9 @@ import { View } from 'react-native';
 
 import { COCO } from '@/art';
 import {
+  FeedbackPart,
+  FixedSentence,
+  RecallCard,
   answerTile,
   Badge,
   Btn,
@@ -18,6 +21,7 @@ import {
   EmptyState,
   Feedback,
   Field,
+  Figure,
   IconBtn,
   ListGroup,
   ListRow,
@@ -163,6 +167,19 @@ export default function DesignCatalog() {
         <Feedback tone="correct">Yes! That’s exactly the idea, in your own words.</Feedback>
         <Feedback tone="almost">You’re on the right track: say where it happens.</Feedback>
         <Feedback tone="wrong">Not quite. The chain needs oxygen at the end.</Feedback>
+        <Feedback tone="almost" title="Almost there">
+          <FeedbackPart tone="almost" label="What’s missing" first>
+            Say where it happens: on the inner membrane.
+          </FeedbackPart>
+          <FeedbackPart tone="almost" label="The answer">
+            The chain on the inner membrane pumps protons, and oxygen takes the electrons at the end.
+          </FeedbackPart>
+        </Feedback>
+        <Feedback tone="wrong">
+          <FeedbackPart tone="wrong" label="The answer" first>
+            <FixedSentence parts={[{ t: 'Q is the set of ' }, { t: 'states', gap: 0 }, { t: ', Σ is the input ' }, { t: 'alphabet', gap: 1 }, { t: '.' }]} marks={[false, true]} />
+          </FeedbackPart>
+        </Feedback>
         <Row gap={2} wrap>
           {(['idle', 'picked', 'correct', 'almost', 'wrong'] as const).map((s) => (
             <View key={s} style={[{ paddingHorizontal: S[3], paddingVertical: S[2], borderRadius: radius.md, borderWidth: 2 }, answerTile(s)]}>
@@ -225,6 +242,17 @@ export default function DesignCatalog() {
         <Coco src={COCO.classic} size={120} />
         <Divider />
         <EmptyState coco={COCO.reading} title="No chapters yet" body="Add your first lecture and Coco will plant a branch for it." action="Add a lecture" onAction={() => setSheet(true)} />
+      </Section>
+
+      <Section title="Memory hook">
+        <T v="bodySm">What the hook is for: the answer to remember, with its question small above it. While typing it shrinks to the answer.</T>
+        <RecallCard q="Fill in the parts of the 5-tuple of an NFA." a="Q states, Σ alphabet, δ transition function, q₀ start state, F accepting states." />
+        <RecallCard q="Fill in the parts of the 5-tuple of an NFA." a="Q states, Σ alphabet, δ transition function, q₀ start state, F accepting states." compact />
+      </Section>
+
+      <Section title="Lecture pictures">
+        <T v="bodySm">Under a question that is about a diagram, a chart or a table of the lecture. Tap it to open it full screen.</T>
+        <Figure source={COCO.reading} ratio={4 / 3} />
       </Section>
 
       <Sheet visible={sheet} title="A bottom sheet" onClose={() => setSheet(false)}>

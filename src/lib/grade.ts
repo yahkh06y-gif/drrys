@@ -16,7 +16,7 @@ export function gradeOrder(q: ActiveQuestion, order: string[]): Grade & { marks:
     marks,
     feedback: correct
       ? 'Every step is in the right place.'
-      : `${pct(right, want.length)} steps are in the right place. The right order is below. Look for what each step needs from the one before it.`,
+      : `${pct(right, want.length)} steps are in the right place.`,
   };
 }
 
@@ -35,7 +35,7 @@ export function gradeSort(q: ActiveQuestion, assigned: Record<string, string>): 
     correct,
     close: almost(right, total),
     marks,
-    feedback: correct ? 'Everything is in the right group.' : `${pct(right, total)} are in the right group. The model answer shows how they split, and why.`,
+    feedback: correct ? 'Everything is in the right group.' : `${pct(right, total)} are in the right group.`,
   };
 }
 
@@ -50,7 +50,7 @@ export function gradeMatch(q: ActiveQuestion, matched: Record<string, string>): 
     correct,
     close: almost(right, total),
     marks,
-    feedback: correct ? 'All the pairs are right.' : `${pct(right, total)} pairs are right. The correct pairs are below.`,
+    feedback: correct ? 'All the pairs are right.' : `${pct(right, total)} pairs are right.`,
   };
 }
 
@@ -65,6 +65,6 @@ export function gradeBlank(q: ActiveQuestion, filled: string[]): Grade & { marks
     correct,
     close: almost(right, answers.length),
     marks,
-    feedback: correct ? 'Every gap is filled with the right word.' : `${pct(right, answers.length)} gaps are right. The full sentence is below.`,
+    feedback: correct ? 'Every gap is filled with the right word.' : '', // the sentence, with the right words in green, says it all
   };
 }

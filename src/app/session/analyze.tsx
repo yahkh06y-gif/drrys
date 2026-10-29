@@ -7,9 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COCO } from '@/art';
 import { Btn, Coco, Enter, SessionHeader, T } from '@/components/ui';
-import { prepareSession } from '@/lib/ai';
+import { analyse } from '@/lib/prep';
 import { haptic, play } from '@/lib/feedback';
-import { sessionContext } from '@/lib/session';
 import { color } from '@/design/tokens';
 import { useApp } from '@/store';
 import { C, F } from '@/theme';
@@ -28,8 +27,6 @@ export default function Analyze() {
     `Comparing your recall with ${pages}`,
     'Finding what you nailed',
     'Spotting gaps and mix-ups',
-    'Writing your questions',
-    'Making your flashcards',
   ];
 
   useEffect(() => {
@@ -46,10 +43,11 @@ export default function Analyze() {
     setErr(undefined);
     setDone(0);
     // one request does all of this, so the checklist moves on a timer that slows down as it goes
-    // (quick at first, then patient), and waits on the last step until the answer is in
+    // (quick at first, then patient), and waits on the last step until the answer is in. The questions and the
+    // flashcards are written afterwards, in the background, while the student reads the analysis (lib/prep).
     const timers: ReturnType<typeof setTimeout>[] = [];
     let at = 0;
-    [2500, 3500, 5000, 7000, 9000, 12000].forEach((gap) => {
+    [2500, 3500, 5000, 7000].forEach((gap) => {
       at += gap;
       timers.push(setTimeout(() => alive && setDone((d) => Math.min(d + 1, steps.length - 1)), at));
     });
@@ -57,16 +55,11 @@ export default function Analyze() {
     (async () => {
       try {
         setTimeout(() => alive && setDone((d) => Math.max(d, 1)), 700);
-        const ctx = await sessionContext();
-        if (!alive) return;
-        setDone((d) => Math.max(d, 2));
-        const { analysis, questions, cards } = await prepareSession(ctx, useApp.getState().session!.recall);
+        const st1 = useApp.getState().session!;
+        await analyse(`${st1.recall}|${st1.materialId ?? ''}|${st1.fromPage}-${st1.toPage}`);
         if (!alive) return;
         tick.stop();
         setDone(steps.length);
-        // a fresh set of questions: forget any answers / cards from an earlier attempt
-        const st1 = useApp.getState().session!;
-        patchSession({ analysis, analyzedFor: `${st1.recall}|${st1.materialId ?? ''}|${st1.fromPage}-${st1.toPage}`, questions, draftCards: cards, answers: [], correct: 0, newCardIds: [], gapCards: [], results: [], qIndex: 0 });
         play('success');
         haptic('success');
         timers.push(setTimeout(() => alive && router.replace('/session/review'), 450));

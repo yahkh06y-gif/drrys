@@ -166,6 +166,8 @@ export const color = {
     scrimStrong: 'rgba(43,27,16,0.5)',
     shade: 'rgba(0,0,0,0.25)', // on top of videos ("Tap to skip")
     onDark: 'rgba(255,255,255,0.7)', // secondary marks on a dark or green surface
+    viewer: 'rgba(23,15,9,0.94)', // behind a picture opened full screen (a lecture figure)
+    viewerButton: 'rgba(255,255,255,0.16)', // the round close button on that dark backdrop
   },
   shadow: 'rgba(43,27,16,0.12)',
 } as const;

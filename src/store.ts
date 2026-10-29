@@ -4,7 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { shrinkBigPictures } from '@/lib/shrink';
 
-import type { Analysis, ActiveQuestion } from '@/lib/ai';
+import type { Analysis, ActiveQuestion, MapIdea } from '@/lib/ai';
 
 export type Material = { id: string; name: string; uri: string; size?: number; mime?: string; sample?: boolean; pages?: number }; // sample: Drrys' own demo lecture ("Fill sample answer" works only there) · pages: pages (or slides) in the file, counted once
 export type Chapter = { id: string; title: string; materials: Material[]; mastery: number; sessions: number };
@@ -81,7 +81,8 @@ export type SessionDraft = {
   recall: string;
   analysis?: Analysis;
   analyzedFor?: string; // what the analysis was made from (recall + pages): going back and forward again without a change does not ask the AI again
-  questions?: ActiveQuestion[];
+  map?: MapIdea[]; // every idea of the lecture pages and its shape: the questions are planned from it
+  questions?: ActiveQuestion[]; // undefined while Coco is still writing them (lib/prep), [] when there are none
   answers: string[];
   newCardIds: string[];
   groups?: { name: string; items: string[] }[]; // the student's own grouping of what they missed
