@@ -78,7 +78,6 @@ export default function TreeScreen() {
   );
   const lastFlip = useRef(0);
   const pageRef = useRef(activeIdx);
-  const raceFrom = useRef(-1);
 
   // follow the store when the active tree changes elsewhere (e.g. a new tree was just planted)
   useEffect(() => {
@@ -101,13 +100,8 @@ export default function TreeScreen() {
       setPage(n);
       play('flip');
       const now = Date.now();
-      // Hard landing is rare: ~1 in 50, or when you race through every tree from the first to the last.
-      // (Values are read here, before the refs move on; the state updater runs later.)
-      const fast = now - lastFlip.current < 1400;
-      const prev = pageRef.current;
-      if (!fast || n !== prev + 1) raceFrom.current = prev; // a race = quick flips, always forward
-      const raced = subjects.length > 1 && n === subjects.length - 1 && raceFrom.current === 0 && fast;
-      const hard = raced || Math.random() < 1 / 50;
+      // flipping to another tree right after the last one makes it a hard landing
+      const hard = now - lastFlip.current < 1400;
       setLanding((l) => ({ n: l.n + 1, hard }));
       lastFlip.current = now;
       pageRef.current = n;

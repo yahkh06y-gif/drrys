@@ -204,10 +204,9 @@ function StageTree({ stage, children }: { stage: number; children: React.ReactNo
 // random idle clip every 10 s (weighted toward the calm ones).
 export type CocoLanding = { n: number; hard: boolean; water?: boolean };
 
-const arrivalClip = (l: CocoLanding) => (l.water ? COCO_TREE.water : l.hard ? COCO_TREE.fallHard : COCO_TREE.fall);
+const arrivalClip = (l: CocoLanding) => (l.water ? COCO_TREE.water : l.hard ? COCO_TREE.fallHard : COCO_TREE.fall[pick(COCO_TREE.fall)]);
 
-function pickIdle(prev?: number) {
-  const clips = COCO_TREE.idle;
+function pick(clips: CocoClip[], prev?: number) {
   const total = clips.reduce((t, c) => t + (c.weight ?? 1), 0);
   let r = Math.random() * total;
   for (let i = 0; i < clips.length; i++) {
@@ -267,7 +266,7 @@ function CocoOnLawn({ width, height, landing }: { width: number; height: number;
     if (shownTurn !== st.turn) return;
     const t = setTimeout(() => {
       setSt((s) => {
-        const i = pickIdle(s.idle);
+        const i = pick(COCO_TREE.idle, s.idle);
         return { clip: COCO_TREE.idle[i], idle: i, turn: s.turn + 1 };
       });
     }, st.clip.ms);
@@ -288,7 +287,7 @@ function CocoOnLawn({ width, height, landing }: { width: number; height: number;
         contentFit="fill"
       />
       {/* keep the special clips decoded in memory so they appear instantly when needed */}
-      {[COCO_TREE.water, COCO_TREE.fall, COCO_TREE.fallHard].map((c, k) => (
+      {[COCO_TREE.water, ...COCO_TREE.fall, COCO_TREE.fallHard].map((c, k) => (
         <Image key={`warm${k}`} source={c.src} autoplay={false} cachePolicy="memory-disk" style={{ position: 'absolute', width: 2, height: 2, opacity: 0.01, left: 0, top: 0 }} />
       ))}
     </Animated.View>

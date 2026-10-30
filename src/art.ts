@@ -114,23 +114,27 @@ export const TREE_STAGES: Record<1 | 2 | 3 | 4 | 5, TreeStage> = {
 // Coco on the lawn next to the tree: animated WebPs with transparency, cut from Blender renders on the same
 // 2160×3840 camera. Each clip's box = where its crop sits on that canvas, in 1080×1920 pixels.
 // Every clip starts/ends in the same standing pose, so they chain seamlessly.
-//   fall / fallHard: Coco drops in when you arrive at a tree. The hard fall is rare: about 1 in 50
-//   landings, or when you race from the first tree to the last one. The normal fall plays a bit slowed.
-//   idle: plays after landing, a new random one every 10 s; calm 1–2 far more often than lively 3–4
+//   fall / fallHard: Coco drops in when you arrive at a tree: a random normal fall, or the hard fall
+//   when you're flipping through the trees fast.
+//   idle: plays after landing, then a new random one; calm 1 and 1.1 most often, lively 4 least
 // Set COCO_ON_TREE to false to take him off the tree.
 export const COCO_ON_TREE = true;
 export type CocoClip = { src: number; box: [number, number, number, number]; ms: number; weight?: number };
-const IDLE_BOX: CocoClip['box'] = [637, 1203, 233, 185];
+const COCO_BOX: CocoClip['box'] = [637, 1050, 233, 338]; // the same crop for every clip, so he never shifts
 export const COCO_TREE = {
-  fall: { src: require('../assets/art/coco/tree-fall.webp'), box: [637, 1203, 233, 195], ms: 1755 } as CocoClip,
-  fallHard: { src: require('../assets/art/coco/tree-fall-hard.webp'), box: [637, 1175, 233, 223], ms: 1570 } as CocoClip,
+  fall: [
+    { src: require('../assets/art/coco/tree-v2-fall-1.webp'), box: COCO_BOX, ms: 2400, weight: 70 },
+    { src: require('../assets/art/coco/tree-v2-fall-2.webp'), box: COCO_BOX, ms: 2500, weight: 30 },
+  ] as CocoClip[],
+  fallHard: { src: require('../assets/art/coco/tree-v2-fall-hard.webp'), box: COCO_BOX, ms: 2566 } as CocoClip,
   // after a full session: Coco waters the tree, puts the can away and settles into the idle pose
   water: { src: require('../assets/art/coco/tree-water.webp'), box: [590, 1220, 370, 200], ms: 4000 } as CocoClip,
   idle: [
-    { src: require('../assets/art/coco/tree-idle-1.webp'), box: IDLE_BOX, ms: 10000, weight: 4 },
-    { src: require('../assets/art/coco/tree-idle-2.webp'), box: IDLE_BOX, ms: 10000, weight: 4 },
-    { src: require('../assets/art/coco/tree-idle-3.webp'), box: IDLE_BOX, ms: 10000, weight: 1 },
-    { src: require('../assets/art/coco/tree-idle-4.webp'), box: IDLE_BOX, ms: 10000, weight: 1 },
+    { src: require('../assets/art/coco/tree-v2-idle-1.webp'), box: COCO_BOX, ms: 9499, weight: 30 },
+    { src: require('../assets/art/coco/tree-v2-idle-1-1.webp'), box: COCO_BOX, ms: 9332, weight: 30 },
+    { src: require('../assets/art/coco/tree-v2-idle-2.webp'), box: COCO_BOX, ms: 9766, weight: 20 },
+    { src: require('../assets/art/coco/tree-v2-idle-3.webp'), box: COCO_BOX, ms: 9932, weight: 12 },
+    { src: require('../assets/art/coco/tree-v2-idle-4.webp'), box: COCO_BOX, ms: 9399, weight: 8 },
   ] as CocoClip[],
 };
 
