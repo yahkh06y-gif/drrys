@@ -11,7 +11,7 @@ import { Gesture, GestureDetector, ScrollView } from 'react-native-gesture-handl
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { COCO, STAT_ICONS, TREE, TREE_ASPECT } from '@/art';
+import { COCO, SCENE_ASPECT, STAT_ICONS, TREE, TREE_ASPECT } from '@/art';
 import { HookGallery } from '@/components/HookGallery';
 import { KnowledgeTree, type CocoLanding } from '@/components/Tree';
 import { Btn, Coco, Enter, Pill, T } from '@/components/ui';
@@ -165,13 +165,9 @@ export default function TreeScreen() {
   const acc = stats.quizTotal ? Math.round((stats.quizCorrect / stats.quizTotal) * 1000) / 10 : 0;
   const st = streak(stats.studyDays);
   const treeH = width / TREE_ASPECT;
-  // the lawn-to-soil edge fills only what's left of the first screen under the tree, so the
-  // insights further down sit on plain earth
-  const band = Math.max(90, (viewH || treeH + 90) - treeH);
-  // a thin strip of lawn under the tree lets today's card sit a little lower, off the trunk,
-  // with "Subject insights" right under it
-  const lift = 18;
-  const pagerH = treeH + lift;
+  const sceneH = width / SCENE_ASPECT;
+  // the meadow fills the first screen, down to the tab bar
+  const pagerH = Math.max(treeH, viewH);
 
   return (
     <View style={{ flex: 1, backgroundColor: '#241911' }}>
@@ -185,11 +181,11 @@ export default function TreeScreen() {
                 </View>
               ))}
               {Array.from({ length: pageCount - 1 }, (_, i) => (
-                <Image key={`b${i}`} source={TREE.between} style={{ position: 'absolute', top: 0, left: i * STEP + width - 1, width: width + 2, height: treeH }} contentFit="cover" />
+                <Image key={`b${i}`} source={TREE.between} style={{ position: 'absolute', top: 0, left: i * STEP + width - 1, width: width + 2, height: sceneH }} contentFit="cover" />
               ))}
               {plantPage && (
-                <View style={{ position: 'absolute', top: 0, left: subjects.length * STEP, width, height: treeH }}>
-                  <PlantPage width={width} height={treeH} topInset={insets.top} locked={subjects.length >= maxTrees} />
+                <View style={{ position: 'absolute', top: 0, left: subjects.length * STEP, width, height: pagerH }}>
+                  <PlantPage width={width} height={pagerH} sceneHeight={sceneH} topInset={insets.top} locked={subjects.length >= maxTrees} />
                 </View>
               )}
             </Animated.View>
@@ -197,6 +193,17 @@ export default function TreeScreen() {
             {/* arrows: the obvious way to walk to the neighbouring tree (swiping works too) */}
             {page > 0 && <SideArrow side="left" top={treeH * 0.56} onPress={() => goTo(page - 1)} />}
             {page < last && <SideArrow side="right" top={treeH * 0.56} onPress={() => goTo(page + 1)} plus={plantPage && page + 1 === last} />}
+
+            {/* the insights are one scroll down */}
+            {!onPlant && (
+              <View pointerEvents="none" style={{ position: 'absolute', bottom: 6, left: 0, right: 0, alignItems: 'center', gap: 2 }}>
+                <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.paper, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 6 }}>
+                  <Ionicons name="stats-chart" size={13} color={C.bark} />
+                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.bark }}>Subject insights</Text>
+                </View>
+                <Ionicons name="chevron-down" size={18} color={color.overlay.onDark} />
+              </View>
+            )}
 
             {/* first visit: Coco explains the daily watering, pointing at the card */}
             {!coachSeen && !guide && !onPlant && <CoachTip width={width} height={pagerH} onDone={() => set({ coachSeen: true })} />}
@@ -221,16 +228,9 @@ export default function TreeScreen() {
 
         {/* underground: the lawn of the render fades into soil. The empty spot for a new tree has no insights. */}
         {onPlant ? (
-          <Soil band={band} />
+          <Soil />
         ) : (
-          <Soil band={band} style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 40, gap: 16 }}>
-            <View style={{ alignItems: 'center', gap: 2, marginBottom: 18 }}>
-              <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.paper, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 6 }}>
-                <Ionicons name="stats-chart" size={13} color={C.bark} />
-                <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.bark }}>Subject insights</Text>
-              </View>
-              <Ionicons name="chevron-down" size={18} color={color.overlay.onDark} />
-            </View>
+          <Soil style={{ paddingHorizontal: 16, paddingTop: 96, paddingBottom: 40, gap: 16 }}>
             <View style={{ alignItems: 'center' }}>
               <T v="h3" style={{ color: C.white }}>
                 {subject.name} Learning Progress
@@ -507,7 +507,7 @@ const COACH_LINES: { text: string; icons?: { src: number; label: string }[] }[] 
   },
 ];
 const CARD_H = 164; // today's card height, measured from its layout (header + week strip + button + padding)
-const CARD_GAP = 10; // space under today's card, above the soil
+const CARD_GAP = 58; // space under today's card, for the "Subject insights" label
 
 function CoachTip({ width, height, onDone }: { width: number; height: number; onDone: () => void }) {
   const [i, setI] = useState(0);
@@ -683,10 +683,10 @@ function GuideTip({ subject, step, width, height }: { subject: Subject; step: 'f
 }
 
 // The empty spot at the end of the forest: plant another subject here (Pro unlocks up to 5 trees).
-function PlantPage({ width, height, topInset, locked }: { width: number; height: number; topInset: number; locked: boolean }) {
+function PlantPage({ width, height, sceneHeight, topInset, locked }: { width: number; height: number; sceneHeight: number; topInset: number; locked: boolean }) {
   return (
     <View style={{ width, height }}>
-      <Image pointerEvents="none" source={TREE.empty} style={{ position: 'absolute', left: 0, top: 0, width, height }} contentFit="cover" />
+      <Image pointerEvents="none" source={TREE.empty} style={{ position: 'absolute', left: 0, top: 0, width, height: sceneHeight }} contentFit="cover" />
       <View style={{ position: 'absolute', top: topInset + 8, left: 24, right: 24, height: 40, justifyContent: 'center' }}>
         <Text accessibilityRole="header" style={{ textAlign: 'center', fontFamily: F.semi, fontSize: 22, lineHeight: 28, letterSpacing: -0.3, color: C.ink }}>New tree</Text>
       </View>
@@ -712,24 +712,26 @@ function PlantPage({ width, height, topInset, locked }: { width: number; height:
   );
 }
 
-// Lawn → soil, matching the Figma "under ground" gradient: the first `band` px carry the lawn-to-earth
+// Lawn → soil, matching the Figma "under ground" gradient: the first BAND px carry the lawn-to-earth
 // edge, then the earth darkens down to the bottom of the page.
-const LAWN = '#C8F197'; // the colour at the very bottom of the tree render
+const LAWN = '#97CB39'; // the colour at the very bottom of the tree render
 
-function Soil({ band, style, children }: { band: number; style?: StyleProp<ViewStyle>; children?: React.ReactNode }) {
+const BAND = 90;
+
+function Soil({ style, children }: { style?: StyleProp<ViewStyle>; children?: React.ReactNode }) {
   return (
-    <View style={[{ minHeight: band, backgroundColor: '#241911' }, style]}>
+    <View style={[{ minHeight: BAND, backgroundColor: '#241911' }, style]}>
       <LinearGradient
         pointerEvents="none"
-        colors={[LAWN, '#A9D179', '#95B96C', '#6E8852', '#787249', '#7E6644', '#835B3F']}
+        colors={[LAWN, '#6C9A30', '#6C9238', '#6E8852', '#787249', '#7E6644', '#835B3F']}
         locations={[0, 0.37, 0.5, 0.74, 0.81, 0.85, 1]}
-        style={{ position: 'absolute', left: 0, right: 0, top: 0, height: band }}
+        style={{ position: 'absolute', left: 0, right: 0, top: 0, height: BAND }}
       />
       <LinearGradient
         pointerEvents="none"
         colors={['#835B3F', '#5A3C26', '#241911']}
         locations={[0, 0.35, 0.85]}
-        style={{ position: 'absolute', left: 0, right: 0, top: band - 1, bottom: 0 }}
+        style={{ position: 'absolute', left: 0, right: 0, top: BAND - 1, bottom: 0 }}
       />
       {children}
     </View>

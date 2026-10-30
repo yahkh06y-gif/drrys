@@ -3,7 +3,7 @@
 // session as soon as they are ready. The questions page and the flashcards page wait for them only if the
 // student gets there first. If the app was closed in between, they are simply asked for again.
 import { analyseSession, planQuestions, timed, writeCards, writeQuestions, type Lesson } from './ai';
-import { attachPictures } from './figures';
+import { attachPictures, warmPictures } from './figures';
 import { sessionContext } from './session';
 import { useApp } from '@/store';
 
@@ -22,6 +22,7 @@ export async function analyse(key: string, onStep?: (step: AnalyseStep) => void)
   const st = useApp.getState();
   const t0 = Date.now();
   const ctx = await timed('lecture file ready', () => sessionContext());
+  if (ctx.pdfBase64) warmPictures(); // a PDF's pictures are cut on the server: wake it while Coco reads
   onStep?.(1);
   const lesson = await analyseSession(ctx, st.session!.recall);
   onStep?.(2);

@@ -4,6 +4,7 @@
 //   - a slide: the picture is already in the deck (lib/slides), so it is used as it is.
 // A question about a picture that can't be shown can't be answered, so it is left out of the session.
 import { Directory, File, Paths } from 'expo-file-system';
+import { PDFDocument } from 'pdf-lib';
 import { Platform } from 'react-native';
 
 import { timed, type ActiveQuestion, type Context, type QPicture } from './ai';
@@ -37,6 +38,20 @@ async function cutFromPdf(pdf: string, qs: ActiveQuestion[]): Promise<(QPicture 
     } catch {}
   }
   return qs.map(() => undefined); // the server could not cut them: these questions are left out below
+}
+
+let warmed = 0;
+/** Wake the picture server while the student waits for the analysis: its first request after a quiet while loads a
+ *  10 MB PDF engine, so a tiny one-page PDF is cut now and the real pictures later find it ready. Never throws. */
+export function warmPictures() {
+  if (!cloudEnabled || Date.now() - warmed < 5 * 60000) return;
+  warmed = Date.now();
+  (async () => {
+    const doc = await PDFDocument.create();
+    doc.addPage([100, 100]);
+    const pdf = await doc.saveAsBase64();
+    await timed('pictures server warm-up', () => callFunction('figures', { pdf, crops: [{ page: 1 }] }, 45000));
+  })().catch(() => {});
 }
 
 /** Give every question that is about a picture its picture. Questions whose picture can't be made are left out,

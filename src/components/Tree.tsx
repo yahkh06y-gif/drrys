@@ -18,7 +18,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { palette } from '@/design/tokens';
-import { COCO_ON_TREE, COCO_TREE, TREE, type CocoClip, TREE_ASPECT, TREE_MAX_BRANCHES, TREE_STAGES, type BranchAnchor } from '@/art';
+import { COCO_ON_TREE, COCO_TREE, SCENE_ASPECT, TREE, type CocoClip, TREE_ASPECT, TREE_MAX_BRANCHES, TREE_STAGES, type BranchAnchor } from '@/art';
 import type { Chapter } from '@/store';
 import { haptic, play } from '@/lib/feedback';
 import { C, F } from '@/theme';
@@ -83,19 +83,17 @@ export function KnowledgeTree({
   const c1 = useAnimatedStyle(() => ({ transform: [{ translateX: -40 + cloud.value * 60 }] }));
   const c2 = useAnimatedStyle(() => ({ transform: [{ translateX: 30 - cloud.value * 50 }] }));
   const c3 = useAnimatedStyle(() => ({ transform: [{ translateX: -20 + cloud.value * 35 }] }));
+  const c4 = useAnimatedStyle(() => ({ transform: [{ translateX: 12 - cloud.value * 24 }] }));
+  const drift = [c1, c2, c3, c4];
 
   return (
-    <View style={{ width, height, overflow: 'hidden' }}>
-      <Image pointerEvents="none" source={TREE.sky} style={layer} contentFit="cover" cachePolicy="memory-disk" />
-      <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: height * 0.04, right: -10 }, c1]}>
-        <Image pointerEvents="none" source={TREE.clouds[1]} style={{ width: width * 0.45, height: width * 0.2 }} contentFit="contain" />
-      </Animated.View>
-      <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: height * 0.12, left: -6 }, c2]}>
-        <Image pointerEvents="none" source={TREE.clouds[0]} style={{ width: width * 0.34, height: width * 0.23 }} contentFit="contain" />
-      </Animated.View>
-      <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: height * 0.2, right: -8 }, c3]}>
-        <Image pointerEvents="none" source={TREE.clouds[2]} style={{ width: width * 0.25, height: width * 0.18 }} contentFit="contain" />
-      </Animated.View>
+    <View style={{ width, height }}>
+      <Image pointerEvents="none" source={TREE.sky} style={{ position: 'absolute', left: 0, top: 0, width, height: width / SCENE_ASPECT }} contentFit="cover" cachePolicy="memory-disk" />
+      {TREE.clouds.map(({ src, box: [x, y, w, h] }, i) => (
+        <Animated.View key={i} pointerEvents="none" style={[{ position: 'absolute', left: (x / 1080) * width, top: (y / 1920) * height }, drift[i]]}>
+          <Image pointerEvents="none" source={src} style={{ width: (w / 1080) * width, height: (h / 1920) * height }} contentFit="contain" />
+        </Animated.View>
+      ))}
 
       <Animated.View pointerEvents="none" style={[layer, treeA]}>
         <StageTree stage={stage}>
@@ -106,7 +104,7 @@ export function KnowledgeTree({
         </StageTree>
       </Animated.View>
 
-      {COCO_ON_TREE && coco && <CocoOnLawn width={width} height={height} landing={coco} />}
+      {COCO_ON_TREE && coco && <CocoOnLawn key={coco.n} width={width} height={height} landing={coco} />}
 
       {chapters.slice(0, TREE_MAX_BRANCHES).map((ch, i) => {
         const a = T.anchors[i];
@@ -170,7 +168,8 @@ function Branch({ src, anchor: a, chapter, grow, yellow, index, pressed }: { ind
   const st = useAnimatedStyle(() => ({
     opacity: s.value > 0.02 ? 1 : 0,
     transform: [{ scale: s.value * pulse.value * (1 + swell.value * 0.07) }],
-    transformOrigin: `${a.jx * 100}% ${a.jy * 100}%`,
+    // whole numbers only: React Native's transformOrigin string parser misreads decimals
+    transformOrigin: `${Math.round(a.jx * 100)}% ${Math.round(a.jy * 100)}%`,
   }));
   const wash = useAnimatedStyle(() => ({ opacity: yellow.value * 0.6 }));
   return (
@@ -199,7 +198,7 @@ function StageTree({ stage, children }: { stage: number; children: React.ReactNo
   return <Animated.View style={[layer, st]}>{children}</Animated.View>;
 }
 
-// Coco on the lawn. He is only on the tree you're looking at: each time you arrive (`landing.n` changes) he
+// Coco on the lawn. He is only on the tree you're looking at: each time you arrive (a new `landing.n` remounts him) he
 // drops in from above and lands (a harder fall if you were flipping fast), then idles, picking a new
 // random idle clip every 10 s (weighted toward the calm ones).
 export type CocoLanding = { n: number; hard: boolean; water?: boolean };
@@ -226,31 +225,15 @@ function CocoOnLawn({ width, height, landing }: { width: number; height: number;
   // a clip's timer (and the watering sound) only start once its image is actually on screen —
   // a big animated WebP can take a moment to decode the first time on Android
   const [shownTurn, setShownTurn] = useState(-1);
-  const drop = useSharedValue(-height * 0.2);
-
-  // arrive → fall (or water, after a full session)
-  useEffect(() => {
-    setSt((s) => ({ clip: arrivalClip(landing), idle: -1, turn: s.turn + 1 }));
-    if (landing.water) drop.value = 0;
-    else {
-      drop.value = -height * 0.2;
-      drop.value = withTiming(0, { duration: landing.hard ? 170 : 230, easing: Easing.in(Easing.quad) });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [landing.n]);
 
   // refs, not state: the image's load event and the safety timer can both fire before a re-render,
   // and a stale state check let the watering sound play twice
   const shownRef = useRef(-1);
-  const wateredFor = useRef(-1);
   const onShown = () => {
     if (shownRef.current === st.turn) return;
     shownRef.current = st.turn;
     setShownTurn(st.turn);
-    if (st.clip === COCO_TREE.water && wateredFor.current !== landing.n) {
-      wateredFor.current = landing.n; // once per watering, whatever happens
-      play('water');
-    }
+    if (st.clip === COCO_TREE.water) play('water');
   };
 
   // safety net: if the image never reports it loaded, carry on anyway
@@ -273,10 +256,9 @@ function CocoOnLawn({ width, height, landing }: { width: number; height: number;
     return () => clearTimeout(t);
   }, [shownTurn, st.turn, st.clip.ms]);
 
-  const dropA = useAnimatedStyle(() => ({ transform: [{ translateY: drop.value }] }));
   const [x, y, w, h] = st.clip.box;
   return (
-    <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width, height }, dropA]}>
+    <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height }}>
       <Image
         pointerEvents="none"
         source={st.clip.src}
@@ -290,6 +272,6 @@ function CocoOnLawn({ width, height, landing }: { width: number; height: number;
       {[COCO_TREE.water, ...COCO_TREE.fall, COCO_TREE.fallHard].map((c, k) => (
         <Image key={`warm${k}`} source={c.src} autoplay={false} cachePolicy="memory-disk" style={{ position: 'absolute', width: 2, height: 2, opacity: 0.01, left: 0, top: 0 }} />
       ))}
-    </Animated.View>
+    </View>
   );
 }

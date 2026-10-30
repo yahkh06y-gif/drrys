@@ -9,6 +9,7 @@
  * The AI keys never ship in the app: every call goes through Drrys' server function (supabase/functions/ai),
  * which holds the keys as Supabase secrets.
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PDFDocument } from 'pdf-lib';
 
 import { cloudEnabled, fetchFunction } from './cloud';
@@ -18,7 +19,7 @@ import { readFileBase64 } from './readfile';
 import type { Slide } from './slides';
 
 const MODEL = process.env.EXPO_PUBLIC_CLAUDE_MODEL || 'claude-sonnet-5-5';
-const GEMINI_MODEL = process.env.EXPO_PUBLIC_GEMINI_MODEL || 'gemini-3.8-flash';
+const GEMINI_MODEL = process.env.EXPO_PUBLIC_GEMINI_MODEL || 'gemini-3.5-flash';
 const CHOICE = (process.env.EXPO_PUBLIC_COCO_AI || 'gemini').toLowerCase();
 
 export const aiProvider: 'claude' | 'gemini' | null = !cloudEnabled || CHOICE === 'demo' ? null : CHOICE === 'claude' ? 'claude' : 'gemini';
@@ -114,8 +115,9 @@ export async function timed<T>(label: string, run: () => Promise<T>): Promise<T>
   }
 }
 
-async function call(system: string, content: Block[], maxTokens = 2000, label = 'ai'): Promise<string> {
-  return aiProvider === 'gemini' ? callGemini(system, content, maxTokens, { label }) : callClaude(system, content, maxTokens, label);
+/** `json`: the answer must be JSON (Gemini is then held to it, so it can't come back as prose or broken). */
+async function call(system: string, content: Block[], maxTokens = 2000, label = 'ai', json = false): Promise<string> {
+  return aiProvider === 'gemini' ? callGemini(system, content, maxTokens, { label, json }) : callClaude(system, content, maxTokens, label);
 }
 
 async function callClaude(system: string, content: Block[], maxTokens: number, label = 'ai'): Promise<string> {
@@ -133,24 +135,53 @@ async function callClaude(system: string, content: Block[], maxTokens: number, l
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Gemini generateContent: the PDF goes in as inline data, the persona as the system instruction.
-// Free-tier traffic is often turned away ("high demand" 503) or rate-limited (429). So:
-//  - each request walks down a chain of Flash models until one answers,
-//  - a model that just failed is skipped for a couple of minutes (no waiting on it again),
+// Free-tier traffic is often turned away ("high demand" 503) or rate-limited (429), and a model can hang. So:
+//  - each request walks down a chain of Flash models, the stable one first,
+//  - a model that fails is benched (circuit breaker): 2 minutes, then 10, then 30 if it keeps failing,
+//    remembered across app restarts, cleared the moment it answers again,
 //  - the model that last worked is tried first,
-//  - a request that hangs is cut off and the next model is tried,
+//  - hedging: if the model is slower than usual, the next one is asked too and the first answer wins
+//    (the other is stopped), so one hanging model costs seconds, not a 30-second timeout,
 //  - thinking is kept low: Coco's tasks don't need long deliberation, and it's much faster.
-const GEMINI_CHAIN = [...new Set([GEMINI_MODEL, 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'])];
+const GEMINI_CHAIN = [...new Set([GEMINI_MODEL, 'gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'])];
 const RETRYABLE = new Set([404, 408, 429, 500, 503, 504]);
 const cooldown = new Map<string, number>(); // model -> skip until (ms)
+const strikes = new Map<string, number>(); // model -> failures in a row
+const BENCH_MS = [120000, 600000, 1800000];
+const HEALTH_KEY = 'drrys.ai-health';
 let lastGood: string | undefined;
 let lastVoiceGood: string | undefined; // same idea for the transcription chain
 const noThinking = new Set<string>(); // models that rejected the thinking setting
+
+AsyncStorage.getItem(HEALTH_KEY)
+  .then((raw) => {
+    const saved = raw ? (JSON.parse(raw) as { until: [string, number][]; strikes: [string, number][] }) : undefined;
+    saved?.until.forEach(([m, t]) => t > Date.now() && !cooldown.has(m) && cooldown.set(m, t));
+    saved?.strikes.forEach(([m, n]) => !strikes.has(m) && strikes.set(m, n));
+  })
+  .catch(() => {});
+const saveHealth = () => AsyncStorage.setItem(HEALTH_KEY, JSON.stringify({ until: [...cooldown], strikes: [...strikes] })).catch(() => {});
+
+/** The model failed: bench it, longer each time it fails again. */
+function bench(model: string, ms?: number) {
+  const n = Math.min((strikes.get(model) ?? 0) + 1, BENCH_MS.length);
+  strikes.set(model, n);
+  cooldown.set(model, Date.now() + (ms ?? BENCH_MS[n - 1]));
+  saveHealth();
+}
+/** The model answered: it is healthy again. */
+function healthy(model: string) {
+  if (!strikes.has(model) && !cooldown.has(model)) return;
+  strikes.delete(model);
+  cooldown.delete(model);
+  saveHealth();
+}
 
 // Voice → text: Google's dedicated transcription model first (fast, made for this), then the light
 // Flash models. Thinking is kept to a minimum — writing down speech needs no reasoning.
 const TRANSCRIBE_CHAIN = ['gemini-3.5-transcribe', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.5-flash'];
 
-type GeminiOpts = { chain?: string[]; thinking?: 'minimal' | 'low'; temperature?: number; timeoutMs?: number; label?: string };
+type GeminiOpts = { chain?: string[]; thinking?: 'minimal' | 'low'; temperature?: number; timeoutMs?: number; label?: string; json?: boolean };
 
 async function callGemini(system: string, content: Block[], maxTokens: number, opts: GeminiOpts = {}): Promise<string> {
   const parts = content.map((b) =>
@@ -169,6 +200,7 @@ async function callGemini(system: string, content: Block[], maxTokens: number, o
       generationConfig: {
         maxOutputTokens: maxTokens + (opts.thinking === 'minimal' ? 256 : 2048),
         temperature: opts.temperature ?? 0.6,
+        ...(opts.json ? { responseMimeType: 'application/json' } : {}),
         ...(noThinking.has(model) ? {} : { thinkingConfig: { thinkingLevel: opts.thinking ?? 'low' } }),
       },
     },
@@ -181,14 +213,21 @@ async function callGemini(system: string, content: Block[], maxTokens: number, o
   const tryList = ready.length ? ready : order; // everything cooling down → try anyway
   const hasPdf = content.some((b) => b.type === 'document') || content.filter((b) => b.type === 'image').length > 1; // a PDF or a slide deck
   const hasAudio = content.some((b) => b.type === 'audio');
-  let last = '';
-  for (const model of tryList) {
+  // how long a model may take before the next one is asked too, and before it is given up on
+  const hedgeMs = hasPdf ? 90000 : hasAudio ? 15000 : 8000;
+  const timeoutMs = opts.timeoutMs ?? (hasPdf ? 120000 : hasAudio ? 45000 : 20000);
+  const label = opts.label ?? (opts.chain ? 'transcribe' : 'ai');
+  const failed = (msg: string, fatal = false) => Object.assign(new Error(msg), { fatal });
+
+  /** One model, start to finish. Throws when it can't answer (fatal: no other model would help either). */
+  const ask = async (model: string, ctrl: AbortController): Promise<string> => {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const ctrl = new AbortController();
-      // the full-session request (PDF in, analysis + questions + cards out) legitimately takes a while
-      const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? (hasPdf ? 120000 : hasAudio ? 45000 : 30000));
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        ctrl.abort();
+      }, timeoutMs);
       const t0 = Date.now();
-      const label = opts.label ?? (opts.chain ? 'transcribe' : 'ai');
       try {
         const res = await fetchFunction('ai', bodyFor(model), ctrl.signal);
         if (res.ok) {
@@ -197,16 +236,14 @@ async function callGemini(system: string, content: Block[], maxTokens: number, o
           const text = out.filter((p: { text?: string; thought?: boolean }) => p.text && !p.thought).map((p: { text: string }) => p.text).join('');
           const use = json.usageMetadata ?? {};
           logTiming({ label, model, ms: Date.now() - t0, ok: !!text, inTokens: use.promptTokenCount, outTokens: use.candidatesTokenCount, thinkTokens: use.thoughtsTokenCount, cutOff: json.candidates?.[0]?.finishReason === 'MAX_TOKENS', note: text ? undefined : 'empty reply' });
-          if (text) {
-            if (opts.chain) lastVoiceGood = model;
-            else lastGood = model;
-            return text;
-          }
-          last = `${model}: empty reply`;
-          break;
+          if (!text) throw failed(`${model}: empty reply`);
+          healthy(model);
+          if (opts.chain) lastVoiceGood = model;
+          else lastGood = model;
+          return text;
         }
         const errText = (await res.text()).slice(0, 300);
-        last = `Gemini API ${res.status} (${model}): ${errText.slice(0, 160)}`;
+        const msg = `Gemini API ${res.status} (${model}): ${errText.slice(0, 160)}`;
         logTiming({ label, model, ms: Date.now() - t0, ok: false, note: `status ${res.status}, trying the next model` });
         if (res.status === 400 && /thinking/i.test(errText) && !noThinking.has(model)) {
           noThinking.add(model); // this model doesn't take the thinking setting — same model again without it
@@ -214,26 +251,75 @@ async function callGemini(system: string, content: Block[], maxTokens: number, o
         }
         // a special-purpose model may turn down this input (400): the next model in its chain can still do it
         if (opts.chain && res.status === 400 && !/API key/i.test(errText)) {
-          cooldown.set(model, Date.now() + 600000);
-          break;
+          bench(model, 600000);
+          throw failed(msg);
         }
-        if (!RETRYABLE.has(res.status)) throw Object.assign(new Error(last), { fatal: true }); // bad key / bad request — another model won't help
-        cooldown.set(model, Date.now() + 120000);
-        break;
+        if (!RETRYABLE.has(res.status)) throw failed(msg, true); // bad key / bad request — another model won't help
+        bench(model);
+        throw failed(msg);
       } catch (e) {
-        if ((e as { fatal?: boolean }).fatal) throw e;
-        // timed out (RN reports an aborted fetch as "Fetch request has been canceled") or the network
-        // dropped: try the next model rather than failing the whole session
-        last = ctrl.signal.aborted ? `${model}: timed out` : `${model}: ${(e as Error).message}`;
-        logTiming({ label, model, ms: Date.now() - t0, ok: false, note: ctrl.signal.aborted ? 'timed out, trying the next model' : String((e as Error).message).slice(0, 80) });
-        cooldown.set(model, Date.now() + 120000);
-        break;
+        if (e instanceof Error && 'fatal' in e) throw e;
+        // stopped because another model answered first: nothing wrong with this one
+        if (ctrl.signal.aborted && !timedOut) throw failed(`${model}: stopped`);
+        // timed out (RN reports an aborted fetch as "Fetch request has been canceled") or the network dropped
+        logTiming({ label, model, ms: Date.now() - t0, ok: false, note: timedOut ? 'timed out, trying the next model' : String((e as Error).message).slice(0, 80) });
+        bench(model);
+        throw failed(timedOut ? `${model}: timed out` : `${model}: ${(e as Error).message}`);
       } finally {
         clearTimeout(timer);
       }
     }
-  }
-  throw new Error(last);
+    throw failed(`${model}: no answer`);
+  };
+
+  // Start the first model; ask the next one when a model fails, or when the newest one is slower than hedgeMs.
+  // The first answer wins and the others are stopped.
+  return new Promise<string>((resolve, reject) => {
+    const ctrls: AbortController[] = [];
+    let next = 0;
+    let running = 0;
+    let settled = false;
+    let last = '';
+    let hedge: ReturnType<typeof setTimeout> | undefined;
+    const finish = (run: () => void) => {
+      settled = true;
+      clearTimeout(hedge);
+      ctrls.forEach((c) => c.abort());
+      run();
+    };
+    const launch = () => {
+      clearTimeout(hedge);
+      if (settled) return;
+      if (next >= tryList.length) {
+        if (!running) finish(() => reject(new Error(last)));
+        return;
+      }
+      const model = tryList[next++];
+      const ctrl = new AbortController();
+      ctrls.push(ctrl);
+      running++;
+      ask(model, ctrl).then(
+        (text) => {
+          running--;
+          if (!settled) finish(() => resolve(text));
+        },
+        (e: Error & { fatal?: boolean }) => {
+          running--;
+          if (settled) return;
+          last = e.message;
+          if (e.fatal) finish(() => reject(e));
+          else launch();
+        },
+      );
+      if (next < tryList.length) {
+        hedge = setTimeout(() => {
+          logTiming({ label, model, ms: hedgeMs, ok: false, note: 'slower than usual, asking the next model too' });
+          launch();
+        }, hedgeMs);
+      }
+    };
+    launch();
+  });
 }
 
 function parseJSON<T>(raw: string): T {
@@ -384,7 +470,7 @@ const grounding = (c: Context) =>
 async function callJSON<T>(system: string, content: Block[], maxTokens: number, retryNote: string, label = 'ai'): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
-      const raw = await call(system, attempt ? [...content, { type: 'text', text: `YOUR PREVIOUS ANSWER WAS CUT OFF OR NOT VALID JSON. Answer again with COMPLETE, valid JSON. ${retryNote}` }] : content, maxTokens, attempt ? `${label} (again: the first answer was cut off or broken)` : label);
+      const raw = await call(system, attempt ? [...content, { type: 'text', text: `YOUR PREVIOUS ANSWER WAS CUT OFF OR NOT VALID JSON. Answer again with COMPLETE, valid JSON. ${retryNote}` }] : content, maxTokens, attempt ? `${label} (again: the first answer was cut off or broken)` : label, true);
       return parseJSON<T>(raw);
     } catch (e) {
       if (!(e instanceof SyntaxError) || attempt >= 1) throw e;
@@ -567,7 +653,8 @@ Rules:
 - Never write an explain or work question that asks the student to match, connect, order, sort or fill gaps.
 - For order, sort, match and blank, "ideal" is ONE sentence saying why it is that way (it becomes the student's flashcard if they miss it).
 - "kind": conceptual (how ideas relate), procedural (a process or calculation), analogous (a comparison and where it stops working) or evidence (use a fact or example on a new case). Mix them.
-- Ask the way an exam would: when a syllabus or past papers are attached, use them ONLY to choose the phrasing, never as a source of content.${c.interests.length ? ' At most ONE question may invite an analogy from their interests, and only if the idea is abstract enough to need it.' : ''}`,
+- Ask the way an exam would: when a syllabus or past papers are attached, use them ONLY to choose the phrasing, never as a source of content.${c.interests.length ? `
+- THE STUDENT'S WORLD (${c.interests.join(' · ')}): exactly ONE "explain" question (pick the most abstract idea of the plan that has no picture) is "kind": "analogous" and built on ONE item of this world. Compare the lecture idea with something specific and true about that item, then ask the student where the comparison fits and where it stops working. The lecture facts stay exactly as on the page; use only details of that item you are sure about, otherwise its listed "about" themes. Name the item in the question. No other question mentions their world.` : ''}`,
       },
     ],
     9000,
@@ -676,6 +763,7 @@ export async function discussAnswer(
       },
     ],
     500,
+    'discuss',
   ));
 }
 
@@ -704,6 +792,7 @@ Max 4 items per list. Empty lists are fine.`,
       },
     ],
     2500,
+    'analysis (old)',
   );
   return parseJSON<Analysis>(raw);
 }
@@ -719,7 +808,7 @@ Write as many short active-learning questions as the gaps need (no fixed number)
 ${c.interests.length ? 'At most one question may invite an analogy from their interests, only if an idea really needs it.' : ''}
 Return ONLY JSON: [{"q": "...", "hint": "a nudge, not the answer", "ideal": "model answer in 1-2 sentences"}]`,
     },
-  ]);
+  ], 2000, 'questions (old)');
   return parseJSON<ActiveQuestion[]>(raw);
 }
 
@@ -822,7 +911,7 @@ export async function chatCoco(c: Context, history: { role: 'user' | 'assistant'
   const convo = history.map((m) => `${m.role === 'user' ? 'Student' : 'Coco'}: ${m.text}`).join('\n');
   return plainMath(await call(persona(c) + '\nReply in 1-3 short sentences. Match the language the student writes in.', [
     { type: 'text', text: `${convo}\nCoco:` },
-  ], 500));
+  ], 500, 'chat'));
 }
 
 /** Flashcard review: the student asks Coco about the card they're looking at. */
@@ -841,6 +930,7 @@ export async function askAboutCard(
       '\nThe student is reviewing a flashcard and has a question about it. Explain simply in 1-4 short sentences, using what the card and lecture say; an example helps. Match the language the student writes in.',
     [{ type: 'text', text: `Flashcard — Q: ${card.q}\nA: ${card.a}\n\n${convo}\nCoco:` }],
     600,
+    'ask about card',
   ));
 }
 
@@ -895,6 +985,7 @@ Return ONLY JSON: {"groups": [{"name": "same name", "ok": true|false, "note": ".
       },
     ],
     900,
+    'grouping',
   );
   const r = parseJSON<GroupCheck>(raw);
   return { groups: r.groups ?? [], overall: r.overall ?? '' };
@@ -920,6 +1011,7 @@ Return ONLY JSON: ["hook 1", "hook 2", "hook 3"]`,
       },
     ],
     500,
+    'hooks',
   );
   return parseJSON<string[]>(raw).filter((x) => typeof x === 'string' && x.trim()).slice(0, 3);
 }
@@ -943,6 +1035,7 @@ Return ONLY JSON: {"q": "...", "a": "..."}`,
       },
     ],
     500,
+    'level up',
   );
   const r = parseJSON<FlashCard>(raw);
   if (!r?.q || !r?.a) throw new Error('empty level-up');
@@ -967,6 +1060,7 @@ Return ONLY the description, no title, no quotes.`,
       },
     ],
     350,
+    'hook scene',
   );
   return raw.trim().replace(/^["“]|["”]$/g, '').slice(0, 550);
 }
@@ -995,6 +1089,7 @@ The student loves: ${world.name} (${world.kind}).${world.themes.length ? ` Its t
       },
     ],
     400,
+    'explain with world',
   );
   const a = parseJSON<{ analogy?: string }>(raw).analogy?.trim();
   return a || null;

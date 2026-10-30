@@ -17,7 +17,7 @@ import { Enter, IconBtn, Pill, SessionHeader, T } from '@/components/ui';
 import { askAboutCard, levelUp, makeCards } from '@/lib/ai';
 import { haptic, play, tap } from '@/lib/feedback';
 import { cardsReady } from '@/lib/prep';
-import { cardContext, sessionContext } from '@/lib/session';
+import { cardContext, sessionContext, tasteOf } from '@/lib/session';
 import { isDue, useApp, type Card, type ChatMsg, type Rating } from '@/store';
 import { C, F } from '@/theme';
 
@@ -51,6 +51,20 @@ export default function Cards() {
   // a card that slipped 3 times in a row offers a memory hook (the student's choice); `go` carries on afterwards
   const [hook, setHook] = useState<{ card: Card; go: () => void; auto?: boolean }>();
   const [toast, setToast] = useState<string>();
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(undefined), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   useEffect(() => {
     if (!loading || !session?.analysis) return;
@@ -109,9 +123,10 @@ export default function Cards() {
       const [id] = st.addCards([{ q: harder.q, a: harder.a, subjectId: c.subjectId, chapterId: c.chapterId, level: 2 }]);
       st.patchCard(id, { due: Date.now() + 3 * 86_400_000 });
       st.patchCard(c.id, { leveled: true });
+      // the answer can arrive long after the student left: the new card still counts, but stays quiet
+      if (!mounted.current) return;
       play('success');
       setToast('Mastered! Coco added a harder version of that card.');
-      setTimeout(() => setToast(undefined), 4000);
     } catch {
       // no connection: it will graduate the next time it is answered right
     }
@@ -279,7 +294,7 @@ function AskCard({ visible, card, subjectId, onClose }: { visible: boolean; card
         {
           subject: subject?.name ?? 'General',
           chapter: '',
-          interests: st.coco.memory ? st.profile.interests : [],
+          interests: tasteOf(st),
           style: { friendly: 'friendly coach', calm: 'calm tutor', direct: 'direct & focused', playful: 'playful buddy' }[st.coco.style],
           depth: st.coco.depth,
         },

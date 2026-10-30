@@ -5,7 +5,8 @@ import { Platform } from 'react-native';
 import { readFileBase64 } from '@/lib/readfile';
 import { countSlides, isOldPpt, isSlides, readSlides, type Slide } from '@/lib/slides';
 import type { Analysis, Context } from '@/lib/ai';
-import { useApp, type QResult, type SessionDraft } from '@/store';
+import { TYPE_LABEL } from '@/lib/qloo';
+import { useApp, type QResult, type SessionDraft, type WorldItem } from '@/store';
 
 /** A picked file lives in the cache, which Android may clear: copy it into the app's own documents
  *  so Coco can still read the lecture weeks later. Falls back to the picked copy if anything fails.
@@ -205,10 +206,21 @@ export async function sessionContext(withPdf = true): Promise<Context> {
     course,
     fromPage: d.fromPage,
     toPage: d.toPage,
-    interests: s.coco.memory ? s.profile.interests : [],
+    interests: tasteOf(s),
     style: { friendly: 'friendly coach', calm: 'calm tutor', direct: 'direct & focused', playful: 'playful buddy' }[s.coco.style],
     depth: s.coco.depth,
   };
+}
+
+/** What the student loves, for Coco's analogies and hooks: each pick with its kind and what it is about
+ *  (its Qloo tags), so an analogy rests on what the show / team / song really is, not on a guess. */
+export function tasteOf(st: { coco: { memory: boolean }; profile: { interests: string[] }; world: { picks: WorldItem[] } }): string[] {
+  if (!st.coco.memory) return [];
+  if (!st.world.picks.length) return st.profile.interests;
+  return st.world.picks.slice(0, 6).map((p) => {
+    const about = (p.tags ?? []).slice(0, 4).join(', ');
+    return `${p.name} (${TYPE_LABEL[p.type]}${about ? `; about: ${about}` : ''})`;
+  });
 }
 
 /** A light context (no lecture file, no running session): for chats about a single card, memory hooks and level-ups. */
@@ -218,7 +230,7 @@ export function cardContext(subjectId: string): Context {
   return {
     subject: subject?.name ?? 'General',
     chapter: '',
-    interests: st.coco.memory ? st.profile.interests : [],
+    interests: tasteOf(st),
     style: { friendly: 'friendly coach', calm: 'calm tutor', direct: 'direct & focused', playful: 'playful buddy' }[st.coco.style],
     depth: st.coco.depth,
   };
