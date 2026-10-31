@@ -1,14 +1,15 @@
-// Blender video renders (720×1280, H.264). Each is a full-screen 9:16 shot from the fixed camera.
+// Blender video renders (H.264). Each is a full-screen 9:16 shot from the fixed camera.
+// The planting clips (plant*) are 1080×1920; each one starts on the last frame of the one before it.
 export const VIDEOS = {
   splash: require('../assets/videos/splash.mp4'), // Coco peeks, teal hill rises (1.2s)
   intro1: require('../assets/videos/intro-1.mp4'), // loop: tree
   intro2: require('../assets/videos/intro-2.mp4'), // loop: Coco + gadgets
   intro3: require('../assets/videos/intro-3.mp4'), // loop: Coco reading
   hello: require('../assets/videos/hello.mp4'), // loop: Coco waves
-  agriculture: require('../assets/videos/agriculture.mp4'), // loop: Coco the farmer waves his shovel (sound)
-  fallSeed: require('../assets/videos/fall-seed.mp4'), // once: a seed falls and Coco catches it (sound)
-  seedOpen: require('../assets/videos/seed-open.mp4'), // once: hands open the glowing seed → cream (sound)
-  seedClose: require('../assets/videos/seed-close.mp4'), // once: seed planted, tree grows (10.7s, sound)
+  plantLoop: require('../assets/videos/plant-loop.mp4'), // loop: the seed waits in the field (behind "Plant now")
+  plantOpen: require('../assets/videos/plant-open.mp4'), // once: the seed opens → cream (the subject form)
+  plantClose: require('../assets/videos/plant-close.mp4'), // once: cream → the seed closes, back in the field
+  plantTree: require('../assets/videos/plant-tree.mp4'), // once: the seed grows into a tree
   celebrate: require('../assets/videos/celebrate.mp4'), // once: Coco in sunglasses + confetti (sound)
   chestIdle: require('../assets/videos/chest-idle.mp4'), // loop: the closed chest wobbles, before it is opened (quiet sound)
 } as const;
@@ -17,10 +18,10 @@ export type VideoKey = keyof typeof VIDEOS;
 
 // Clips that carry their own sound design (the rest are silent).
 export const VIDEO_SOUND: Partial<Record<VideoKey, true>> = {
-  agriculture: true,
-  fallSeed: true,
-  seedOpen: true,
-  seedClose: true,
+  plantLoop: true,
+  plantOpen: true,
+  plantClose: true,
+  plantTree: true,
   celebrate: true,
   chestIdle: true,
 };
@@ -38,10 +39,10 @@ export const VIDEO_BG: Record<VideoKey, string> = {
   intro2: '#327B78',
   intro3: '#78993B',
   hello: '#F2EEE4',
-  agriculture: '#C1DD85',
-  fallSeed: '#C1DD85',
-  seedOpen: '#95BD65', // first frame is the green backdrop with the hands
-  seedClose: '#F2EEE4',
+  plantLoop: '#799B2C', // the grass
+  plantOpen: '#799B2C',
+  plantClose: '#F1F1E7', // first frame is the cream page
+  plantTree: '#7E9F32',
   celebrate: '#F2EADA',
   chestIdle: '#17594F',
 };
@@ -53,10 +54,10 @@ export const VIDEO_MS: Record<VideoKey, number> = {
   intro2: 10000,
   intro3: 10000,
   hello: 8000,
-  agriculture: 6000,
-  fallSeed: 4340,
-  seedOpen: 4020,
-  seedClose: 10750,
+  plantLoop: 5970,
+  plantOpen: 3920,
+  plantClose: 3950,
+  plantTree: 3920,
   celebrate: 8000,
   chestIdle: 4000,
 };

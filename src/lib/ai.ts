@@ -973,6 +973,9 @@ async function sourcePage(c: Context, page?: number): Promise<Block[]> {
   }
 }
 
+/** A picture's type from its first bytes: a slide's picture can be a PNG or WebP, a cut from a PDF is a JPEG. */
+const imageType = (b64: string) => (b64.startsWith('iVBOR') ? 'image/png' : b64.startsWith('UklGR') ? 'image/webp' : 'image/jpeg');
+
 /** The question's picture, for Coco to look at while grading or talking about it (nothing if it can't be read). */
 async function pictureOf(q: ActiveQuestion): Promise<Block[]> {
   if (!q.picture?.uri) return [];
@@ -980,7 +983,7 @@ async function pictureOf(q: ActiveQuestion): Promise<Block[]> {
     const data = await readFileBase64(q.picture.uri);
     if (!data) return [];
     return [
-      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } },
+      { type: 'image', source: { type: 'base64', media_type: imageType(data), data } },
       { type: 'text', text: 'The picture above is from the lecture: it is the one the question is about (the student sees it under the question).' },
     ];
   } catch {

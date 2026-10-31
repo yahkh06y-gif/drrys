@@ -371,7 +371,7 @@ function QuestionView({ i, n, q, res, onNext }: { i: number; n: number; q: Activ
             )}
             {fmt === 'work' && (
               <View style={{ gap: 8 }}>
-                <Pressable onPress={() => (tap('select'), setSketching((v) => !v))} style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: sketching ? C.teal : C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
+                <Pressable onPress={() => (tap('select'), sketching && setInk(false), setSketching(!sketching))} style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: sketching ? C.teal : C.sand, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
                   <Ionicons name="brush-outline" size={14} color={sketching ? C.white : C.body} />
                   <Text style={{ fontFamily: F.medium, fontSize: 13, color: sketching ? C.white : C.body }}>{sketching ? 'Hide the sketch pad' : 'Sketch or write by hand'}</Text>
                 </Pressable>
