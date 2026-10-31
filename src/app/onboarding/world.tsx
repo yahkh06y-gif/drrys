@@ -159,13 +159,18 @@ export function WorldView({ editing = false }: { editing?: boolean }) {
     const qloo = rows.find((r) => !r.niche.local);
     if (!qloo) return setResults(mine);
     setSearching(true);
+    let alive = true; // a newer search replaces this one: its late answer is dropped
     const t = setTimeout(() => {
       searchWorld(q, area === 'sports' ? 'sports' : qloo.type)
-        .then((found) => setResults([...mine, ...found]))
-        .catch(() => setResults(mine))
-        .finally(() => setSearching(false));
+        .then((found) => alive && setResults([...mine, ...found]))
+        .catch(() => alive && setResults(mine))
+        .finally(() => alive && setSearching(false));
     }, 450);
-    return () => clearTimeout(t);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+      setSearching(false);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, area, chosen]);
 

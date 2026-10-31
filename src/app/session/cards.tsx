@@ -66,8 +66,11 @@ export default function Cards() {
     return () => clearTimeout(t);
   }, [toast]);
 
+  // made once: the session changes while the cards are being made (the drafts land), and that must not add them twice
+  const making = useRef(false);
   useEffect(() => {
-    if (!loading || !session?.analysis) return;
+    if (!loading || !session?.analysis || making.current) return;
+    making.current = true;
     (async () => {
       try {
         // usually ready already (written in the background while the student practised); otherwise ask Coco now

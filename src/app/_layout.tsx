@@ -68,6 +68,11 @@ export default function RootLayout() {
         </Stack.Protected>
         <Stack.Screen name="(tabs)" options={{ animation: 'fade', contentStyle: { backgroundColor: color.bg.sky } }} />
         <Stack.Screen name="session" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
+        {/* in onboarding the form fades in over the opened seed's cream frame, never slides */}
+        <Stack.Screen
+          name="subject"
+          options={({ route }) => ({ animation: (route.params as { onboarding?: string } | undefined)?.onboarding ? 'fade' : 'slide_from_right' })}
+        />
         <Stack.Screen name="grow" options={{ animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="paywall" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack>

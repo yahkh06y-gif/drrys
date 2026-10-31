@@ -32,7 +32,6 @@ export function Confetti({ burst, count = 26 }: { burst: number; count?: number 
         glyph: BITS[i % BITS.length],
         size: 16 + Math.random() * 14,
       })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [burst, count, width],
   );
   return (

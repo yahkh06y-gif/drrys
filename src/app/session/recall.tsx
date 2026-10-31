@@ -96,7 +96,7 @@ export default function Recall() {
             <TextInput
               ref={input}
               value={withLive(recall, voice.live)}
-              onChangeText={(t) => voice.state !== 'recording' && patchSession({ recall: t })}
+              onChangeText={(t) => voice.state !== 'recording' && (stopTyping.current?.(), patchSession({ recall: t }))}
               onFocus={() => setActive(true)}
               onBlur={() => setActive(false)}
               multiline
@@ -113,7 +113,7 @@ export default function Recall() {
                   </Pressable>
                 )}
                 {!!recall && (
-                  <Pressable onPress={() => (tap(), patchSession({ recall: '' }))}>
+                  <Pressable onPress={() => (tap(), stopTyping.current?.(), patchSession({ recall: '' }))}>
                     <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.body }}>Clear</Text>
                   </Pressable>
                 )}

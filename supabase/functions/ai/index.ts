@@ -9,6 +9,11 @@
 //
 // Only what the app needs is allowed: Claude messages, Gemini generateContent on gemini-* models, and the
 // three YouCam calls for memory-hook pictures. Output length is capped so one request can't run up a big bill.
+//
+// Only Drrys students get in: every request carries the student's login token (an anonymous login for students
+// without an account), and each student has a daily cap (DAILY_CALLS, counted in the ai_usage table), so a
+// stranger who finds this URL can't spend the AI keys. Turn on "Allow anonymous sign-ins" in Supabase
+// (Authentication → Sign In / Providers) or students without an account get "sign in first".
 
 const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
 const CLAUDE_MODEL = Deno.env.get('CLAUDE_MODEL') || 'claude-sonnet-5-5';
@@ -17,6 +22,10 @@ const YOUCAM_KEY = Deno.env.get('YOUCAM_API_KEY') ?? '';
 
 const YOUCAM = 'https://yce-api-01.makeupar.com/s2s/v2.0';
 const YOUCAM_TASKS: Record<string, string> = { text: `${YOUCAM}/task/text-to-image/youcam`, image: `${YOUCAM}/task/image-to-image/youcam` };
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const DAILY_CALLS = Number(Deno.env.get('AI_DAILY_CALLS')) || 400; // AI calls per student per day
 
 const MAX_BODY = 40 * 1024 * 1024; // a lecture PDF as base64 (Gemini takes up to ~20 MB inline)
 const MAX_OUT = 12000; // output tokens per request
@@ -100,10 +109,33 @@ async function youcam(body: any): Promise<Response> {
   return json({ error: 'unknown step' }, 400);
 }
 
+/** The student behind the request's login token, or null for a stranger. */
+async function student(req: Request): Promise<string | null> {
+  const auth = req.headers.get('authorization') ?? '';
+  if (!/^Bearer \S+$/.test(auth) || !SUPABASE_URL || !SERVICE_KEY) return null;
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { authorization: auth, apikey: SERVICE_KEY } });
+  if (!res.ok) return null;
+  const user = await res.json().catch(() => null);
+  return typeof user?.id === 'string' ? user.id : null;
+}
+
+/** Counts one call for today; false once the student is over the daily cap. */
+async function withinCap(uid: string): Promise<boolean> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/ai_tick`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', apikey: SERVICE_KEY, authorization: `Bearer ${SERVICE_KEY}` },
+    body: JSON.stringify({ p_user: uid }),
+  });
+  if (!res.ok) return true; // the counter itself failing shouldn't stop a real student
+  return Number(await res.json()) <= DAILY_CALLS;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
   if (Number(req.headers.get('content-length') ?? 0) > MAX_BODY) return json({ error: 'too big' }, 413);
+  const uid = await student(req);
+  if (!uid) return json({ error: 'sign in first' }, 401);
   let body: any;
   try {
     body = await req.json();
@@ -111,6 +143,8 @@ Deno.serve(async (req) => {
     return json({ error: 'bad request' }, 400);
   }
   try {
+    const costs = body?.action === 'claude' || body?.action === 'gemini' || (body?.action === 'youcam' && body?.step === 'start');
+    if (costs && !(await withinCap(uid))) return json({ error: 'daily limit reached, see you tomorrow' }, 403);
     switch (body?.action) {
       // which providers have a key on the server (never the keys themselves)
       case 'status':

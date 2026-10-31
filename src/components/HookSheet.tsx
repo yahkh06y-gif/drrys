@@ -46,8 +46,11 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
   const { ref: kbRef, onLayout: kbLayout, lift: kbLift, room: kbRoom, open: kbOpen } = useKeyboardLift();
   const insets = useSafeAreaInsets();
   const tried = text.trim().split(/\s+/).filter(Boolean).length >= 3; // your own first try comes before Coco's ideas
+  // a fresh start for each question or card (a question that has no card yet has no id, so its text names it)
+  const target = card ? (card.id ?? card.q) : undefined;
+  const mnemonic = card?.mnemonic;
   useEffect(() => {
-    setText(card?.mnemonic ?? '');
+    setText(mnemonic ?? '');
     setIdeas([]);
     setBusy(false);
     setPhase('write');
@@ -55,7 +58,7 @@ export function HookSheet({ card, onClose, slipping }: { card?: HookTarget; onCl
     setMaking(false);
     setPicErr(undefined);
     setTries(0);
-  }, [card?.id]);
+  }, [target, mnemonic]);
   if (!card) return null;
   const getIdeas = async () => {
     setBusy(true);

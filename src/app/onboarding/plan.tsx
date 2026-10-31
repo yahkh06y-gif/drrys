@@ -7,8 +7,8 @@
 // It comes right after "Show Coco your world": while the student answers, Coco's first explanation is made in
 // the background (lib/first), so "Let me show you how we'll study" is ready when they get there.
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import Animated, { cancelAnimation, Easing, runOnJS, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -66,7 +66,18 @@ export default function Plan() {
   };
 
   // on to Coco's first explanation (made in the background while the student was here)
-  const finish = () => router.push('/onboarding/first');
+  // once only: after the promise, "Continue" shows while the reminder timer is still running, and both lead on
+  const left = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      left.current = false;
+    }, []),
+  );
+  const finish = () => {
+    if (left.current) return;
+    left.current = true;
+    router.push('/onboarding/first');
+  };
 
   const onPromise = async () => {
     setPromised(true);

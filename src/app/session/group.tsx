@@ -18,7 +18,7 @@ import { color, palette, radius } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 type Item = { id: string; title: string; detail: string };
-type Group = { name: string; items: string[] };
+type GroupDraft = { name: string; items: string[] };
 
 const MAX_GROUPS = 4;
 const MAX_PER_GROUP = 4; // about how many things a mind holds at once
@@ -43,7 +43,7 @@ export default function Group() {
     if (items.length < ORGANIZE_MIN) router.replace('/session/active');
   }, [items.length]);
 
-  const [groups, setGroups] = useState<Group[]>([
+  const [groups, setGroups] = useState<GroupDraft[]>([
     { name: '', items: [] },
     { name: '', items: [] },
   ]);

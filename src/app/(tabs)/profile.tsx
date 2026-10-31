@@ -4,13 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, Switch, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Modal, Pressable, ScrollView, Switch, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { autoDir, dirIcon } from '@/design/rtl';
 import { color, radius, shadow } from '@/design/tokens';
 import { COCO, STAT_ICONS } from '@/art';
 import { Btn, Confirm, Progress, XpStars } from '@/components/ui';
+import { alert } from '@/lib/alert';
 import { aiLabel } from '@/lib/ai';
 import { play, tap } from '@/lib/feedback';
 import { DEFAULT_HOUR, disableReminders, enableReminders, hourLabel, REMINDER_HOURS, remindersSupported } from '@/lib/notify';
@@ -57,7 +58,7 @@ export default function Profile() {
       const ok = await enableReminders();
       setProfile({ reminders: ok });
       if (!ok)
-        Alert.alert(
+        alert(
           remindersSupported ? 'Notifications are off' : 'Not in Expo Go',
           remindersSupported ? 'Allow notifications for Drrys in your phone settings, then try again.' : 'Reminders work in the installed app (APK), not in Expo Go.',
         );
@@ -175,7 +176,7 @@ export default function Profile() {
             label="Restore purchases"
             onPress={async () => {
               const ok = await restore();
-              Alert.alert(ok ? 'Welcome back to Pro' : 'No active subscription found');
+              alert(ok ? 'Welcome back to Pro' : 'No active subscription found');
             }}
           />
           <Row icon="trash-outline" label="Reset app" danger onPress={() => setResetting(true)} last />
