@@ -57,6 +57,7 @@ export type ActiveQuestion = {
   figure?: FigureRef; // the picture of the lecture this question is about (chosen by the AI)
   page?: number; // the page of the session's lecture pages (1 = the first chosen page) where the answer is written
   picture?: QPicture; // that picture, cut out and saved, shown under the question
+  idea?: string; // the idea of the lecture map this question practises (to know which gaps got a question)
 };
 /** Where a question's picture is in the lecture: the page, and on a PDF page the box around it ([top, left, bottom, right],
  *  0–1000 of the page, the way Gemini gives boxes); on a slide, which of the slide's pictures it is (1 = the first). */
@@ -177,9 +178,8 @@ function healthy(model: string) {
   saveHealth();
 }
 
-// Voice → text: Google's dedicated transcription model first (fast, made for this), then the light
-// Flash models. Thinking is kept to a minimum — writing down speech needs no reasoning.
-const TRANSCRIBE_CHAIN = ['gemini-3.5-transcribe', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.5-flash'];
+// Voice → text: the light Flash models (fast). Thinking is kept to a minimum — writing down speech needs no reasoning.
+const TRANSCRIBE_CHAIN = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.5-flash']; // gemini-3.5-transcribe turned voice answers down (400)
 
 type GeminiOpts = { chain?: string[]; thinking?: 'minimal' | 'low'; temperature?: number; timeoutMs?: number; label?: string; json?: boolean };
 
@@ -401,6 +401,9 @@ function noPages(t: string, whenOnlyAPointer?: string): string {
   return out ? out.charAt(0).toUpperCase() + out.slice(1) : t;
 }
 
+/** The hint when the AI's own hint only sent the student to a page or a picture. */
+const HINT_FALLBACK = 'Think back to how this was explained, step by step.';
+
 const MARKED = ['order', 'sort', 'match', 'blank'] as const;
 type Marked = (typeof MARKED)[number];
 const isMarked = (f?: string): f is Marked => (MARKED as readonly string[]).includes(f ?? '');
@@ -421,7 +424,7 @@ export function cleanQuestion(q: ActiveQuestion): ActiveQuestion | null {
   const blankText = s(q.text);
   const gaps = [...blankText.matchAll(/\[\[(.+?)\]\]/g)].length;
   const { fit: _fit, ...rest } = q as ActiveQuestion & { fit?: unknown }; // "fit" only made the AI check the format
-  const base = { ...rest, q: noPages(q.q), hint: noPages(q.hint ?? '', 'Think back to how this was explained, step by step.'), ideal: noPages(q.ideal ?? ''), figure: cleanFigure(q.figure), steps: undefined, buckets: undefined, pairs: undefined, text: undefined, extras: undefined };
+  const base = { ...rest, q: noPages(q.q), hint: noPages(q.hint ?? '', HINT_FALLBACK), ideal: noPages(q.ideal ?? ''), figure: cleanFigure(q.figure), steps: undefined, buckets: undefined, pairs: undefined, text: undefined, extras: undefined };
   const usable: Record<Marked, boolean> = {
     order: steps.length >= 3,
     sort: buckets.length >= 2 && buckets.reduce((n, b) => n + b.items.length, 0) >= 4,
@@ -449,8 +452,21 @@ export function cleanQuestion(q: ActiveQuestion): ActiveQuestion | null {
  *  reasoning = a why / how idea, best explained. */
 export type IdeaShape = 'visual' | 'sequence' | 'groups' | 'pairs' | 'definition' | 'calculation' | 'reasoning';
 const SHAPES: IdeaShape[] = ['visual', 'sequence', 'groups', 'pairs', 'definition', 'calculation', 'reasoning'];
-/** One idea of the lecture, checked against the student's brain dump. `figure`: the picture it lives in, if any. */
-export type MapIdea = { idea: string; page?: number; weight: number; status: 'nailed' | 'missed' | 'wrong'; shape: IdeaShape; figure?: FigureRef };
+/** One idea of the lecture, checked against the student's brain dump. `figure`: the picture it lives in, if any.
+ *  A gap carries what the student reads about it: `teach` + `why` for a missed idea, `youSaid` + `truth` for a wrong one. */
+export type MapIdea = {
+  idea: string;
+  page?: number;
+  weight: number;
+  status: 'nailed' | 'missed' | 'wrong';
+  shape: IdeaShape;
+  figure?: FigureRef;
+  teach?: string;
+  why?: string;
+  youSaid?: string;
+  truth?: string;
+  formula?: string;
+};
 export type Lesson = { analysis: Analysis; map: MapIdea[] };
 
 const NO_PAGES = `NO PAGE NUMBERS IN WHAT THE STUDENT READS: questions, hints, answers, cards and the analysis texts never mention a page or slide number and never send the student to the lecture ("on page 4…", "see slide 2", "go back to page 3"). The student answers from memory; page numbers belong only in "src", "page" and "figure".`;
@@ -458,25 +474,77 @@ const NO_PICTURE_TALK = `NO PICTURES HERE: the student sees this text WITHOUT an
 
 // Words that point at a picture the student would have to see ("in the diagram below", "Figure 3", "في الرسمة").
 // A question or card without its picture that says this can't be answered, so it is left out.
+// Up to 4 words may sit between "the" and the picture word: "based on the transition function diagram", "the given state diagram".
 const PICTURE_TALK =
-  /\b(?:in|on|from|using|see|look at|refer to|based on|according to)\s+(?:the|this|that)\s+(?:above\s+|following\s+|given\s+|attached\s+)?(?:figure|fig\.?|diagram|graph|chart|table|image|picture|illustration|drawing|plot|screenshot)\b|\b(?:the|this)\s+(?:figure|diagram|image|picture|illustration|screenshot|chart)\s+(?:below|above|shown)\b|\b(?:shown|pictured|illustrated|depicted)\s+(?:below|above)\b|\bfig(?:ure)?\.?\s*\d|(?:في|من|على|ب)\s*ال(?:رسمة|رسم البياني|صورة|مخطط)|(?:الشكل|الرسمة|الرسم|الصورة|المخطط|الجدول)\s+(?:التالي|التالية|أدناه|المرفق|المرفقة|المقابل|المقابلة|الموضح|الموضحة|السابق|السابقة|رقم)/i;
+  /\b(?:in|on|from|using|see|look at|refer to|based on|according to|consider|study|examine|given)\s+(?:the|this|that)\s+(?:[\w-]+\s+){0,4}?(?:figure|fig\.?|diagram|graph|chart|table|image|picture|illustration|drawing|plot|screenshot)s?\b|\b(?:the|this)\s+(?:figure|diagram|image|picture|illustration|screenshot|chart)\s+(?:below|above|shown)\b|\b(?:shown|pictured|illustrated|depicted)\s+(?:below|above)\b|\bfig(?:ure)?\.?\s*\d|(?:في|من|على|ب)\s*ال(?:رسمة|رسم البياني|صورة|مخطط)|(?:الشكل|الرسمة|الرسم|الصورة|المخطط|الجدول)\s+(?:التالي|التالية|أدناه|المرفق|المرفقة|المقابل|المقابلة|الموضح|الموضحة|السابق|السابقة|رقم)/i;
 /** The text points at a picture of the lecture. */
 export const mentionsPicture = (t?: string) => !!t && PICTURE_TALK.test(t);
+
+/**
+ * Questions and cards are shown without a picture unless they have one (`figure`). When such a text still points at a
+ * picture ("Based on the transition function diagram…"), it is rewritten to stand on its own: usually it already holds
+ * what the picture shows, so only the pointer goes. One short call for all of them, without the lecture file.
+ * An item that can't be asked without its picture is left out (and logged), never shown broken.
+ */
+async function standAlone<T extends { figure?: FigureRef }>(c: Context, items: T[], fields: (keyof T & string)[], what: string): Promise<T[]> {
+  const refs = items.flatMap((x, k) => (x.figure ? [] : fields.filter((f) => mentionsPicture(x[f] as string)).map((f) => ({ k, f, text: String(x[f]) }))));
+  if (!refs.length) return items;
+  let fixed: string[] = [];
+  try {
+    const out = await callJSON<unknown[]>(
+      persona(c),
+      [
+        {
+          type: 'text',
+          text: `Each text below is from a study app. The student sees it WITHOUT any picture, but it points at one ("based on the diagram…", "in the table below…").
+Rewrite each one so it stands on its own: take out the pointer and keep every fact the text already gives (states, transitions, values, labels), written in words. Add no new facts. Keep the meaning, the language and roughly the length.
+If a text can't be understood without seeing the picture (the facts it needs are not in the text), return "" for it.
+Texts: ${JSON.stringify(refs.map((r) => r.text))}
+Return ONLY a JSON array of strings: the same number, in the same order.`,
+        },
+      ],
+      1500,
+      'Keep each text short.',
+      `${what} without picture talk`,
+    );
+    fixed = refs.map((_, k) => (typeof out?.[k] === 'string' ? (out[k] as string).trim() : ''));
+  } catch {}
+  const next = items.map((x) => ({ ...x }));
+  const lost = new Set<number>();
+  refs.forEach((r, k) => {
+    const t = fixed[k];
+    if (t && !mentionsPicture(t)) (next[r.k] as Record<string, unknown>)[r.f] = t;
+    else lost.add(r.k);
+  });
+  lost.forEach((k) => console.log(`[check] ${what} left out: it needs a picture it doesn't have: "${refs.find((r) => r.k === k)!.text.slice(0, 80)}"`));
+  return next.filter((_, k) => !lost.has(k));
+}
 
 const grounding = (c: Context) =>
   `GROUNDING (the most important rule): everything comes from the lecture pages above and nothing else. Never use your own knowledge, the syllabus or the past papers as a source of facts. "src" is the page number of the lecture document (1 to ${c.pageCount ?? 'the last page'}) where the answer or fact is actually written. If you cannot point to a page, leave that item out.`;
 
 /** Ask once more when the answer came back cut off or as broken JSON (a dense lecture makes a long answer). */
-async function callJSON<T>(system: string, content: Block[], maxTokens: number, retryNote: string, label = 'ai'): Promise<T> {
+/** `complete`: says whether the parsed answer has everything; one that doesn't is asked for again, like broken JSON. */
+async function callJSON<T>(system: string, content: Block[], maxTokens: number, retryNote: string, label = 'ai', complete?: (v: T) => boolean): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
-      const raw = await call(system, attempt ? [...content, { type: 'text', text: `YOUR PREVIOUS ANSWER WAS CUT OFF OR NOT VALID JSON. Answer again with COMPLETE, valid JSON. ${retryNote}` }] : content, maxTokens, attempt ? `${label} (again: the first answer was cut off or broken)` : label, true);
-      return parseJSON<T>(raw);
+      const raw = await call(system, attempt ? [...content, { type: 'text', text: `YOUR PREVIOUS ANSWER WAS CUT OFF OR NOT VALID JSON. Answer again with COMPLETE, valid JSON. ${retryNote}` }] : content, maxTokens, attempt ? `${label} (again: the first answer was cut off or broken)` : label);
+      const v = parseJSON<T>(raw);
+      if (complete && !complete(v)) {
+        console.log(`[check] ${label}: the answer is missing a part (it has: ${Object.keys(v ?? {}).join(', ') || 'nothing'}), asking again`);
+        throw new SyntaxError('the answer is missing a part');
+      }
+      return v;
     } catch (e) {
       if (!(e instanceof SyntaxError) || attempt >= 1) throw e;
     }
   }
 }
+
+/** How many map entries a lecture can have, and the room the analysis gets: a long lecture (80 pages) has far more
+ *  ideas than a short one, and an answer cut off at its length limit can't be read at all. */
+const mapCap = (c: Context) => Math.min(60, 25 + Math.round((c.pageCount ?? 20) / 3));
+const analysisBudget = (c: Context) => Math.min(16000, 8000 + Math.max(0, (c.pageCount ?? 20) - 20) * 120);
 
 /**
  * Session step 1 — the only one the student waits for: every idea of the lecture pages (with its shape, and the
@@ -501,20 +569,22 @@ export async function analyseSession(c: Context, recall: string): Promise<Lesson
 Compare it with ${hasLecture(c) ? "today's lecture pages" : 'the topic (no lecture file attached, so use standard curriculum knowledge for this chapter)'}.
 Return ONLY JSON with this shape:
 {
- "map": [{"idea": "short name", "page": 1, "weight": 3, "status": "nailed|missed|wrong", "shape": "visual|sequence|groups|pairs|definition|calculation|reasoning", "figure": ${slides ? '{"page": 1, "image": 1}' : '{"page": 1, "box": [0, 0, 1000, 1000]}'} | null}],
+ "map": [{"idea": "short name", "page": 1, "weight": 3, "status": "nailed|missed|wrong", "shape": "visual|sequence|groups|pairs|definition|calculation|reasoning", "figure": ${slides ? '{"page": 1, "image": 1}' : '{"page": 1, "box": [0, 0, 1000, 1000]}'} | null,
+          ...only when "missed": "teach": "teach it clearly in 2-3 simple sentences, as if explaining it for the first time", "why": "ONE short sentence: where it shows up (a typical exam question, or what it is needed for); never add content from the syllabus or past papers",
+          ...only when "wrong": "youSaid": "their wrong statement (quote/paraphrase)", "truth": "the correct idea in 1-2 sentences", "formula": "optional short formula"}],
  "analysis": {
    "summary": "1 short encouraging sentence",
    "nailed": [{"title": "concept", "detail": "what they got right (1 sentence)", "tag": "Strong Recall|Exact Match|Firmly Grasped"}],
-   "forgotten": [{"title": "important idea from the lecture they did not mention", "detail": "teach it clearly in 2-3 simple sentences, as if explaining it for the first time", "why": "ONE short sentence: why it matters, i.e. where it shows up (a typical exam question, or what it is needed for); never add content from the syllabus or past papers", "tag": "Missed", "src": 1}],
-   "corrections": [{"concept": "name", "youSaid": "their wrong statement (quote/paraphrase)", "truth": "the correct idea in 1-2 sentences", "formula": "optional short formula"}],
    "keywords": ["exact short phrases copied from the student's text that are correct"]
  }
 }
 Rules:
 - ${NO_PAGES}
 - ${grounding(c)}
-- The analysis texts (summary, details, why, truth) are read without pictures. ${NO_PICTURE_TALK}
-- map (do this FIRST, it is your working list): walk through the lecture pages in order and list EVERY distinct idea, definition, formula, number, example or picture worth knowing, whether or not the student mentioned it. "page": where it is (1 to ${c.pageCount ?? 'the last page'}). weight: 3 = core and likely examined, 2 = important support, 1 = detail. status compares it with the brain dump: nailed (stated correctly), missed (not mentioned), wrong (stated incorrectly). Names only, no explanations here. The LECTURE decides what matters, never the student's text.
+- The texts the student reads (summary, detail, teach, why, truth) are read without pictures. ${NO_PICTURE_TALK}
+- map (do this FIRST, it is your working list and the ONLY list of the student's gaps): walk through the lecture pages in order and list EVERY distinct idea, definition, formula, number, example or picture worth knowing, whether or not the student mentioned it. "page": where it is (1 to ${c.pageCount ?? 'the last page'}). weight: 3 = core and likely examined, 2 = important support, 1 = detail. status compares it with the brain dump: nailed (stated correctly), missed (not mentioned), wrong (stated incorrectly). The LECTURE decides what matters, never the student's text.
+- NO GAP IS LOST: every missed or wrong idea of weight 2 or 3 gets its own entry, and every wrong statement in the brain dump gets a "wrong" entry. To keep the answer short, merge NAILED ideas and weight-1 details instead: the map has at most ${mapCap(c)} entries that are nailed or weight 1; missed and wrong ideas of weight 2-3 don't count toward that.
+- Every "missed" entry has "teach" and "why"; every "wrong" entry has "youSaid" and "truth". "teach" must actually teach the idea, because the student reads these before being questioned. Nailed entries are names only.
 - "shape" says how the idea is built in the lecture. Look at each one honestly; Drrys picks how to practise it from this:
     visual — the idea is taught with a picture the student must SEE: a diagram, automaton, graph, chart, table, circuit, map, labelled drawing, code screenshot. Lectures that are mostly pictures have many of these.
     sequence — steps of a process or algorithm, stages in time, a chain where each step causes the next: ONE right order that the lecture shows. A list of types, features or examples is not a sequence.
@@ -524,35 +594,59 @@ Rules:
     calculation — something worked out on paper: a calculation, derivation, proof, tracing an algorithm by hand.
     reasoning — a why / how idea, best explained in words. Use it only when none of the shapes above fits.
 - "figure" (for a visual idea; null otherwise): the picture it lives in. ${slides ? 'This lecture is slides: {"page": the page, "image": which picture of that page, as numbered in the lecture ("picture 2 of page 5" → 2)}. Only the numbered pictures can be shown: a visual drawn with shapes or text on the slide has none, so it is not "visual".' : 'This lecture is a PDF: {"page": the page, "box": [top, left, bottom, right]}: a tight box around the whole visual with its labels (not the page title or the text around it), each value 0-1000 of the page\'s height or width, like your usual box_2d.'}
-- analysis.forgotten: every "missed" idea of weight 3 and 2 (weight 1 only if the page stresses it), most important first; max 12. Each detail must actually teach the idea, because the student reads these before being questioned.
-- analysis.corrections: every wrong statement, max 6. nailed: max 6. Empty lists are fine.`,
+- analysis.nailed: max 6. Empty lists are fine.`,
       },
     ],
-    8000,
-    'Keep every "detail" short (one sentence) and the map entries minimal, but keep all the ideas.',
+    analysisBudget(c),
+    `Your answer was too long. Merge NAILED ideas and weight-1 details so they are at most ${Math.round(mapCap(c) * 0.6)} entries, keep every missed and wrong idea of weight 2-3, and keep every "teach" and "truth" to one sentence.`,
     'analysis',
+    (v) => !!v?.analysis && Array.isArray(v.map) && v.map.length > 0,
   );
   const a = out.analysis;
   if (!a) throw new Error('Coco’s answer came back incomplete');
-  // the model sometimes leaves a list out: make every list safe to read
-  const analysis = { ...a, nailed: a.nailed ?? [], forgotten: grounded(c, a.forgotten ?? []), corrections: a.corrections ?? [], keywords: a.keywords ?? [] };
+  const text = (x: unknown) => (typeof x === 'string' ? x.trim() : '');
   const map = (out.map ?? [])
     .filter((m) => m?.idea)
     .map((m): MapIdea => {
       const page = Number(m.page);
       const figure = m.shape === 'visual' ? figureIn(c, cleanFigure(m.figure)) : undefined;
       const shape = SHAPES.includes(m.shape as IdeaShape) ? (m.shape as IdeaShape) : 'reasoning';
+      const status = m.status === 'nailed' || m.status === 'wrong' ? m.status : 'missed';
+      const gapText =
+        status === 'missed'
+          ? { teach: noPages(text(m.teach)), why: noPages(text(m.why)) }
+          : status === 'wrong'
+            ? { youSaid: text(m.youSaid), truth: noPages(text(m.truth)), formula: text(m.formula) }
+            : {};
       return {
         idea: String(m.idea),
         page: Number.isInteger(page) && page >= 1 ? page : undefined,
         weight: Math.max(1, Math.min(3, Number(m.weight) || 2)),
-        status: m.status === 'nailed' || m.status === 'wrong' ? m.status : 'missed',
+        status,
         // a picture that can't be shown is practised in words
         shape: shape === 'visual' && !figure ? 'reasoning' : shape,
         ...(figure ? { figure } : {}),
+        ...Object.fromEntries(Object.entries(gapText).filter(([, v]) => v)),
       };
     });
+  // what the student reads is built from the map, so every gap they read about is one the questions and cards know
+  const analysis: Analysis = { ...a, nailed: a.nailed ?? [], ...gapsToRead(map), keywords: a.keywords ?? [] };
   return { analysis, map };
+}
+
+/** The "you missed" and "fix this" lists the student reads, straight from the map: most important first. A missed
+ *  weight-1 detail is listed only when the map taught it. */
+function gapsToRead(map: MapIdea[]): Pick<Analysis, 'forgotten' | 'corrections'> {
+  const byWeight = (x: MapIdea, y: MapIdea) => y.weight - x.weight || (x.page ?? 0) - (y.page ?? 0);
+  const forgotten = map
+    .filter((m) => m.status === 'missed' && (m.weight >= 2 || m.teach))
+    .sort(byWeight)
+    .map((m) => ({ title: m.idea, detail: m.teach || m.idea, ...(m.why ? { why: m.why } : {}), tag: 'Missed' }));
+  const corrections = map
+    .filter((m) => m.status === 'wrong')
+    .sort(byWeight)
+    .map((m) => ({ concept: m.idea, youSaid: m.youSaid ?? '', truth: m.truth || m.idea, ...(m.formula ? { formula: m.formula } : {}) }));
+  return { forgotten, corrections };
 }
 
 /** One question to write: which idea, and how the student practises it. */
@@ -568,6 +662,9 @@ const SHAPE_FORMAT: Record<IdeaShape, QFormat> = {
   reasoning: 'explain',
 };
 
+/** Every session practises at least this many ideas (when the lecture has them), even after a strong recall. */
+const MIN_QUESTIONS = 5;
+
 /**
  * Which ideas get a question and in what format, decided here (not by the AI) from the shape of each idea:
  * the student's gaps and mix-ups first (wrong, then missed, most important first), then about a quarter that
@@ -581,11 +678,13 @@ export function planQuestions(map: MapIdea[], analysis?: Analysis): PlanItem[] {
   }
   const byWeight = (a: MapIdea, b: MapIdea) => b.weight - a.weight || (a.page ?? 0) - (b.page ?? 0);
   const gaps = [...map.filter((m) => m.status === 'wrong' && m.weight >= 2).sort(byWeight), ...map.filter((m) => m.status === 'missed' && m.weight >= 2).sort(byWeight)].slice(0, 8);
-  if (gaps.length < 3) gaps.push(...map.filter((m) => m.status !== 'nailed' && m.weight < 2).slice(0, 3 - gaps.length));
+  if (gaps.length < MIN_QUESTIONS) gaps.push(...map.filter((m) => m.status !== 'nailed' && m.weight < 2).slice(0, MIN_QUESTIONS - gaps.length));
   const known = map.filter((m) => m.status === 'nailed' && m.weight >= 2).sort(byWeight);
   // pictures first among the known ideas: a lecture made of pictures should be practised with them
   known.sort((a, b) => Number(!!b.figure) - Number(!!a.figure));
-  const deepen = known.slice(0, Math.max(1, Math.ceil(gaps.length / 3), 3 - gaps.length)); // at least 3 questions when the lecture has them
+  // at least MIN_QUESTIONS when the lecture has them: a strong recall still gets real practice, on harder ground
+  const deepen = known.slice(0, Math.max(1, Math.ceil(gaps.length / 3), MIN_QUESTIONS - gaps.length));
+  if (gaps.length + deepen.length < MIN_QUESTIONS) deepen.push(...map.filter((m) => m.status === 'nailed' && m.weight < 2).slice(0, MIN_QUESTIONS - gaps.length - deepen.length));
   const chosen = [...gaps, ...deepen].slice(0, 10);
   const used: Partial<Record<QFormat, number>> = {};
   const items = chosen.map((m, k): PlanItem => {
@@ -671,22 +770,38 @@ Rules:
       const format = p?.figure ? q.format : (p?.format ?? q.format);
       const clean = cleanQuestion({ ...q, format, kind: KINDS.includes(q.kind as QKind) ? q.kind : 'conceptual', figure: p?.figure, src: q.src ?? p?.page } as ActiveQuestion);
       if (!clean) return [];
-      // no picture in the plan, but the text points at one: the student couldn't answer it
-      if (!clean.figure && (mentionsPicture(clean.q) || mentionsPicture(clean.hint))) {
-        console.log(`[check] question left out: it talks about a picture it doesn't have: "${clean.q.slice(0, 80)}"`);
-        return [];
-      }
+      const hint = !clean.figure && mentionsPicture(clean.hint) ? HINT_FALLBACK : clean.hint;
       const src = Number(q.src ?? p?.page);
-      return [{ ...clean, src: q.src ?? p?.page, ...(Number.isInteger(src) && src >= 1 ? { page: src } : {}) }];
+      return [{ ...clean, hint, idea: p?.idea, src: q.src ?? p?.page, ...(Number.isInteger(src) && src >= 1 ? { page: src } : {}) }];
     });
-  return grounded(c, written);
+  // a question without a picture that still points at one is rewritten to stand on its own
+  return standAlone(c, grounded(c, written), ['q', 'ideal'], 'question');
 }
 
-/** Session step 2b (in the background): the lecture's flashcards. */
-export async function writeCards(c: Context, lesson: Lesson): Promise<FlashCard[]> {
+/** The student's gaps: every idea they got wrong, and every idea they missed that they read about (see gapsToRead). */
+export const gapsOf = (map: MapIdea[]) => map.filter((m) => m.status === 'wrong' || (m.status === 'missed' && (m.weight >= 2 || !!m.teach)));
+
+/** The gaps that got no question today. Each of them becomes a flashcard, so no gap is left without practice. */
+export const unasked = (map: MapIdea[], questions: ActiveQuestion[]) => {
+  const asked = new Set(questions.map((q) => q.idea).filter(Boolean));
+  return gapsOf(map).filter((m) => !asked.has(m.idea));
+};
+
+/** The card for a gap the AI didn't write one for, made from what the student read about it. */
+function gapCard(m: MapIdea): FlashCard | undefined {
+  if (m.status === 'wrong') return m.truth ? { q: `${m.idea}: what is the correct idea?`, a: m.truth } : undefined;
+  return m.teach ? { q: `Explain: ${m.idea}`, a: m.teach } : undefined;
+}
+
+/**
+ * Session step 2b (in the background): the lecture's flashcards. `gaps`: the student's gaps that got no question
+ * today (see unasked); each one gets a card, written by the AI or, if it left one out, made from the analysis.
+ */
+export async function writeCards(c: Context, lesson: Lesson, gaps: MapIdea[] = []): Promise<FlashCard[]> {
   if (!aiEnabled) return DEMO.cards;
   const a = lesson.analysis;
-  const raw = await callJSON<FlashCard[]>(
+  const mustCover = gaps.map((m, k) => ({ gap: k + 1, idea: m.idea, student: m.status === 'wrong' ? `mixed it up (said: ${m.youSaid ?? ''})` : 'forgot it' }));
+  const raw = await callJSON<(FlashCard & { gap?: number })[]>(
     persona(c),
     [
       ...material(c),
@@ -694,22 +809,35 @@ export async function writeCards(c: Context, lesson: Lesson): Promise<FlashCard[
         type: 'text',
         text: `The student's session: they mixed up ${JSON.stringify(a.corrections.map((x) => x.concept))}, forgot ${JSON.stringify(a.forgotten.map((x) => x.title))}.
 Make the flashcards for these lecture pages.
-Return ONLY JSON: [{"q": "short question", "a": "short, accurate answer", "src": 1}]
+Return ONLY JSON: [{"q": "short question", "a": "short, accurate answer", "src": 1${mustCover.length ? ', "gap": 1 (only on a card for one of the gaps below)' : ''}}]
 Rules:
 - ${NO_PAGES}
 - ${grounding(c)}
 - Cards are shown without any picture. ${NO_PICTURE_TALK}
 - Only REFERENCE material: terms, definitions, numbers, formulas, lists, labels: the things that are simply remembered. Ideas that are better practised by explaining do not get a card. Built from the LECTURE content, not from the student's wording: the mixed-up ideas first, then the forgotten reference facts, then the other key reference facts of these pages.
-- No fixed number: one card per fact worth memorising, as many as the material holds; dense pages get many cards, light pages few. Never pad with trivia, never skip a key fact, never add facts that aren't in the lecture.`,
+- No fixed number: one card per fact worth memorising, as many as the material holds; dense pages get many cards, light pages few. Never pad with trivia, never skip a key fact, never add facts that aren't in the lecture.${mustCover.length ? `
+- THESE GAPS GET NO QUESTION TODAY, so each one MUST get exactly one card with its "gap" number, even a why / how idea (then the card asks it in one short question and answers it in 1-2 sentences). They come first: ${JSON.stringify(mustCover)}` : ''}`,
       },
     ],
-    6000,
-    'Keep every answer short, but keep all the cards.',
+    6000 + gaps.length * 120,
+    'Keep every answer short, but keep all the cards and one card for every gap.',
     'cards',
   );
-  return grounded(c, (Array.isArray(raw) ? raw : []).filter((x) => x?.q && x?.a))
-    .map((x) => ({ q: noPages(x.q), a: noPages(x.a) }))
-    .filter((x) => !(mentionsPicture(x.q) || mentionsPicture(x.a)) || (console.log(`[check] card left out: it talks about a picture: "${x.q.slice(0, 80)}"`), false));
+  const list = (Array.isArray(raw) ? raw : []).filter((x) => x?.q && x?.a);
+  // a gap's card stays even without a page: the gap itself came from the lecture map
+  const isGap = (x: { gap?: number }) => Number.isInteger(x.gap) && x.gap! >= 1 && x.gap! <= gaps.length;
+  const written = [...list.filter(isGap), ...grounded(c, list.filter((x) => !isGap(x)))].map((x) => ({ q: noPages(x.q), a: noPages(x.a), ...(isGap(x) ? { gap: x.gap } : {}) }));
+  // cards are never shown with a picture: one that points at a picture is rewritten to stand on its own
+  const cards = await standAlone<FlashCard & { gap?: number; figure?: FigureRef }>(c, written, ['q', 'a'], 'card');
+  // every gap without a question must leave with a card: the ones the AI skipped are made from the analysis
+  const covered = new Set(cards.map((x) => x.gap));
+  const extra = gaps.flatMap((m, k) => {
+    if (covered.has(k + 1)) return [];
+    const card = gapCard(m);
+    console.log(`[check] gap "${m.idea}" had no question and no card: ${card ? 'made one from the analysis' : 'nothing to make it from'}`);
+    return card ? [card] : [];
+  });
+  return [...cards.map(({ q, a }) => ({ q, a })), ...extra];
 }
 
 /** The picture reference, if it points at something this session's pages can show. */
@@ -874,7 +1002,7 @@ export async function gradeAnswer(c: Context, q: ActiveQuestion, answer: string,
     {
       type: 'text',
       text: `${sketch ? 'The image above is what the student sketched or wrote by hand for this question.\n' : ''}Question (${q.kind ?? 'conceptual'}): ${q.q}\nModel answer: ${q.ideal}\nStudent answer: """${answer}"""
-${q.format === 'work' ? 'This is a worked problem: judge the method, each step and the final answer (from the typed working and/or the sketch). If only the final answer is wrong, say which step to recheck.\n' : ''}${q.kind === 'analogous' ? 'This is a comparison question: the answer must say where the comparison fits AND where it stops working.\n' : ''}${q.kind === 'procedural' ? 'This is a procedure question: the steps must be right and in the right order.\n' : ''}Judge if the student's explanation captures the key idea (be fair, not pedantic). Give a "verdict": "right" (the key idea is there), "close" (the student is on the right track and says part of it correctly, but it is incomplete or imprecise: not yet the answer wanted), or "wrong" (the key idea is missing or mixed up). The model answer comes from the lecture: judge against it and add nothing from outside it.${page.length ? ' The lecture page above is where this question comes from. The model answer is only a short summary of it: anything correct the student says that this page supports counts as correct, even if the model answer leaves it out.' : ''}
+${q.format === 'work' ? 'This is a worked problem: judge the method, each step and the final answer (from the typed working and/or the sketch). If only the final answer is wrong, say which step to recheck.\n' : ''}${q.kind === 'analogous' ? 'This is a comparison question: the answer must say where the comparison fits AND where it stops working.\n' : ''}${q.kind === 'procedural' ? 'This is a procedure question: the steps must be right and in the right order.\n' : ''}Judge MEANING, never wording: the student explains in their own words, often in another language than the lecture (Arabic, English or a mix), and often by voice (so the text may have speech-to-text slips: a word that sounds like the right one counts as the right one). All of these count as right when the meaning is right: synonyms, everyday words instead of the term, an example instead of a definition, a different order, extra correct details, short or informal answers. Never mark an answer down for missing the exact term, the model answer's phrasing, or details the question did not ask for. "wrong" ONLY when the key idea is missing or the answer says something the lecture contradicts. When torn between two verdicts, pick the kinder one. Give a "verdict": "right" (the key idea is there), "close" (the student is on the right track and says part of it correctly, but it is incomplete or imprecise: not yet the answer wanted), or "wrong" (the key idea is missing or mixed up). The model answer comes from the lecture: judge against it and add nothing from outside it.${page.length ? ' The lecture page above is where this question comes from. The model answer is only a short summary of it: anything correct the student says that this page supports counts as correct, even if the model answer leaves it out.' : ''}
 Also spot the gap: if the answer is wrong, incomplete or mixes something up, write ONE flashcard aimed at exactly that
 missing or confused point (not the whole question again), answered from the lecture. If the answer is fully right, "card" is null.
 The student will see the model answer right under your feedback, so the feedback must NOT repeat it, praise, or explain the whole idea.

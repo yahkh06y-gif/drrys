@@ -130,7 +130,7 @@ export const COCO_TREE = {
   ] as CocoClip[],
   fallHard: { src: require('../assets/art/coco/tree-v2-fall-hard.webp'), box: COCO_BOX, ms: 1733 } as CocoClip,
   // after a full session: Coco waters the tree, puts the can away and settles into the idle pose
-  water: { src: require('../assets/art/coco/tree-water.webp'), box: [590, 1220, 370, 200], ms: 4000 } as CocoClip,
+  water: { src: require('../assets/art/coco/tree-water-2.webp'), box: [560, 1200, 360, 190], ms: 3948 } as CocoClip,
   idle: [
     { src: require('../assets/art/coco/tree-v2-idle-1.webp'), box: COCO_BOX, ms: 9499, weight: 30 },
     { src: require('../assets/art/coco/tree-v2-idle-1-1.webp'), box: COCO_BOX, ms: 9332, weight: 30 },

@@ -4,8 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
-import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { ActivityIndicator, Pressable, ScrollView, Text, View, type LayoutChangeEvent } from 'react-native';
+import Animated, { interpolate, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { autoDir } from '@/design/rtl';
@@ -91,9 +91,6 @@ export default function Cards() {
   const cards = useMemo(() => ids.map((id) => allCards.find((c) => c.id === id)).filter(Boolean), [ids, allCards]);
   const card = cards[i];
 
-  const front = useAnimatedStyle(() => ({ transform: [{ perspective: 900 }, { rotateY: `${interpolate(flip.value, [0, 1], [0, 180])}deg` }], backfaceVisibility: 'hidden' }));
-  const back = useAnimatedStyle(() => ({ transform: [{ perspective: 900 }, { rotateY: `${interpolate(flip.value, [0, 1], [180, 360])}deg` }], backfaceVisibility: 'hidden' }));
-
   // tap flips the card either way, so the question can be read again after the answer
   const reveal = () => {
     const toBack = !onBack;
@@ -165,7 +162,8 @@ export default function Cards() {
           <SessionHeader step={6} title="Lock it in" onBack={() => router.replace('/session/active')} />
         </>
       )}
-      <View style={{ flex: 1, padding: 20, gap: 14 }}>
+      {/* scrolls when a long card and its buttons don't fit on the screen */}
+      <ScrollView contentContainerStyle={{ flexGrow: 1, padding: 20, gap: 14 }}>
         <Enter>
           <Pill text={review ? 'Spaced repetition' : 'Made from today’s session'} bg={C.sand} border={C.sand} fg={C.body} />
           <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 6 }}>
@@ -189,24 +187,7 @@ export default function Cards() {
         ) : (
           <>
             <Enter key={card.id}>
-            <Pressable onPress={reveal} style={{ height: 300 }}>
-              <Animated.View style={[cardStyle, front]}>
-                <Pill text={card.reps ? 'Review' : 'New'} bg={color.feedback.almost.picked} border={color.feedback.almost.picked} fg={color.feedback.almost.text} />
-                <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted, marginTop: 14 }}>Question</Text>
-                <Text style={[{ fontFamily: F.medium, fontSize: 21, lineHeight: 29, color: C.ink, marginTop: 4, letterSpacing: -0.2 }, autoDir(card.q)]}>{card.q}</Text>
-                <View style={{ flex: 1 }} />
-                <View style={{ alignItems: 'center', gap: 4 }}>
-                  <Ionicons name="hand-left-outline" size={20} color={C.leaf} />
-                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.leaf }}>{revealed ? 'Tap to see the answer again' : 'Tap card to reveal answer'}</Text>
-                </View>
-              </Animated.View>
-              <Animated.View style={[cardStyle, back, { backgroundColor: color.feedback.correct.bg, borderColor: C.mintBorder }]}>
-                <Text style={{ fontFamily: F.medium, fontSize: 13, color: color.feedback.correct.text }}>Answer</Text>
-                <Text style={[{ fontFamily: F.medium, fontSize: 20, lineHeight: 28, color: C.ink, marginTop: 6 }, autoDir(card.a)]}>{card.a}</Text>
-                <View style={{ flex: 1 }} />
-                <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.leaf, textAlign: 'center' }}>Tap to see the question again</Text>
-              </Animated.View>
-            </Pressable>
+              <FlipCard card={card} revealed={revealed} flip={flip} onPress={reveal} />
             </Enter>
 
             {(revealed || !!card.mnemonic) && (
@@ -248,7 +229,7 @@ export default function Cards() {
             )}
           </>
         )}
-      </View>
+      </ScrollView>
       {toast && (
         <View pointerEvents="none" style={{ position: 'absolute', left: 16, right: 16, top: 70, backgroundColor: C.ink, borderRadius: radius.lg, padding: 12, ...shadow.float }}>
           <Text style={{ fontFamily: F.medium, fontSize: 14, lineHeight: 20, color: C.white, textAlign: 'center' }}>{toast}</Text>
@@ -320,9 +301,53 @@ function AskCard({ visible, card, subjectId, onClose }: { visible: boolean; card
   );
 }
 
+/** How tall a card is at least; it grows with its longer side. */
+const CARD_MIN = 300;
+/** Long text gets a smaller size, so a long question still reads as one card. */
+const fit = (t: string) => (t.length > 160 ? { fontSize: 17, lineHeight: 24 } : t.length > 90 ? { fontSize: 19, lineHeight: 26 } : { fontSize: 21, lineHeight: 29 });
+
+/**
+ * The flashcard: tap to flip. Both sides lie on top of each other, and the card is as tall as the longer one
+ * (at least CARD_MIN), so a long question or answer never runs over the buttons under it.
+ * Keyed by the card, so its height starts again for each card.
+ */
+function FlipCard({ card, revealed, flip, onPress }: { card: Card; revealed: boolean; flip: SharedValue<number>; onPress: () => void }) {
+  const [h, setH] = useState(CARD_MIN);
+  // each side reports its height (at least h); the card only ever grows, so the two sides settle at once
+  const grow = (e: LayoutChangeEvent) => {
+    const next = Math.ceil(e.nativeEvent.layout.height);
+    setH((old) => Math.max(old, next));
+  };
+  const front = useAnimatedStyle(() => ({ transform: [{ perspective: 900 }, { rotateY: `${interpolate(flip.value, [0, 1], [0, 180])}deg` }], backfaceVisibility: 'hidden' }));
+  const back = useAnimatedStyle(() => ({ transform: [{ perspective: 900 }, { rotateY: `${interpolate(flip.value, [0, 1], [180, 360])}deg` }], backfaceVisibility: 'hidden' }));
+  return (
+    <Pressable onPress={onPress} style={{ height: h }}>
+      <Animated.View onLayout={grow} style={[cardStyle, { minHeight: h }, front]}>
+        <Pill text={card.reps ? 'Review' : 'New'} bg={color.feedback.almost.picked} border={color.feedback.almost.picked} fg={color.feedback.almost.text} />
+        <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.muted, marginTop: 14 }}>Question</Text>
+        <Text style={[{ fontFamily: F.medium, color: C.ink, marginTop: 4, letterSpacing: -0.2 }, fit(card.q), autoDir(card.q)]}>{card.q}</Text>
+        <View style={{ flex: 1, minHeight: 16 }} />
+        <View style={{ alignItems: 'center', gap: 4 }}>
+          <Ionicons name="hand-left-outline" size={20} color={C.leaf} />
+          <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.leaf }}>{revealed ? 'Tap to see the answer again' : 'Tap card to reveal answer'}</Text>
+        </View>
+      </Animated.View>
+      <Animated.View onLayout={grow} style={[cardStyle, { minHeight: h }, back, { backgroundColor: color.feedback.correct.bg, borderColor: C.mintBorder }]}>
+        <Text style={{ fontFamily: F.medium, fontSize: 13, color: color.feedback.correct.text }}>Answer</Text>
+        <Text style={[{ fontFamily: F.medium, color: C.ink, marginTop: 6 }, fit(card.a), autoDir(card.a)]}>{card.a}</Text>
+        <View style={{ flex: 1, minHeight: 16 }} />
+        <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.leaf, textAlign: 'center' }}>Tap to see the question again</Text>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+// a side of the card: pinned to the top and both edges, its height set by its text (see FlipCard)
 const cardStyle = {
   position: 'absolute',
-  inset: 0,
+  top: 0,
+  start: 0,
+  end: 0,
   backgroundColor: C.white,
   borderRadius: radius.xl,
   borderWidth: 1.5,

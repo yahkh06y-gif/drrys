@@ -1,8 +1,8 @@
 // Session step 2, in the background. The student only waits for the analysis (lib/ai: analyseSession); while
-// they read it, the questions (with their pictures) and the flashcards are written here, and they land in the
-// session as soon as they are ready. The questions page and the flashcards page wait for them only if the
+// they read it, the questions (with their pictures) and then the flashcards are written here, and they land in the
+// session as soon as they are ready. The cards wait for the questions: every gap that got no question gets a card. The questions page and the flashcards page wait for them only if the
 // student gets there first. If the app was closed in between, they are simply asked for again.
-import { analyseSession, planQuestions, timed, writeCards, writeQuestions, type Lesson } from './ai';
+import { analyseSession, planQuestions, timed, unasked, writeCards, writeQuestions, type ActiveQuestion, type Lesson } from './ai';
 import { attachPictures, warmPictures } from './figures';
 import { sessionContext } from './session';
 import { useApp } from '@/store';
@@ -42,20 +42,30 @@ function prepare() {
   if (job) return job;
   const lesson: Lesson = { analysis: s.analysis, map: s.map ?? [] };
   const ctx = sessionContext();
-  const questions = s.questions
-    ? Promise.resolve()
+  const written: Promise<ActiveQuestion[]> = s.questions
+    ? Promise.resolve(s.questions)
     : (async () => {
         const c = await ctx;
         const t0 = Date.now();
         const qs = await attachPictures(c, await writeQuestions(c, lesson, planQuestions(lesson.map, lesson.analysis)));
         console.log(`[timing] questions ready (written + pictures) · ${((Date.now() - t0) / 1000).toFixed(1)}s · ${qs.length} questions`);
         if (current(key)) useApp.getState().patchSession({ questions: qs });
+        return qs;
       })();
+  const questions = written.then(() => {});
   const cards = s.draftCards
     ? Promise.resolve()
     : (async () => {
         const c = await ctx;
-        const made = await writeCards(c, lesson);
+        const t0 = Date.now();
+        // no questions at all (they failed): then every gap needs its card
+        const asked = await written.catch(() => []);
+        const waited = Date.now() - t0;
+        const gaps = unasked(lesson.map, asked);
+        const made = await writeCards(c, lesson, gaps);
+        const sec = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+        console.log(`[timing] cards ready · ${sec(Date.now() - t0)} (${sec(waited)} waiting for the questions, ${sec(Date.now() - t0 - waited)} writing) · ${made.length} cards`);
+        console.log(`[check] cards: ${made.length} (${gaps.length} of the gaps had no question)`);
         if (current(key)) useApp.getState().patchSession({ draftCards: made });
       })();
   job = { questions, cards };
