@@ -3,12 +3,13 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RangePicker } from '@/design/RangePicker';
 
 import { Btn, Enter, SessionHeader, T } from '@/components/ui';
+import { alert } from '@/lib/alert';
 import { play, tap } from '@/lib/feedback';
 import { checkPdf, fileLength, keepFile, realType } from '@/lib/session';
 import { isSlides, LECTURE_TYPES } from '@/lib/slides';
@@ -66,7 +67,7 @@ export default function Choose() {
     if (r.canceled) return;
     const f = await realType(r.assets[0]);
     const bad = await checkPdf(f, { chapter: true, isPro: useApp.getState().isPro });
-    if (bad) return Alert.alert('Can’t use this file', bad);
+    if (bad) return alert('Can’t use this file', bad);
     const m = { id: uid(), name: f.name, uri: await keepFile(f.uri, f.name), size: f.size, mime: f.mimeType };
     updateSubject(subject.id, { chapters: subject.chapters.map((c) => (c.id === chapter.id ? { ...c, materials: [...c.materials, m] } : c)) });
     patchSession({ materialId: m.id });

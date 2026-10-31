@@ -19,6 +19,7 @@ export function Motion({
   style,
   fit = 'cover',
   startAt = 0,
+  rate = 1,
 }: {
   video: VideoKey;
   loop?: boolean;
@@ -28,6 +29,8 @@ export function Motion({
   fit?: 'cover' | 'contain';
   /** seconds: the first play starts here; later loops play the whole clip */
   startAt?: number;
+  /** playback speed: a loop hurries to its last frame with `loop={false} rate={4}` */
+  rate?: number;
 }) {
   const soundOn = useApp((s) => s.sound);
   // a screen left underneath another one (e.g. "Not now" on the planting page) goes quiet and still
@@ -52,6 +55,12 @@ export function Motion({
   useEffect(() => {
     player.muted = !withSound;
   }, [withSound, player]);
+
+  // a loop can be told to stop looping (and speed up) while it plays, so it runs on to its last frame
+  useEffect(() => {
+    player.loop = loop;
+    player.playbackRate = rate;
+  }, [loop, rate, player]);
 
   // a one-shot clip that already ended starts over when it's played again (e.g. after going back)
   const ended = useRef(false);

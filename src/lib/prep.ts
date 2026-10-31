@@ -5,13 +5,16 @@
 import { analyseSession, planQuestions, timed, unasked, writeCards, writeQuestions, type ActiveQuestion, type Lesson } from './ai';
 import { attachPictures, warmPictures } from './figures';
 import { sessionContext } from './session';
-import { useApp } from '@/store';
+import { useApp, type SessionDraft } from '@/store';
 
 const running = new Map<string, { questions: Promise<void>; cards: Promise<void> }>();
 
 const keyOf = () => useApp.getState().session?.analyzedFor ?? '';
 /** Still the same session and analysis this work was started for. */
 const current = (key: string) => !!key && keyOf() === key;
+
+/** What an analysis was made from: the recall, the file and its pages. A change to any of them needs a new one. */
+export const analysisKey = (s: SessionDraft) => `${s.recall}|${s.materialId ?? ''}|${s.fromPage}-${s.toPage}`;
 
 /** Where the analysis is: 1 = the lecture file is ready, 2 = Coco's answer is in. */
 export type AnalyseStep = 1 | 2;
@@ -27,6 +30,9 @@ export async function analyse(key: string, onStep?: (step: AnalyseStep) => void)
   const lesson = await analyseSession(ctx, st.session!.recall);
   onStep?.(2);
   console.log(`[timing] analysis screen total · ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  // the student left, or changed the recall or the pages meanwhile: this answer is for a session that's gone
+  const now = useApp.getState().session;
+  if (!now || analysisKey(now) !== key) return;
   // a fresh analysis: forget the questions, answers and cards of an earlier attempt
   st.patchSession({ analysis: lesson.analysis, map: lesson.map, analyzedFor: key, questions: undefined, draftCards: undefined, answers: [], correct: 0, newCardIds: [], gapCards: [], results: [], qIndex: 0 });
   running.delete(key);

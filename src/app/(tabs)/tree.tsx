@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, Pressable, Text, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
+import { AppState, Pressable, Text, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector, ScrollView } from 'react-native-gesture-handler';
 import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,6 +15,7 @@ import { COCO, SCENE_ASPECT, STAT_ICONS, TREE, TREE_ASPECT } from '@/art';
 import { HookGallery } from '@/components/HookGallery';
 import { KnowledgeTree, type CocoLanding } from '@/components/Tree';
 import { Btn, Coco, Enter, Pill, T } from '@/components/ui';
+import { alert } from '@/lib/alert';
 import { haptic, play, tap } from '@/lib/feedback';
 import { isResting, LIMITS } from '@/lib/purchases';
 import { makeSampleLecture, SAMPLE_PAGES, SAMPLE_TITLE } from '@/lib/sample';
@@ -28,6 +29,8 @@ const DAY_NAMES = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 // The forest nudges sideways once per app launch so people discover they can swipe to their other trees.
 let hinted = false;
+// Experiment: show meadow art (not flat lawn) when you pull past the first or the last page. Set to false to undo.
+const EDGE_MEADOW = true;
 
 export default function TreeScreen() {
   const { width } = useWindowDimensions();
@@ -180,6 +183,9 @@ export default function TreeScreen() {
                   <TreePage clock={clock} subjectId={s.id} width={width} height={pagerH} topInset={insets.top} near={Math.abs(i - page) <= 1} coco={i === page ? landing : undefined} onInsights={() => scroller.current?.scrollTo({ y: pagerH - 30, animated: true })} />
                 </View>
               ))}
+              {/* experiment: past either end the meadow carries on (the "between" art meets a page's edges) instead of flat lawn */}
+              {EDGE_MEADOW && <Image source={TREE.between} style={{ position: 'absolute', top: 0, left: -width - 1, width: width + 2, height: sceneH }} contentFit="cover" />}
+              {EDGE_MEADOW && <Image source={TREE.between} style={{ position: 'absolute', top: 0, left: last * STEP + width - 1, width: width + 2, height: sceneH }} contentFit="cover" />}
               {Array.from({ length: pageCount - 1 }, (_, i) => (
                 <Image key={`b${i}`} source={TREE.between} style={{ position: 'absolute', top: 0, left: i * STEP + width - 1, width: width + 2, height: sceneH }} contentFit="cover" />
               ))}
@@ -196,12 +202,14 @@ export default function TreeScreen() {
 
             {/* the insights are one scroll down */}
             {!onPlant && (
-              <View pointerEvents="none" style={{ position: 'absolute', bottom: 6, left: 0, right: 0, alignItems: 'center', gap: 2 }}>
-                <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.paper, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 6 }}>
+              <View pointerEvents="none" style={{ position: 'absolute', bottom: HINT.bottom, left: 0, right: 0, alignItems: 'center', gap: HINT.gap }}>
+                <View style={{ height: HINT.pill, flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.paper, borderRadius: radius.pill, paddingHorizontal: 14 }}>
                   <Ionicons name="stats-chart" size={13} color={C.bark} />
-                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.bark }}>Subject insights</Text>
+                  <Text numberOfLines={1} maxFontSizeMultiplier={1.2} style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 18, includeFontPadding: false, color: C.bark }}>
+                    Subject insights
+                  </Text>
                 </View>
-                <Ionicons name="chevron-down" size={18} color={color.overlay.onDark} />
+                <Ionicons name="chevron-down" size={HINT.chevron} color={color.overlay.onDark} />
               </View>
             )}
 
@@ -236,7 +244,8 @@ export default function TreeScreen() {
                 {subject.name} Learning Progress
               </T>
             </View>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+            {/* two cards per row on any width; the row gap leaves room for the icons perched on each card's corner */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 12, rowGap: 20 }}>
               <Stat icon={STAT_ICONS.fire} label="Daily Study Streak" value={`Day ${st} of ${streakGoal}`} note={stats.studyDays.includes(today()) ? 'Watered today' : 'Study today to keep it'} noteColor={C.orange}>
                 <WeekFlames days={stats.studyDays} />
               </Stat>
@@ -507,7 +516,10 @@ const COACH_LINES: { text: string; icons?: { src: number; label: string }[] }[] 
   },
 ];
 const CARD_H = 164; // today's card height, measured from its layout (header + week strip + button + padding)
-const CARD_GAP = 58; // space under today's card, for the "Subject insights" label
+// The "Subject insights" hint under today's card. Its height is fixed (not left to the font), so the card
+// can sit right above it on every phone and font size without the two overlapping.
+const HINT = { bottom: 6, pill: 30, gap: 2, chevron: 18 };
+const CARD_GAP = HINT.bottom + HINT.pill + HINT.gap + HINT.chevron + 8; // space under today's card
 
 function CoachTip({ width, height, onDone }: { width: number; height: number; onDone: () => void }) {
   const [i, setI] = useState(0);
@@ -597,7 +609,7 @@ function GuideTip({ subject, step, width, height }: { subject: Subject; step: 'f
     if (r.canceled) return;
     const f = await realType(r.assets[0]);
     const bad = await checkPdf(f, { chapter: true, isPro });
-    if (bad) return Alert.alert('Can’t use this file', bad);
+    if (bad) return alert('Can’t use this file', bad);
     addFile({ id: uid(), name: f.name, uri: await keepFile(f.uri, f.name), size: f.size, mime: f.mimeType });
   };
 
@@ -606,7 +618,7 @@ function GuideTip({ subject, step, width, height }: { subject: Subject; step: 'f
     try {
       addFile(await makeSampleLecture(), SAMPLE_TITLE);
     } catch {
-      Alert.alert('Couldn’t make the sample', 'Please try again, or upload your own lecture.');
+      alert('Couldn’t make the sample', 'Please try again, or upload your own lecture.');
     } finally {
       setBusy(false);
     }
@@ -753,7 +765,7 @@ function EmptyForest() {
 
 function Stat({ icon, label, value, note, noteColor = C.moss, children }: { icon: number; label: string; value: string; note: string; noteColor?: string; children: React.ReactNode }) {
   return (
-    <View style={{ width: '47.5%', backgroundColor: color.surface.cardWarm, borderWidth: 2, borderColor: C.bark, borderBottomWidth: 6, borderRadius: radius.lg, padding: 14, gap: 4 }}>
+    <View style={{ flexGrow: 1, flexBasis: '40%', backgroundColor: color.surface.cardWarm, borderWidth: 2, borderColor: C.bark, borderBottomWidth: 6, borderRadius: radius.lg, padding: 14, gap: 4 }}>
       {/* clay icon (Blender render) perched on the card's corner */}
       <Image source={icon} style={{ position: 'absolute', top: -14, right: -8, width: 44, height: 44, transform: [{ rotate: '8deg' }] }} contentFit="contain" />
       <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted, paddingRight: 30 }}>{label}</Text>

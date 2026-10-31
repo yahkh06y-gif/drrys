@@ -11,9 +11,8 @@ import {
   useAudioRecorderState,
   type RecordingOptions,
 } from 'expo-audio';
-import { File } from 'expo-file-system';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -28,6 +27,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { alert } from '@/lib/alert';
 import { readFileBase64 } from '@/lib/readfile';
 import { transcribe, voiceEnabled } from '@/lib/ai';
 import { liveEnabled, startDictation, type DictationHandle } from '@/lib/live';
@@ -47,9 +47,6 @@ const SPEECH: RecordingOptions = {
   web: { mimeType: 'audio/webm', bitsPerSecond: 32000 },
 };
 const MAX_MS = 10 * 60_000; // stop by itself after 10 minutes
-
-// react-native-web's Alert.alert shows nothing, so on the web a normal browser alert carries the message
-const notify = (title: string, msg?: string) => (Platform.OS === 'web' ? (globalThis as any).alert?.(msg ? `${title}\n\n${msg}` : title) : Alert.alert(title, msg));
 
 export type VoiceState = 'idle' | 'recording' | 'writing';
 
@@ -97,20 +94,20 @@ export function useVoice(onText: (text: string) => void, onFallback?: () => void
             if (alive.current) {
               setState('idle');
               setLive('');
-              notify('Live writing stopped', m);
+              alert('Live writing stopped', m);
             }
           },
         });
       } catch (e) {
         dict.current = undefined;
         setState('idle');
-        notify('Can’t listen right now', String((e as Error)?.message ?? e));
+        alert('Can’t listen right now', String((e as Error)?.message ?? e));
       }
       return;
     }
     const perm = await requestRecordingPermissionsAsync();
     if (!perm.granted) {
-      notify('Microphone is off', 'Allow the microphone for Drrys in your phone settings to talk to Coco.');
+      alert('Microphone is off', 'Allow the microphone for Drrys in your phone settings to talk to Coco.');
       return;
     }
     try {
@@ -121,7 +118,7 @@ export function useVoice(onText: (text: string) => void, onFallback?: () => void
       setState('recording');
     } catch {
       setState('idle');
-      notify('Can’t record right now', 'Another app may be using the microphone.');
+      alert('Can’t record right now', 'Another app may be using the microphone.');
     }
   }, [recorder, onFallback, streaming]);
 
@@ -150,9 +147,9 @@ export function useVoice(onText: (text: string) => void, onFallback?: () => void
       const text = await transcribe(await readBase64(uri), mime);
       if (!alive.current) return;
       if (text) onText(text);
-      else notify('I didn’t catch that', 'Try again a little closer to the mic.');
+      else alert('I didn’t catch that', 'Try again a little closer to the mic.');
     } catch {
-      if (alive.current) notify('Coco couldn’t hear that', 'Check your connection and try again — or type it instead.');
+      if (alive.current) alert('Coco couldn’t hear that', 'Check your connection and try again — or type it instead.');
     }
     if (alive.current) setState('idle');
   }, [state, recorder, onText, streaming]);

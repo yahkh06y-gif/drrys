@@ -1,6 +1,7 @@
-// After a subject is saved: the seed closes, Coco plants it and the tree grows (10.7s video, tap to skip).
+// After a subject is saved: the seed closes (plantClose), then it grows into a tree (plantTree). Both clips are
+// preloaded and plantTree's first frame is plantClose's last, so the cut between them doesn't show. Tap to skip.
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -11,8 +12,11 @@ import { haptic } from '@/lib/feedback';
 import { finishOnboarding } from '@/lib/finish';
 import { C, F } from '@/theme';
 
+type Stage = 'close' | 'tree';
+
 export default function Grow() {
   const { onboarding } = useLocalSearchParams<{ onboarding?: string }>();
+  const [stage, setStage] = useState<Stage>('close');
   const done = useRef(false);
 
   const go = useCallback(() => {
@@ -30,19 +34,22 @@ export default function Grow() {
     }, [go]),
   );
 
+  const onClosed = useCallback(() => setStage('tree'), []);
+
+  // the clips have their own sound design; haptics mark the two moments
   useEffect(() => {
-    // the clip has its own sound design; haptics are timed to its key moments
-    const cues = [
-      setTimeout(() => haptic('light'), 400), // hands close the seed
-      setTimeout(() => haptic('medium'), 5200), // Coco plants it
-      setTimeout(() => haptic('success'), 7000), // the tree shoots up
-    ];
-    return () => cues.forEach(clearTimeout);
-  }, []);
+    haptic(stage === 'close' ? 'light' : 'success');
+  }, [stage]);
+
+  const fill = { position: 'absolute', inset: 0 } as const;
 
   return (
     <Pressable style={{ flex: 1 }} onPress={go}>
-      <Motion video="seedClose" loop={false} onEnd={go} style={{ flex: 1 }} />
+      <Motion video="plantClose" loop={false} playing={stage === 'close'} onEnd={stage === 'close' ? onClosed : undefined} style={fill} />
+      {/* preloaded under an opacity switch: an instant cut from the closed seed's last frame */}
+      <View style={[fill, { opacity: stage === 'tree' ? 1 : 0 }]}>
+        <Motion video="plantTree" loop={false} playing={stage === 'tree'} onEnd={stage === 'tree' ? go : undefined} style={{ flex: 1 }} />
+      </View>
       <SafeAreaView pointerEvents="none" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, alignItems: 'center', paddingBottom: 16 }}>
         <View style={{ backgroundColor: color.overlay.shade, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 6 }}>
           <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.white }}>Tap to skip</Text>

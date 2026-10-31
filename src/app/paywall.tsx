@@ -2,7 +2,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Segmented } from '@/design/components';
@@ -13,6 +13,7 @@ import { dirIcon } from '@/design/rtl';
 import { color, radius, shadow } from '@/design/tokens';
 import { COCO, STAT_ICONS } from '@/art';
 import { Btn, Coco, Enter, IconBtn, Progress, T } from '@/components/ui';
+import { alert } from '@/lib/alert';
 import { haptic, play, tap } from '@/lib/feedback';
 import { buy, getPricing, nextReward, rcEnabled, restore, studyStreak, type Discount, type Plan } from '@/lib/purchases';
 import { friendBranches, MAX_OFF, refreshTogether, SQUAD_OFF, SQUAD_SIZE } from '@/lib/together';
@@ -78,11 +79,11 @@ export default function Paywall() {
       if (ok) {
         play('celebrate');
         haptic('success');
-        Alert.alert('Welcome to Drrys Pro', 'Your forest can now grow up to 5 trees.', [{ text: 'Let’s grow', onPress: () => router.back() }]);
+        alert('Welcome to Drrys Pro', 'Your forest can now grow up to 5 trees.', [{ text: 'Let’s grow', onPress: () => router.back() }]);
       }
     } catch (e) {
       haptic('error');
-      Alert.alert('Purchase failed', String((e as Error).message ?? e));
+      alert('Purchase failed', String((e as Error).message ?? e));
     }
     setBusy(false);
   };
@@ -241,7 +242,7 @@ export default function Paywall() {
           onPress={async () => {
             tap();
             const ok = await restore();
-            Alert.alert(ok ? 'Pro restored' : 'No active subscription found');
+            alert(ok ? 'Pro restored' : 'No active subscription found');
           }}
           style={{ alignSelf: 'center' }}>
           <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.teal, padding: 6 }}>Restore purchases</Text>

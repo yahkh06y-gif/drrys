@@ -3,10 +3,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Btn, Enter, IconBtn, T } from '@/components/ui';
+import { alert } from '@/lib/alert';
 import { haptic, play, tap } from '@/lib/feedback';
 import { finishOnboarding } from '@/lib/finish';
 import { checkPdf, keepFile, realType } from '@/lib/session';
@@ -47,7 +48,7 @@ export default function SubjectForm() {
     if (r.canceled) return;
     const f = await realType(r.assets[0]);
     const bad = await checkPdf(f, { chapter: true, isPro });
-    if (bad) return Alert.alert('Can’t use this file', bad);
+    if (bad) return alert('Can’t use this file', bad);
     play('select');
     const uri = await keepFile(f.uri, f.name);
     setChapters((cs) =>
@@ -61,7 +62,7 @@ export default function SubjectForm() {
     for (const f of r.assets) {
       const bad = await checkPdf(f, { chapter: false, isPro });
       if (bad) {
-        Alert.alert('Can’t use this file', `${f.name}: ${bad}`);
+        alert('Can’t use this file', `${f.name}: ${bad}`);
         return [];
       }
     }
@@ -72,13 +73,13 @@ export default function SubjectForm() {
   const addChapter = () => {
     if (chapters.length >= maxCh) {
       if (canInvite)
-        Alert.alert('Want a 2nd branch?', 'Invite a friend for a free 2nd branch, or go Pro for 5.', [
+        alert('Want a 2nd branch?', 'Invite a friend for a free 2nd branch, or go Pro for 5.', [
           { text: 'Not now', style: 'cancel' },
           { text: 'See Pro', onPress: () => router.push('/paywall') },
           { text: 'Invite a friend', onPress: () => router.push('/together') },
         ]);
       else if (!isPro) router.push('/paywall');
-      else Alert.alert('Tree is full', `A tree can hold ${maxCh} branches.`);
+      else alert('Tree is full', `A tree can hold ${maxCh} branches.`);
       return;
     }
     tap('select');

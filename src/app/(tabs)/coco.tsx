@@ -26,12 +26,13 @@ type Msg = { role: 'user' | 'assistant'; text: string; voice?: boolean; failed?:
 const STYLE_LABEL = { friendly: 'Friendly coach', calm: 'Calm tutor', direct: 'Direct & focused', playful: 'Playful buddy' };
 const GENERAL = 'general';
 const NONE: Msg[] = [];
+const NO_INTERESTS: string[] = []; // one empty list, so the store doesn't see a new value on every read
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 export default function CocoTab() {
   const coco = useApp((s) => s.coco);
   const name = useApp((s) => s.profile.name);
-  const interests = useApp((s) => (s.coco.memory ? s.profile.interests : []));
+  const interests = useApp((s) => (s.coco.memory ? s.profile.interests : NO_INTERESTS));
   const subjects = useApp((s) => s.subjects);
   const current = useApp(activeSubject);
   // what the chat is about: a tree (its id) or General. Starts on the tree you were last on.

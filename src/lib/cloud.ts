@@ -20,12 +20,30 @@ const URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://jvoqecqeldykhysaqkk
 const KEY = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable__y4DT3FHtXGy3SG-66Rp4g_X1czO-Le';
 export const cloudEnabled = /^https:\/\//.test(URL) && KEY.length > 10;
 
+/** The login token that tells Drrys' server functions which student is asking. A student without an account
+ *  yet gets an anonymous one (Supabase anonymous sign-in), so the AI server can turn strangers away and count
+ *  each student's requests. One shared sign-in, even when several calls start at once. */
+let anonSignIn: Promise<string | undefined> | undefined;
+async function token(): Promise<string | undefined> {
+  const c = client();
+  if (!c) return undefined;
+  const { data } = await c.auth.getSession();
+  if (data.session) return data.session.access_token;
+  anonSignIn ??= c.auth
+    .signInAnonymously()
+    .then(({ data: anon }) => anon.session?.access_token)
+    .catch(() => undefined)
+    .finally(() => (anonSignIn = undefined));
+  return anonSignIn;
+}
+
 /** POST to one of Drrys' server functions and get its raw answer (status and body as the server sent them). */
-export function fetchFunction(name: string, body: unknown, signal?: AbortSignal): Promise<Response> {
-  if (!cloudEnabled) return Promise.reject(new Error('No server configured'));
+export async function fetchFunction(name: string, body: unknown, signal?: AbortSignal): Promise<Response> {
+  if (!cloudEnabled) throw new Error('No server configured');
+  const jwt = await token();
   return fetch(`${URL}/functions/v1/${name}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', apikey: KEY },
+    headers: { 'content-type': 'application/json', apikey: KEY, ...(jwt ? { authorization: `Bearer ${jwt}` } : {}) },
     body: JSON.stringify(body),
     signal,
   });
@@ -302,7 +320,8 @@ export function initCloud() {
     .getSession()
     .then(({ data }) => {
       const user = data.session?.user;
-      if (user) return resume(user);
+      // an anonymous login (only there so the AI server knows who's asking) is not an account: no backups
+      if (user && !user.is_anonymous) return resume(user);
       // opened offline: the saved login comes back once the token refreshes
       if (useApp.getState().profile.uid) {
         const { data: sub } = c.auth.onAuthStateChange((event, session) => {

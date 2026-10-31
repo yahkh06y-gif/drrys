@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { COCO } from '@/art';
 import { Btn, Coco, Enter, SessionHeader, T } from '@/components/ui';
-import { analyse } from '@/lib/prep';
+import { analyse, analysisKey } from '@/lib/prep';
 import { haptic, play } from '@/lib/feedback';
 import { color } from '@/design/tokens';
 import { useApp } from '@/store';
@@ -41,7 +41,7 @@ export default function Analyze() {
     let alive = true;
     // came back to this step without changing anything: the analysis is already made, so show it
     const st0 = useApp.getState().session;
-    const key0 = st0 ? `${st0.recall}|${st0.materialId ?? ''}|${st0.fromPage}-${st0.toPage}` : '';
+    const key0 = st0 ? analysisKey(st0) : '';
     if (attempt === 0 && st0?.analysis && st0.analyzedFor === key0) {
       router.replace('/session/review');
       return () => {
@@ -56,8 +56,7 @@ export default function Analyze() {
     const tick = { stop: () => timers.forEach(clearTimeout) };
     (async () => {
       try {
-        const st1 = useApp.getState().session!;
-        await analyse(`${st1.recall}|${st1.materialId ?? ''}|${st1.fromPage}-${st1.toPage}`, (step) => alive && setDone(step + 1));
+        await analyse(analysisKey(useApp.getState().session!), (step) => alive && setDone(step + 1));
         if (!alive) return;
         setDone(steps.length);
         play('success');
