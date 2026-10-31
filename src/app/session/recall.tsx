@@ -5,12 +5,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Segmented } from '@/design/components';
+
 import { Btn, Enter, SessionHeader, T } from '@/components/ui';
-import { MicButton, useVoice, VoiceHint } from '@/components/Voice';
+import { MicButton, useVoice, VoiceHint, VoiceWave, withLive } from '@/components/Voice';
 import { aiEnabled } from '@/lib/ai';
 import { DEMO } from '@/lib/demo';
 import { tap } from '@/lib/feedback';
+import { onSample, SAMPLE_RECALL, typeOut } from '@/lib/sample';
 import { useApp } from '@/store';
+import { autoDir } from '@/design/rtl';
+import { color, radius } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 export default function Recall() {
@@ -19,6 +24,9 @@ export default function Recall() {
   const [mode, setMode] = useState<'speak' | 'write'>('speak');
   const [active, setActive] = useState(false);
   const [secs, setSecs] = useState(0);
+  const sample = useApp(onSample); // the sample lecture: a ready-made (imperfect) brain dump is one tap away
+  const stopTyping = useRef<() => void>(undefined);
+  useEffect(() => () => stopTyping.current?.(), []);
   const input = useRef<TextInput>(null);
   // spoken recall: each recording is written down and added to what's already there
   const addSpoken = useCallback(
@@ -42,65 +50,71 @@ export default function Recall() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
-      <SessionHeader step={2} title="Recall" />
+      <SessionHeader step={2} title="Recall" onBack={() => (router.canGoBack() ? router.back() : router.replace('/session/choose'))} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
           <View>
             <T v="h2">Brain Dump & Recall</T>
-            <T>Tell Coco what you remember about today’s lesson… Take your time and try to remember everything.</T>
+            <T>Tell Coco everything you remember from today’s lesson.</T>
           </View>
 
           {/* mode toggle */}
-          <View style={{ flexDirection: 'row', backgroundColor: '#EBE8E0', borderRadius: 16, padding: 5, borderWidth: 1, borderColor: C.lineStrong }}>
-            {(['speak', 'write'] as const).map((m) => (
-              <Pressable
-                key={m}
-                onPress={() => (tap('select'), setMode(m))}
-                style={{ flex: 1, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 12, backgroundColor: mode === m ? C.white : 'transparent', borderWidth: mode === m ? 1 : 0, borderColor: C.line }}>
-                <Ionicons name={m === 'speak' ? 'mic' : 'create-outline'} size={14} color={m === 'speak' ? C.leaf : C.body} />
-                <Text style={{ fontFamily: F.bold, fontSize: 12, color: mode === m ? C.teal : C.body }}>{m === 'speak' ? 'Speak (Recommended)' : 'Write instead'}</Text>
-              </Pressable>
-            ))}
-          </View>
+          <Segmented
+            value={mode}
+            onChange={setMode}
+            options={[
+              { key: 'speak', label: 'Speak', icon: 'mic', badge: 'Best', badgeTone: 'brand' },
+              { key: 'write', label: 'Write', icon: 'create-outline' },
+            ]}
+          />
 
-          <View style={{ backgroundColor: C.white, borderRadius: 24, borderWidth: 1, borderColor: C.lineStrong, borderBottomWidth: 4, padding: 16, gap: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderColor: 'rgba(90,66,37,0.1)', paddingBottom: 9 }}>
+          <View style={{ backgroundColor: C.white, borderRadius: 20, borderWidth: 1, borderColor: C.line, padding: 16, gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderColor: color.border.subtle, paddingBottom: 9 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: active || voice.state === 'recording' ? C.red : C.lineStrong }} />
-                <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.teal }}>{mode === 'speak' ? 'Voice recall' : 'Written recall'}</Text>
+                <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.ink }}>{mode === 'speak' ? 'Voice recall' : 'Written recall'}</Text>
               </View>
-              <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.goldInk, backgroundColor: C.sand, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>{mm}</Text>
+              <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.body, backgroundColor: C.sand, paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.sm, overflow: 'hidden', fontVariant: ['tabular-nums'] }}>{mm}</Text>
             </View>
 
             {mode === 'speak' && (
               <View style={{ alignItems: 'center', paddingVertical: 8, gap: 8 }}>
-                <MicButton voice={voice} size={72} style={{ marginVertical: 14 }} />
-                <VoiceHint voice={voice} idle={recall ? 'Tap the mic to add more.' : 'Tap the mic and just talk — Arabic or English.'} />
+                <MicButton voice={voice} size={72} style={{ marginTop: 14, marginBottom: voice.state === 'recording' ? 4 : 14 }} />
+                {voice.state === 'recording' && <VoiceWave level={voice.level} active height={40} style={{ alignSelf: 'stretch', marginHorizontal: 8 }} />}
+                <VoiceHint voice={voice} idle={recall ? 'Tap the mic to add more.' : 'Tap and talk, in Arabic or English.'} />
               </View>
             )}
 
+            {sample && !recall && voice.state === 'idle' && (
+              <Pressable
+                onPress={() => (tap('select'), (stopTyping.current = typeOut(SAMPLE_RECALL, (t) => patchSession({ recall: t }))))}
+                style={{ alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: C.mint, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 7 }}>
+                <Ionicons name="sparkles-outline" size={14} color={C.moss} />
+                <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.moss }}>Fill sample answer</Text>
+              </Pressable>
+            )}
             <TextInput
               ref={input}
-              value={recall}
-              onChangeText={(t) => patchSession({ recall: t })}
+              value={withLive(recall, voice.live)}
+              onChangeText={(t) => voice.state !== 'recording' && patchSession({ recall: t })}
               onFocus={() => setActive(true)}
               onBlur={() => setActive(false)}
               multiline
               placeholder="“We started with…”"
-              placeholderTextColor="#A69A8A"
-              style={{ minHeight: mode === 'write' ? 220 : 110, backgroundColor: '#F6F3EB', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(90,66,37,0.1)', padding: 13, fontFamily: F.medium, fontSize: 14, lineHeight: 21, color: '#1C1C17', textAlignVertical: 'top' }}
+              placeholderTextColor={C.mutedLight}
+              style={[{ minHeight: mode === 'write' ? 220 : 110, backgroundColor: C.white, borderRadius: radius.lg, borderWidth: 1.5, borderColor: active ? color.border.focus : C.lineStrong, padding: 13, fontFamily: F.regular, fontSize: 16, lineHeight: 25, color: color.text.primary, textAlignVertical: 'top' }, autoDir(recall)]}
             />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.muted }}>{words} words</Text>
+              <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted, fontVariant: ['tabular-nums'] }}>{words} words</Text>
               <View style={{ flexDirection: 'row', gap: 14 }}>
-                {!aiEnabled && !recall && (
+                {!aiEnabled && !sample && !recall && (
                   <Pressable onPress={() => (tap(), patchSession({ recall: DEMO.recallExample }))}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.leaf }}>Use example</Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.leaf }}>Use example</Text>
                   </Pressable>
                 )}
                 {!!recall && (
                   <Pressable onPress={() => (tap(), patchSession({ recall: '' }))}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: C.body }}>↺ Clear</Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.body }}>Clear</Text>
                   </Pressable>
                 )}
               </View>
@@ -111,10 +125,9 @@ export default function Recall() {
           {/* the button shows up once there's something to analyse */}
           {words >= 3 && voice.state === 'idle' ? (
             <Enter key="analyze">
-              <Btn title="Analyze & compare with lecture" icon="arrow-forward" kind="teal" pill onPress={() => router.push('/session/analyze')} />
+              <Btn title="Analyze & compare with lecture" icon="arrow-forward" kind="green" onPress={() => router.push('/session/analyze')} />
             </Enter>
           ) : null}
-          <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.body, textAlign: 'center' }}>Coco will highlight what you nailed and where memory gaps are.</Text>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

@@ -38,6 +38,7 @@ import {
   startSquad,
 } from "@/lib/together";
 import { useApp } from "@/store";
+import { color } from "@/design/tokens";
 import { C, F } from "@/theme";
 
 export default function Together() {
@@ -120,14 +121,13 @@ export default function Together() {
         <Enter style={{ alignItems: "center", gap: 4 }}>
           <Coco src={COCO.hi} size={100} />
           <T style={{ textAlign: "center" }}>
-            Forests grow better together. Bring your classmates and Drrys gets
-            better for all of you.
+            Study with classmates and unlock discounts together.
           </T>
         </Enter>
 
         {!signedIn ? (
           <Card>
-            <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.ink }}>
+            <Text style={{ fontFamily: F.semi, fontSize: 16, color: C.ink }}>
               Sign in to study together
             </Text>
             <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.body }}>
@@ -138,7 +138,7 @@ export default function Together() {
             {cloudEnabled && (
               <Btn
                 title="Sign in"
-                kind="teal"
+                kind="green"
                 height={48}
                 onPress={() => router.push("/account")}
               />
@@ -163,7 +163,7 @@ export default function Together() {
               {!squad ? (
                 <Btn
                   title="Start a squad"
-                  kind="teal"
+                  kind="green"
                   height={48}
                   icon="people"
                   loading={busy === "squad"}
@@ -310,7 +310,7 @@ export default function Together() {
                 ) : (
                   <Btn
                     title="Get my invite code"
-                    kind="teal"
+                    kind="green"
                     height={46}
                     loading={busy === "code"}
                     onPress={async () => {
@@ -354,7 +354,7 @@ export default function Together() {
                   value={code}
                   onChangeText={(v) => setCode(v.toUpperCase())}
                   placeholder="ABC123"
-                  placeholderTextColor="#A69A8A"
+                  placeholderTextColor={C.mutedLight}
                   autoCapitalize="characters"
                   autoCorrect={false}
                   maxLength={8}
@@ -375,7 +375,7 @@ export default function Together() {
                 />
                 <Btn
                   title="Use"
-                  kind="teal"
+                  kind="green"
                   height={48}
                   style={{ width: 90 }}
                   loading={busy === "use"}
@@ -441,6 +441,9 @@ function Card({ children }: { children: React.ReactNode }) {
   );
 }
 
+// the card headings use line icons, not emoji (same family as the rest of the app)
+const HEAD_ICON: Record<string, keyof typeof Ionicons.glyphMap> = { "👥": "people-outline", "🌿": "git-branch-outline", "🔑": "key-outline" };
+
 function Head({
   emoji,
   title,
@@ -452,17 +455,21 @@ function Head({
 }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-      <Text style={{ fontSize: 20 }}>{emoji}</Text>
-      <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 17, color: C.ink }}>
+      {HEAD_ICON[emoji] ? (
+        <Ionicons name={HEAD_ICON[emoji]} size={20} color={C.teal} />
+      ) : (
+        <Text style={{ fontSize: 20 }}>{emoji}</Text>
+      )}
+      <Text style={{ flex: 1, fontFamily: F.semi, fontSize: 17, color: C.ink }}>
         {title}
       </Text>
       {!!tag && (
         <Text
           style={{
-            fontFamily: F.bold,
-            fontSize: 11,
-            color: C.white,
-            backgroundColor: C.teal,
+            fontFamily: F.medium,
+            fontSize: 12,
+            color: color.selected.text,
+            backgroundColor: color.selected.bg,
             borderRadius: 99,
             paddingHorizontal: 8,
             paddingVertical: 3,
@@ -484,10 +491,10 @@ function CodeBox({ code, onShare }: { code: string; onShare: () => void }) {
         alignItems: "center",
         gap: 10,
         backgroundColor: C.sand,
-        borderRadius: 14,
-        borderWidth: 1,
+        borderRadius: 16,
+        borderWidth: 1.5,
         borderStyle: "dashed",
-        borderColor: C.teal,
+        borderColor: C.lineStrong,
         padding: 10,
       }}
     >
@@ -495,9 +502,10 @@ function CodeBox({ code, onShare }: { code: string; onShare: () => void }) {
         selectable
         style={{
           flex: 1,
-          fontFamily: F.bold,
+          fontFamily: F.semi,
           fontSize: 24,
           letterSpacing: 5,
+          fontVariant: ["tabular-nums"],
           color: C.teal,
           textAlign: "center",
         }}
@@ -506,7 +514,7 @@ function CodeBox({ code, onShare }: { code: string; onShare: () => void }) {
       </Text>
       <Btn
         title="Share"
-        kind="teal"
+        kind="green"
         icon="share-social"
         height={42}
         style={{ width: 110 }}

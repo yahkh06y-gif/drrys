@@ -2,9 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-import type { Analysis, ActiveQuestion } from '@/lib/ai';
+import { shrinkBigPictures } from '@/lib/shrink';
 
-export type Material = { id: string; name: string; uri: string; size?: number; mime?: string };
+import type { Analysis, ActiveQuestion, MapIdea } from '@/lib/ai';
+
+export type Material = { id: string; name: string; uri: string; size?: number; mime?: string; sample?: boolean; pages?: number }; // sample: Drrys' own demo lecture ("Fill sample answer" works only there) · pages: pages (or slides) in the file, counted once
 export type Chapter = { id: string; title: string; materials: Material[]; mastery: number; sessions: number };
 export type Subject = {
   id: string;
@@ -30,6 +32,13 @@ export type Card = {
   interval: number; // days
   reps: number;
   due: number; // epoch ms
+  // how many times in a row the student forgot (wrong) / remembered (right) this card
+  wrong?: number;
+  right?: number;
+  mnemonic?: string; // the student's own memory hook, made when a card kept slipping (shown as a hint, listed in the branch's hook gallery)
+  mnemonicImg?: string; // a drawing for the hook: a file on this device
+  leveled?: boolean; // already upgraded to a harder question after 3 right in a row
+  level?: number; // 2 = a harder question made from a card the student mastered
 };
 
 export type Rating = 'forgot' | 'hard' | 'good' | 'easy';
@@ -37,6 +46,15 @@ export type Rating = 'forgot' | 'hard' | 'good' | 'easy';
 export type Outfit = 'classic' | 'scarf' | 'birthday' | 'ninja';
 export type CocoStyle = 'friendly' | 'calm' | 'direct' | 'playful';
 export type Depth = 'quick' | 'balanced' | 'deep';
+
+/** Something the student loves, found in Qloo (id = Qloo entity id). Picks typed without Qloo have no id. */
+// history: Drrys' own lists (Islamic history, Ancient Egypt…; not from Qloo). person: athletes only, from the sports lists. artist / podcast are no longer offered.
+export type WorldType = 'tv_show' | 'movie' | 'artist' | 'brand' | 'book' | 'person' | 'podcast' | 'history';
+export type WorldItem = { id?: string; name: string; type: WorldType; image?: string; tags?: string[] }; // image: straight from Qloo
+/** The student's world: what they picked, what Qloo found that fans of it love, and its themes (tags). */
+export type World = { picks: WorldItem[]; because: { from: string; items: WorldItem[] }[]; tags: string[] };
+/** The promise made at the end of onboarding: one for the whole forest. */
+export type Plan = { minutes: 10 | 15 | 20; streakGoal: number; promised: boolean };
 
 export type Profile = {
   name: string;
@@ -59,16 +77,34 @@ export type SessionDraft = {
   materialId?: string;
   fromPage: number;
   toPage: number;
+  rangeFor?: string; // the file fromPage/toPage were set for: another file starts on its whole length again
   recall: string;
   analysis?: Analysis;
-  questions?: ActiveQuestion[];
+  analyzedFor?: string; // what the analysis was made from (recall + pages): going back and forward again without a change does not ask the AI again
+  map?: MapIdea[]; // every idea of the lecture pages and its shape: the questions are planned from it
+  questions?: ActiveQuestion[]; // undefined while Coco is still writing them (lib/prep), [] when there are none
   answers: string[];
   newCardIds: string[];
+  groups?: { name: string; items: string[] }[]; // the student's own grouping of what they missed
+  chest?: number; // bonus XP from the end-of-session chest (set once it has been opened)
   draftCards?: { q: string; a: string }[]; // made together with the analysis, added to the deck at the end
   gapCards?: { q: string; a: string }[]; // from active learning: one card per thing the student didn't get
   startedAt: number;
   correct: number;
+  qIndex?: number; // the question the student is on: leaving and coming back opens this one again
+  results?: (QResult | null)[]; // one per question (null = not answered yet): answers, counts and gap cards come from these
   result?: { xp: number; minutes: number; accuracy: number }; // set once scored, so it's never counted twice
+};
+
+/** A message in "Ask Coco" about one question. `voice`: it was said, not typed. */
+export type ChatMsg = { role: 'user' | 'assistant'; text: string; voice?: boolean };
+/** One answered question: kept so the student can go back to it and keep asking Coco about it. */
+export type QResult = {
+  answer: string; // what the student answered, readable (an order / sort / match / blank answer written out)
+  summary: string; // as counted in `answers`
+  grade: { correct: boolean; close?: boolean; feedback: string };
+  gap?: { q: string; a: string }; // the flashcard made from what they didn't get
+  thread?: ChatMsg[];
 };
 
 export type Together = {
@@ -101,7 +137,12 @@ type State = {
   sound: boolean;
   session?: SessionDraft;
   coachSeen: boolean; // Coco has explained the daily watering once
+  hookTipSeen: boolean; // Coco has told the student where to find their memory hooks (hold a branch)
   justWatered?: string; // subject whose full session just finished → Coco waters that tree once
+  world: World;
+  plan: Plan;
+  guide?: 'files' | 'days'; // the one guided step on the tree right after onboarding (add a lecture → how the days work)
+  savePrompted: boolean; // "Save your tree" (make an account) was offered after the first session
 
   set: (p: Partial<State>) => void;
   setProfile: (p: Partial<Profile>) => void;
@@ -113,7 +154,10 @@ type State = {
   startSession: (subjectId: string, chapterId: string) => void;
   patchSession: (p: Partial<SessionDraft>) => void;
   addCards: (cards: Omit<Card, 'id' | 'ease' | 'interval' | 'reps' | 'due'>[]) => string[];
-  rateCard: (id: string, r: Rating) => void;
+  rateCard: (id: string, r: Rating) => { wrong: number; right: number } | undefined;
+  patchCard: (id: string, p: Partial<Card>) => void;
+  saveHook: (id: string, hook: string, img?: string) => void;
+  bonusXp: (subjectId: string, xp: number) => void;
   finishSession: () => { xp: number; minutes: number; accuracy: number };
   buyOutfit: (o: Outfit, cost: number) => boolean;
   reset: () => void;
@@ -137,6 +181,11 @@ const initial = {
   sound: true,
   session: undefined as SessionDraft | undefined,
   coachSeen: false,
+  hookTipSeen: false,
+  world: { picks: [], because: [], tags: [] } as World,
+  plan: { minutes: 15, streakGoal: 14, promised: false } as Plan,
+  guide: undefined as State['guide'],
+  savePrompted: false,
 };
 
 const DAY = 86_400_000;
@@ -246,6 +295,7 @@ export const useApp = create<State>()(
       // Lightweight SM-2 spaced repetition.
       rateCard: (id, r) => {
         const q = { forgot: 1, hard: 3, good: 4, easy: 5 }[r];
+        let streaks: { wrong: number; right: number } | undefined;
         set({
           cards: get().cards.map((c) => {
             if (c.id !== id) return c;
@@ -263,21 +313,48 @@ export const useApp = create<State>()(
             const start = new Date();
             start.setHours(0, 0, 0, 0);
             const due = interval === 0 ? Date.now() + 10 * 60_000 : start.getTime() + interval * DAY + 60 * 60_000; // +1h: safe across DST
-            return { ...c, ease, interval, reps, due };
+            // streaks: forgot → wrong +1, right resets · good/easy → right +1, wrong resets · hard changes neither
+            const wrong = r === 'forgot' ? (c.wrong ?? 0) + 1 : r === 'hard' ? (c.wrong ?? 0) : 0;
+            const right = r === 'forgot' ? 0 : r === 'hard' ? (c.right ?? 0) : (c.right ?? 0) + 1;
+            streaks = { wrong, right };
+            return { ...c, ease, interval, reps, due, wrong, right };
           }),
         });
+        return streaks;
       },
+
+      patchCard: (id, p) => set({ cards: get().cards.map((c) => (c.id === id ? { ...c, ...p } : c)) }),
+
+      // The student made a memory hook for a card that kept slipping: it's saved on the card (+5 XP) and shows up in the branch's hook gallery.
+      saveHook: (id, hook, img) => {
+        const c = get().cards.find((x) => x.id === id);
+        if (!c) return;
+        const d = { xp: c.mnemonic ? 0 : 5 }; // the +5 is for a first hook (editing one earns nothing)
+        set({
+          cards: get().cards.map((x) => (x.id === id ? { ...x, mnemonic: hook.trim(), ...(img ? { mnemonicImg: img } : {}) } : x)),
+          stats: addStats(get().stats, d),
+          subjects: get().subjects.map((x) => (x.id === c.subjectId ? { ...x, stats: addStats(x.stats, d) } : x)),
+        });
+      },
+
+      // Bonus from the end-of-session chest.
+      bonusXp: (subjectId, xp) =>
+        set({
+          stats: addStats(get().stats, { xp }),
+          subjects: get().subjects.map((x) => (x.id === subjectId ? { ...x, stats: addStats(x.stats, { xp }) } : x)),
+        }),
 
       finishSession: () => {
         const s = get().session;
         const st = get().stats;
         if (!s) return { xp: 0, minutes: 0, accuracy: 0 };
         if (s.result) return s.result; // already scored (e.g. the Done screen was opened again)
-        const minutes = Math.max(1, Math.round((Date.now() - s.startedAt) / 60_000));
+        // a session can be left and picked up later, so the time between doesn't all count as study time
+        const minutes = Math.min(90, Math.max(1, Math.round((Date.now() - s.startedAt) / 60_000)));
         const total = s.questions?.length ?? 0;
         const accuracy = total ? Math.round((s.correct / total) * 100) : 100;
-        const xp = 10 + s.correct * 5 + (s.analysis?.nailed.length ?? 0) * 2;
-        const delta = { xp, minutes, correct: s.correct, total };
+        const xp = Math.round(10 + s.correct * 5 + (s.analysis?.nailed.length ?? 0) * 2);
+        const delta = { xp, minutes, correct: Math.round(s.correct), total };
         // grow the chapter branch
         const subjects = get().subjects.map((sub) =>
           sub.id !== s.subjectId
@@ -316,9 +393,24 @@ export const useApp = create<State>()(
     }),
     {
       name: 'drrys-v1',
-      storage: createJSONStorage(() => AsyncStorage),
+      // if the device storage is full, saving fails quietly (a warning) instead of crashing the screen
+      storage: createJSONStorage(() => ({
+        getItem: (k: string) => AsyncStorage.getItem(k),
+        removeItem: (k: string) => AsyncStorage.removeItem(k),
+        setItem: async (k: string, v: string) => {
+          try {
+            await AsyncStorage.setItem(k, v);
+          } catch (e) {
+            console.warn('Drrys: could not save (storage is full?)', e);
+          }
+        },
+      })),
       partialize: ({ hydrated, set: _s, ...rest }) => rest as never,
-      onRehydrateStorage: () => () => useApp.setState({ hydrated: true }),
+      onRehydrateStorage: () => () => {
+        useApp.setState({ hydrated: true });
+        // web only: shrink pictures saved before the size fix
+        shrinkBigPictures(useApp.getState().cards).then((cards) => cards && useApp.setState({ cards }));
+      },
     },
   ),
 );

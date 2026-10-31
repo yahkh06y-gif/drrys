@@ -4,16 +4,32 @@ Drrys turns studying into a small daily mission. Every subject is a tree, every 
 
 <sub>About the name: in spoken Arabic, *drrys* (درّيس) is someone who studies a lot.</sub>
 
-Made by Yahya Al-Khayyat and Abdelhafeez Shaarawy for the RevenueCat Shipaton 2026 (Next Gen).
+Made by Yahya Al-Khayyat and Abdelhafeez Shaarawy. The `forgehacks` branch is our entry to **ForgeHacks Online 2026** (track **AI + Education**). This branch (`qloo`) builds on it for the **Qloo Agentic Hackathon**: see below for exactly what was added.
 
 ![Drrys screens](docs/screens.jpg)
 
-## Try it (for judges)
+## ForgeHacks: what existed before, and what we built during it
 
-1. Download the APK from [Releases](https://github.com/yahkh06y-gif/drrys/releases/latest) and install it on an Android phone.
-2. Create an account (email + password, no confirmation email) or tap "Not now".
-3. **All purchases are test purchases.** This build runs on RevenueCat's Test Store, so buying Pro is free and no real money is charged. Pro: Profile → View plans → buy.
-4. Study Squad and invites: Profile → Study together (needs an account; a squad unlocks at 4 accounts).
+**Before ForgeHacks (existing project):** the idea and visual identity, Coco, the trees and the whole Blender and Figma design work, the screens and the game around the tree (home, onboarding, the forest, profile), accounts and cloud backup, a first version of the study session, flashcards with spaced repetition (SM-2), streaks and reminders.
+
+**Built during ForgeHacks (this branch):** the AI learning engine.
+
+- A full session flow: choose the exact lecture pages, recall, AI analysis of what you remembered, missed and got wrong, a grouping step when many ideas were missed, active-learning questions, flashcards made from the gaps. You can go back a step safely.
+- **Grounding:** every question and flashcard must come from the chosen lecture pages. The model must point to the page where the answer is written, and anything it cannot point to is dropped. The syllabus and past exams are used only to choose which ideas to ask and how to phrase them, never as a source of facts.
+- **Question formats:** explain (graded by the AI), order, sort, match, work-it-out, and fill-in-the-blanks (in the app). The order, sort, match and blank formats are graded by plain code, not the model, with an "almost right" state. Gaps become flashcards.
+- **Memory hooks:** on any flashcard or question the student writes their own hook (a story or picture), with ideas from Coco, and can ask for an AI picture of it (image model through the YouCam API). Hooks live on the tree: hold a branch to see them.
+- Reading PDFs reliably on Android, sounds for right / wrong / half-right answers, XP shown as stars, and a simpler finish page that returns the student to the forest.
+
+## Qloo Agentic Hackathon: what we added (after September 30)
+
+Everything above existed before. On this branch we added **Qloo** to make Coco's teaching personal from the first minute: Coco explains hard ideas through the shows, music, teams and books each student loves.
+
+- **"Show Coco your world" (new onboarding):** three quick steps from wide to narrow. The student picks areas (sports, movies, shows & anime, books, history), then niches inside them, then 3 or more things as big pictures. The niches and the things come from Qloo itself, not from lists we wrote: the sports are found in the tags of Qloo's most popular sports organisations, films, shows and books share one set of Qloo's genres (drama is picked once, and the student then sees drama films, shows and books for whichever they picked), sports Qloo has no tag for (tennis, MMA, golf…) are found through their best-known league or event, each niche's cover is Coco's own picture when there is one (src/art-niches.ts) or else is its most popular thing, and its list is Qloo's most popular teams, players or titles in it. Search covers anything missing, and every pick brings three related things from Qloo's insights. A tray at the bottom shows every pick; one tap takes one out. Islamic history is our own list, because Qloo has no data for it. After it come the plan and the promise, then Coco's first explanation, which is made in the background meanwhile (src/lib/first.ts), so the student never waits for it.
+- **"Coco is exploring your world":** for each pick, Qloo finds what its fans also love (teams, shows, movies, books), and the themes (tags) of the student's whole world. The student sees the map grow, and can remove anything that isn't them.
+- **The first explanation:** a famously hard idea from the student's own field (recursion for Computer Science, compound interest for Finance…), explained through their world. The analogy is written by the language model from the Qloo themes, and the card flips to the plain textbook version to show the difference.
+- **Every session after that:** the student's world is passed to Coco, who uses it for an analogy when an idea is hard to picture.
+- **A shorter, kinder onboarding:** field and speciality on one screen, a daily plan and promise (minutes, streak goal, reminder time), no sign-up until after the first session, one guided step on the tree, and a **sample lecture** so anyone (judges included) can try a full session.
+- **Safe by design:** the Qloo key never ships in the app. Calls go through a Supabase Edge Function (`supabase/functions/qloo`) that only allows shows, movies, books, teams and athletes (no singers or actors), asks Qloo for films up to PG-13 and shows up to TV-14 only, leaves out romance and occult genres, drops anything adult (17+/18+ ratings), romantic, or about alcohol, gambling or drugs, together with its picture (names, tags and age ratings are checked; no AI is used, so it stays fast and free), asks Qloo a few requests at a time to respect the rate limit, and caches results in memory. No Qloo data is stored in this repository. If Qloo can't be reached, the ready-made lists still work; only "more like this" and the exploring are skipped.
 
 ## Why we built it
 
@@ -41,43 +57,29 @@ The cards come back on a spaced repetition schedule (SM-2): forgotten cards come
 
 Around that: a week view per subject, streaks, stats per tree, and daily reminders that know if you have a lecture session or cards waiting (and stay quiet on days you already studied).
 
-## Pricing and RevenueCat
-
-| | Free | Pro ($9.99/month or $79.99/year) |
-| --- | --- | --- |
-| Trees (subjects) | 1 | 5 |
-| Branches (chapters) per tree | 1, or 2 after inviting a friend | 5 |
-| Lecture files | up to 40 pages | up to 150 pages |
-
-- **Entitlement:** `drrys_pro`. **Offerings:** `default`, `streak25`, `streak30`, `bonus50`.
-- **Streak reward.** Study 30 days in a row and Pro is 25% off (`streak25`), 60 days and it's 30% off (`streak30`). Miss a day and the regular price comes back.
-- **Study Squad.** You and 3 friends join with one code. When the squad is full, each of you gets 25% off while the squad stays together. A squad and a streak stack, up to 50% off (`bonus50`).
-- **Invite a friend.** On the free plan, when a friend joins with your code and finishes their first session, your trees get a second branch.
-- The discounted prices are real products in RevenueCat. The app only decides which offering to show (`currentDiscount()` in `src/lib/purchases.ts`).
-- Pro is linked to the student's account with `Purchases.logIn`, so it follows them to a new phone. You have to sign in before buying. Restore purchases is on the paywall and in Profile.
-- If Pro ends, nothing is deleted. Extra trees and branches "rest": their flashcards still work, and new full sessions ask to renew.
-- Squad and invite codes are checked on the server (Supabase functions): you can't use your own code, each student can be invited once, two friends can't swap codes, one squad per student, 4 people per squad.
-
 ## Built with
 
 - Expo SDK 57, React Native, TypeScript, Expo Router
-- RevenueCat (`react-native-purchases`)
-- Gemini API for reading lecture PDFs, questions, grading, flashcards, chat and voice transcription. Only the pages you studied are sent (`pdf-lib`).
+- A language model (Claude, or Gemini as a fallback) for reading the lecture pages, the analysis, questions, grading of explanations, flashcards and chat. Only the pages you studied are sent (`pdf-lib`). The model returns structured data that the app validates before showing it.
+- YouCam API (text-to-image and image-to-image) for memory-hook pictures.
 - Supabase for accounts, cloud backup and the squad/invite functions
 - Zustand + AsyncStorage (works offline), Reanimated, expo-video, expo-audio, expo-notifications
 - Coco, the trees, the world and the icons were modelled in Blender. Some animations were made with Flow from those renders, to save rendering time.
-- Screens were designed in Figma with help from Stitch, and turned into the real app with Claude Opus 5.5.
+- Screens were designed in Figma with help from Stitch, and turned into the real app with Claude.
 
 ## Run it
 
 ```bash
 npm install
-cp .env.example .env   # add a Gemini key and the RevenueCat Test Store key
+cp .env.example .env   # no secret keys here: only which AI Coco uses
 npx expo start
 ```
 
-- Without an AI key, Coco runs a built-in demo session so every screen can still be tried.
-- Android APK: `npx eas-cli build -p android --profile preview`. This build uses RevenueCat's Test Store, so purchases are free (`plugins/withTestStoreRelease.js` allows the test key in this build only).
+- Qloo (server side): `npx supabase functions deploy qloo --no-verify-jwt`, then `npx supabase secrets set QLOO_API_KEY=your-key`.
+- AI (server side): `npx supabase secrets set GEMINI_API_KEY=your-key YOUCAM_API_KEY=your-key` (and `ANTHROPIC_API_KEY` for Claude), then `npx supabase functions deploy ai --no-verify-jwt`.
+- Question pictures (server side, no key): `npx supabase functions deploy figures --no-verify-jwt`. It cuts the diagram a question is about out of the lecture's PDF page. Without it, questions that need a picture are left out of the session.
+- With `EXPO_PUBLIC_COCO_AI=demo`, Coco runs a built-in demo session so every screen can still be tried.
+- Android APK: `npx eas-cli build -p android --profile preview`.
 
 ## Project layout
 
@@ -88,28 +90,32 @@ src/
     (tabs)/         Coco, the forest, profile
     session/        choose file, recall, analyze, review, explain, flashcards, done
     subject.tsx     plant or edit a tree (chapters, files, syllabus, past exams)
-    paywall.tsx     plans and rewards
-    together.tsx    Study Squad and invites
   components/       UI kit, tree, video, voice
   lib/
-    ai.ts           Coco (Gemini, with fallback models)
-    purchases.ts    RevenueCat, limits and discounts
-    together.ts     squads and invites
+    ai.ts           the AI client: prompts, grounding, question and card checks
+    grade.ts        code-based grading (order, sort, match, blanks)
+    youcam.ts       memory-hook pictures
+    session.ts      page ranges, PDF reading
     cloud.ts        accounts and backup
     notify.ts       daily reminders
   store.ts          app state and the flashcard scheduler
+supabase/functions/
+  ai/               holds the AI keys: Claude, Gemini and YouCam calls go through it
+  qloo/             holds the Qloo key: taste data for the onboarding
+  figures/          cuts a question's picture out of a lecture PDF page (no key)
 ```
 
 ## Known limits
 
-- The Gemini key ships inside this competition build. For a real release the AI calls will move behind a server (a Supabase Edge Function).
+- The AI keys stay on the server (`supabase/functions/ai`), but that function is open to anyone who has the app's public Supabase key. Before a big release it should also check that the student is signed in and limit how many requests one student can send.
 - The app's screens are in English for now. Voice recall and Coco's chat already understand many languages, including Arabic.
 - Android only so far.
-- Payments use RevenueCat's Test Store for the competition (no real charges). The products and offerings are ready to connect to Google Play and the App Store for launch.
+- The AI memory-hook picture and some drag interactions were tested mainly in the browser; we are still testing them on more phones.
+- Some features from the earlier version of the project (Pro plans, study squads, invites) exist in the code but are not part of this entry.
 
 ## What's next
 
-Mnemonics, AI-made videos and audio podcasts from your lectures, live AI chat with Coco, and a lot more.
+Better memory hooks, AI-made videos and audio podcasts from your lectures, live AI chat with Coco, and a lot more.
 
 ## License
 

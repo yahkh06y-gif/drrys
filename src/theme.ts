@@ -1,60 +1,57 @@
-// Design tokens pulled from the Drrys Figma file ("full app" section).
+// The old short names (C, F, R), kept so every existing screen works unchanged.
+// They now come from the design system (v2): src/design/tokens.ts. New code imports from '@/design' instead.
+import { alpha, color, font, palette as p } from '@/design/tokens';
+
 export const C = {
   // surfaces
-  cream: '#F7F2E8',
-  paper: '#FCF9F1',
-  card: '#FBF8F1',
-  cardSelected: '#EDE7D8',
-  sand: '#F1EEE6',
-  track: '#E5E2DA',
-  white: '#FFFFFF',
+  cream: color.bg.app,
+  paper: color.bg.raised,
+  card: color.surface.choice,
+  cardSelected: color.surface.choiceOn,
+  sand: color.surface.muted,
+  track: color.surface.track,
+  white: p.neutral0,
 
   // ink
-  ink: '#2B1B10',
-  teal: '#0E5E53',
-  tealSoft: '#216664',
-  body: '#3F4946',
-  muted: '#6E5D4F',
-  mutedLight: '#7A6A5D',
-  gold: '#DEC48C',
-  goldInk: '#4B3A0F',
+  ink: color.text.primary,
+  teal: color.text.brand,
+  tealSoft: p.pine500,
+  body: color.text.body,
+  muted: color.text.muted,
+  mutedLight: color.text.subtle,
+  gold: color.game.xp,
+  goldInk: color.text.label,
 
-  // brand greens
-  title: '#7A9C3E',
-  green: '#78A83B',
-  greenShadow: '#4E6D26',
-  leaf: '#6C8C38',
-  leafShadow: '#546E2A',
-  moss: '#4F6F28',
-  mossDark: '#3F5920',
-  lime: 'rgba(190,243,127,0.6)',
-  limeInk: '#457005',
-  mint: '#E3EED9',
-  mintBorder: '#8EB563',
+  // brand greens (one green for every main button)
+  title: color.text.hero,
+  green: color.action.primary,
+  greenShadow: color.action.primaryEdge,
+  leaf: color.action.primary,
+  leafShadow: color.action.primaryEdge,
+  moss: p.leaf800,
+  mossDark: p.leaf900,
+  lime: alpha(p.leaf200, 0.6),
+  limeInk: p.leaf700,
+  mint: p.leaf100,
+  mintBorder: p.leaf300,
 
   // browns
-  brown: '#7D4815',
-  bark: '#4A2810',
-  barkSoft: '#4A3319',
-  line: 'rgba(90,66,37,0.15)',
-  lineStrong: 'rgba(90,66,37,0.2)',
-  shadow: 'rgba(90,66,37,0.35)',
+  brown: color.border.edge,
+  bark: color.border.bark,
+  barkSoft: p.barkSoft,
+  line: color.border.default,
+  lineStrong: color.border.strong,
+  shadow: color.shadow,
 
   // status
-  red: '#EF4444',
-  orange: '#BD561D',
-  amber: '#F4B266',
-  sky: '#BDE3F2',
-  tealBg: '#2E7D72',
+  red: p.berry500,
+  orange: p.berry600,
+  amber: p.sun400,
+  sky: p.sky200,
+  tealBg: p.pine500,
 } as const;
 
-export const F = {
-  bold: 'SpaceGrotesk_700Bold',
-  semi: 'SpaceGrotesk_600SemiBold',
-  medium: 'SpaceGrotesk_500Medium',
-  regular: 'SpaceGrotesk_400Regular',
-  mono: 'IosevkaCharon_700Bold',
-  monoRegular: 'IosevkaCharon_400Regular',
-} as const;
+// Readex Pro tops out at 600 on screen: "bold" is the semi-bold cut, so headings stay calm.
+export const F = { ...font, bold: font.semi } as const;
 
-export const R = { sm: 12, md: 16, lg: 22, xl: 24, pill: 999 } as const;
+export const R = { sm: 12, md: 16, lg: 20, xl: 24, pill: 999 } as const;

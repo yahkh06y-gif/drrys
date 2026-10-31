@@ -1,4 +1,5 @@
 // Bottom navigation: Coco · Tree · Profile (clay icons from the Figma BottomTabNavigation).
+// Tabs switch instantly: they're used tens of times a day, so motion there would only feel slow.
 import { Image } from 'expo-image';
 import { Tabs } from 'expo-router';
 import { Pressable, View } from 'react-native';
@@ -6,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ICONS } from '@/art';
 import { tap } from '@/lib/feedback';
-import { C } from '@/theme';
+import { color, radius } from '@/design/tokens';
 
 const ORDER = [
   { name: 'coco', icon: ICONS.coco },
@@ -20,16 +21,16 @@ export default function TabsLayout() {
     <Tabs
       initialRouteName="tree"
       backBehavior="initialRoute"
-      screenOptions={{ headerShown: false, animation: 'shift', sceneStyle: { backgroundColor: '#8FC9EC' } }}
+      screenOptions={{ headerShown: false, animation: 'none', sceneStyle: { backgroundColor: color.bg.sky } }}
       tabBar={({ state, navigation }) => (
         <View
           style={{
             flexDirection: 'row',
             justifyContent: 'space-around',
             alignItems: 'center',
-            backgroundColor: '#FCF9F1',
-            borderTopWidth: 2,
-            borderColor: C.barkSoft,
+            backgroundColor: color.bg.raised,
+            borderTopWidth: 1,
+            borderColor: color.border.default,
             paddingTop: 12,
             paddingBottom: Math.max(insets.bottom, 12),
           }}>
@@ -39,6 +40,9 @@ export default function TabsLayout() {
             return (
               <Pressable
                 key={t.name}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={t.name}
                 onPress={() => {
                   if (!active) tap('select');
                   navigation.navigate(t.name);
@@ -46,12 +50,10 @@ export default function TabsLayout() {
                 style={{
                   width: 60,
                   height: 60,
-                  borderRadius: 19,
+                  borderRadius: radius.lg,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: active ? 'rgba(0,106,98,0.16)' : 'transparent',
-                  borderWidth: active ? 1 : 0,
-                  borderColor: '#006A62',
+                  backgroundColor: active ? color.selected.bg : 'transparent',
                 }}>
                 <Image source={t.icon} style={{ width: 42, height: 44, transform: [{ scale: active ? 1.08 : 0.92 }] }} contentFit="contain" />
               </Pressable>

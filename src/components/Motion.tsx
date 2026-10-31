@@ -5,7 +5,7 @@ import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { VIDEO_BG, VIDEO_MS, VIDEO_SOUND, VIDEOS, type VideoKey } from '@/art-videos';
+import { VIDEO_BG, VIDEO_MS, VIDEO_SOUND, VIDEO_VOLUME_OF, VIDEOS, type VideoKey } from '@/art-videos';
 import { useApp } from '@/store';
 
 /** Video sound level (0–1). The renders are mixed loud; this keeps them under the UI sounds. */
@@ -43,7 +43,7 @@ export function Motion({
   const player = useVideoPlayer(VIDEOS[video], (p) => {
     p.loop = loop;
     p.muted = !withSound;
-    p.volume = VIDEO_VOLUME;
+    p.volume = VIDEO_VOLUME_OF[video] ?? VIDEO_VOLUME;
     p.audioMixingMode = 'mixWithOthers';
     if (startAt) p.currentTime = startAt;
     if (playing) p.play();

@@ -5,8 +5,12 @@ import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Segmented } from '@/design/components';
+
 import { Image } from 'expo-image';
 
+import { dirIcon } from '@/design/rtl';
+import { color, radius, shadow } from '@/design/tokens';
 import { COCO, STAT_ICONS } from '@/art';
 import { Btn, Coco, Enter, IconBtn, Progress, T } from '@/components/ui';
 import { haptic, play, tap } from '@/lib/feedback';
@@ -74,7 +78,7 @@ export default function Paywall() {
       if (ok) {
         play('celebrate');
         haptic('success');
-        Alert.alert('Welcome to Drrys Pro 🌳', 'Your forest can now grow up to 5 trees.', [{ text: 'Let’s grow', onPress: () => router.back() }]);
+        Alert.alert('Welcome to Drrys Pro', 'Your forest can now grow up to 5 trees.', [{ text: 'Let’s grow', onPress: () => router.back() }]);
       }
     } catch (e) {
       haptic('error');
@@ -87,7 +91,7 @@ export default function Paywall() {
     <SafeAreaView style={{ flex: 1, backgroundColor: C.paper }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 8 }}>
         <IconBtn name="close" onPress={() => router.back()} />
-        <T v="h3" style={{ color: C.teal }}>
+        <T v="h3">
           Plans & Pricing
         </T>
       </View>
@@ -97,30 +101,29 @@ export default function Paywall() {
           <T v="h2" style={{ textAlign: 'center' }}>
             Grow your knowledge
           </T>
-          <T style={{ textAlign: 'center' }}>Nurture your curiosity with deep, calm focus and mindful study habits.</T>
         </Enter>
 
         {isPro ? (
-          <View style={{ backgroundColor: C.mint, borderRadius: 20, padding: 20, alignItems: 'center', gap: 6, borderWidth: 2, borderColor: C.mintBorder }}>
-            <Text style={{ fontSize: 30 }}>🌳</Text>
-            <Text style={{ fontFamily: F.bold, fontSize: 18, color: C.moss }}>You’re a Pro gardener</Text>
-            <Text style={{ fontFamily: F.medium, fontSize: 13, color: C.body, textAlign: 'center' }}>All features unlocked. Thank you for supporting Drrys!</Text>
+          <View style={{ backgroundColor: color.feedback.correct.bg, borderRadius: radius.xl, padding: 20, alignItems: 'center', gap: 6 }}>
+            <Ionicons name="leaf" size={28} color={C.leaf} />
+            <Text style={{ fontFamily: F.semi, fontSize: 18, color: C.moss }}>You’re a Pro gardener</Text>
+            <Text style={{ fontFamily: F.regular, fontSize: 14, color: C.body, textAlign: 'center' }}>All features unlocked. Thank you for supporting Drrys!</Text>
           </View>
         ) : (
           <>
             {/* rewards: a study streak and a full Study Squad make Pro cheaper (stacked, up to 50% off) */}
             {discount ? (
               <Enter>
-                <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', backgroundColor: '#FFF1DC', borderRadius: 18, borderWidth: 2, borderColor: C.orange, padding: 14 }}>
+                <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', backgroundColor: color.feedback.almost.bg, borderRadius: radius.lg, padding: 14 }}>
                   <Image source={STAT_ICONS.fire} style={{ width: 44, height: 44 }} contentFit="contain" />
                   <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.ink }}>Your reward: {discount.off}% off</Text>
+                    <Text style={{ fontFamily: F.semi, fontSize: 16, color: C.ink }}>Your reward: {discount.off}% off</Text>
                     {discount.streak && (
-                      <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.body }}>
-                        🔥 {discount.streak.off}% for studying {days} days in a row (while your streak lives)
+                      <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.body }}>
+                        {discount.streak.off}% for studying {days} days in a row (while your streak lives)
                       </Text>
                     )}
-                    {discount.squad && <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.body }}>🌳 {SQUAD_OFF}% for your full Study Squad</Text>}
+                    {discount.squad && <Text style={{ fontFamily: F.regular, fontSize: 13, color: C.body }}>{SQUAD_OFF}% for your full Study Squad</Text>}
                     {discount.streak && discount.squad && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Rewards stack up to {MAX_OFF}% off.</Text>}
                   </View>
                 </View>
@@ -129,14 +132,14 @@ export default function Paywall() {
               <View style={{ gap: 6, backgroundColor: C.white, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 12 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Image source={STAT_ICONS.fire} style={{ width: 22, height: 22 }} contentFit="contain" />
-                  <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 13, color: C.ink }}>
+                  <Text style={{ flex: 1, fontFamily: F.medium, fontSize: 14, color: C.ink }}>
                     Study {goal.days} days in a row → {goal.off}% off Pro
                   </Text>
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.orange }}>
+                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: color.feedback.almost.text, fontVariant: ['tabular-nums'] }}>
                     {days}/{goal.days}
                   </Text>
                 </View>
-                <Progress value={days / goal.days} height={6} track={C.track} fill={C.orange} />
+                <Progress value={days / goal.days} height={6} track={C.track} fill={color.game.streak} />
                 {goal.days < 60 && <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>Keep it for 60 days and it’s 30% off.</Text>}
               </View>
             ) : null}
@@ -148,81 +151,79 @@ export default function Paywall() {
                 onPress={() => (tap(), router.push('/together'))}
                 style={{ gap: 8, backgroundColor: C.white, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 12 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontSize: 18 }}>👥</Text>
-                  <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 13, color: C.ink }}>
+                  <Ionicons name="people-outline" size={18} color={C.teal} />
+                  <Text style={{ flex: 1, fontFamily: F.medium, fontSize: 14, color: C.ink }}>
                     Study Squad: {SQUAD_SIZE} friends → {SQUAD_OFF}% off each
                   </Text>
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.teal }}>{together?.squad ? `${squadCount}/${SQUAD_SIZE}` : 'Start'}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.teal }}>{together?.squad ? `${squadCount}/${SQUAD_SIZE}` : 'Start'}</Text>
                 </View>
-                {together?.squad && <Progress value={squadCount / SQUAD_SIZE} height={6} track={C.track} fill={C.teal} />}
+                {together?.squad && <Progress value={squadCount / SQUAD_SIZE} height={6} track={C.track} />}
                 {canInvite && (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontSize: 18 }}>🌿</Text>
-                    <Text style={{ flex: 1, fontFamily: F.bold, fontSize: 13, color: C.ink }}>Invite 1 friend → a free 2nd branch</Text>
-                    <Ionicons name="chevron-forward" size={16} color={C.muted} />
+                    <Ionicons name="git-branch-outline" size={18} color={C.teal} />
+                    <Text style={{ flex: 1, fontFamily: F.medium, fontSize: 14, color: C.ink }}>Invite 1 friend → a free 2nd branch</Text>
+                    <Ionicons name={dirIcon('chevron-forward')} size={16} color={C.mutedLight} />
                   </View>
                 )}
               </Pressable>
             )}
 
-            <View style={{ flexDirection: 'row', backgroundColor: C.sand, borderRadius: 14, padding: 4, borderWidth: 1, borderColor: C.line }}>
-              {(['monthly', 'yearly'] as const).map((p) => (
-                <Pressable key={p} onPress={() => (tap('select'), setSel(p))} style={{ flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, borderRadius: 11, backgroundColor: sel === p ? C.teal : 'transparent' }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 13, color: sel === p ? C.white : C.body, textTransform: 'capitalize' }}>{p}</Text>
-                  {p === 'yearly' && save > 0 && (
-                    <Text style={{ fontFamily: F.bold, fontSize: 9, color: C.mossDark, backgroundColor: '#BEF37F', borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2 }}>save {save}%</Text>
-                  )}
-                </Pressable>
-              ))}
-            </View>
+            <Segmented
+              value={sel}
+              onChange={setSel}
+              options={[
+                { key: 'monthly', label: 'Monthly' },
+                { key: 'yearly', label: 'Yearly', badge: save > 0 ? `Save ${save}%` : undefined, badgeTone: 'brand' },
+              ]}
+            />
 
-            <View style={{ backgroundColor: C.white, borderRadius: 22, borderWidth: 2, borderColor: C.teal, borderBottomWidth: 6, padding: 18, gap: 12 }}>
+            <View style={{ backgroundColor: C.white, borderRadius: radius.xl, borderWidth: 1.5, borderColor: color.selected.border, padding: 18, gap: 12, ...shadow.float }}>
               <View>
-                <Text style={{ fontFamily: F.bold, fontSize: 22, color: C.teal }}>Drrys Pro</Text>
-                <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.muted }}>For students with a full semester: every subject and every chapter in one forest.</Text>
+                <Text style={{ fontFamily: F.semi, fontSize: 22, color: C.ink, letterSpacing: -0.3 }}>Drrys Pro</Text>
+                <Text style={{ fontFamily: F.regular, fontSize: 14, lineHeight: 20, color: C.muted }}>Every subject and every chapter in one forest.</Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, backgroundColor: C.paper, borderRadius: 12, padding: 10 }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 30, color: C.teal }}>{plan?.perMonth ?? '—'}</Text>
-                <Text style={{ flex: 1, fontFamily: F.medium, fontSize: 12, color: C.muted }}>
+                <Text style={{ fontFamily: F.semi, fontSize: 30, color: C.ink, fontVariant: ['tabular-nums'] }}>{plan?.perMonth ?? '—'}</Text>
+                <Text style={{ flex: 1, fontFamily: F.regular, fontSize: 13, color: C.muted }}>
                   / month{sel === 'yearly' ? `, billed ${plan?.price ?? ''} yearly` : ''}
                   {plan?.fullPrice ? (
                     <>
                       {'\n'}
                       <Text style={{ textDecorationLine: 'line-through' }}>{plan.fullPrice}</Text>
-                      <Text style={{ color: C.orange, fontFamily: F.bold }}>{`  ${discount?.off ?? ''}% off`}</Text>
+                      <Text style={{ color: color.feedback.almost.text, fontFamily: F.semi }}>{`  ${discount?.off ?? ''}% off`}</Text>
                     </>
                   ) : null}
                 </Text>
               </View>
               {PRO.map((f) => (
                 <View key={f.t} style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: C.teal, alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name={f.icon} size={13} color={C.white} />
+                  <View style={{ width: 28, height: 28, borderRadius: radius.sm, backgroundColor: color.selected.bg, alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name={f.icon} size={15} color={C.teal} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 13, color: C.ink }}>{f.t}</Text>
-                    <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted }}>{f.d}</Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 15, color: C.ink }}>{f.t}</Text>
+                    <Text style={{ fontFamily: F.regular, fontSize: 13, lineHeight: 18, color: C.muted }}>{f.d}</Text>
                   </View>
                 </View>
               ))}
-              <Btn title={needsAccount ? 'Sign in to upgrade' : 'Upgrade to Drrys Pro'} iconLeft={needsAccount ? 'person' : 'leaf'} kind="teal" loading={busy} onPress={purchase} />
+              <Btn title={needsAccount ? 'Sign in to upgrade' : 'Upgrade to Drrys Pro'} iconLeft={needsAccount ? 'person' : 'leaf'} kind="green" loading={busy} onPress={purchase} />
               {needsAccount && (
-                <Text style={{ fontFamily: F.medium, fontSize: 11, color: C.muted, textAlign: 'center' }}>A free account keeps your Pro and your forest safe on any phone.</Text>
+                <Text style={{ fontFamily: F.regular, fontSize: 12, color: C.muted, textAlign: 'center' }}>A free account keeps your Pro and your forest safe on any phone.</Text>
               )}
             </View>
 
-            <View style={{ backgroundColor: '#F1EEE6', borderRadius: 20, padding: 16, gap: 6 }}>
+            <View style={{ backgroundColor: C.white, borderRadius: radius.xl, borderWidth: 1, borderColor: C.line, padding: 16, gap: 6 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 16, color: C.leaf }}>Free Plan</Text>
-                <Text style={{ fontFamily: F.bold, fontSize: 10, color: C.muted, backgroundColor: C.white, borderRadius: 99, paddingHorizontal: 8, paddingVertical: 3 }}>Current plan</Text>
+                <Text style={{ fontFamily: F.semi, fontSize: 16, color: C.ink }}>Free plan</Text>
+                <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.body, backgroundColor: C.sand, borderRadius: 99, paddingHorizontal: 8, paddingVertical: 3, overflow: 'hidden' }}>Current plan</Text>
               </View>
-              <Text style={{ fontFamily: F.bold, fontSize: 22, color: C.ink }}>
-                $0 <Text style={{ fontSize: 12, color: C.muted }}>/ forever free</Text>
+              <Text style={{ fontFamily: F.semi, fontSize: 22, color: C.ink }}>
+                $0 <Text style={{ fontSize: 13, fontFamily: F.regular, color: C.muted }}>/ forever free</Text>
               </Text>
               {FREE.map((f) => (
                 <View key={f} style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                   <Ionicons name="checkmark-circle-outline" size={14} color={C.leaf} />
-                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: C.body }}>{f}</Text>
+                  <Text style={{ fontFamily: F.regular, fontSize: 14, color: C.body }}>{f}</Text>
                 </View>
               ))}
             </View>
@@ -231,7 +232,7 @@ export default function Paywall() {
 
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 14 }}>
           {['instant access', 'secure checkout', 'no lock-in'].map((x) => (
-            <Text key={x} style={{ fontFamily: F.medium, fontSize: 10, color: C.leaf }}>
+            <Text key={x} style={{ fontFamily: F.medium, fontSize: 12, color: C.leaf }}>
               ✓ {x}
             </Text>
           ))}
@@ -240,13 +241,13 @@ export default function Paywall() {
           onPress={async () => {
             tap();
             const ok = await restore();
-            Alert.alert(ok ? 'Pro restored 🌳' : 'No active subscription found');
+            Alert.alert(ok ? 'Pro restored' : 'No active subscription found');
           }}
           style={{ alignSelf: 'center' }}>
-          <Text style={{ fontFamily: F.bold, fontSize: 12, color: C.teal, textDecorationLine: 'underline' }}>Restore purchases</Text>
+          <Text style={{ fontFamily: F.medium, fontSize: 14, color: C.teal, padding: 6 }}>Restore purchases</Text>
         </Pressable>
-        <Text style={{ fontFamily: F.medium, fontSize: 10, color: C.muted, textAlign: 'center' }}>
-          {rcEnabled ? 'Payments processed securely via the App Store / Google Play, powered by RevenueCat.' : 'Demo mode — add a RevenueCat key to enable real purchases.'}
+        <Text style={{ fontFamily: F.regular, fontSize: 12, lineHeight: 17, color: C.muted, textAlign: 'center' }}>
+          {rcEnabled ? 'Secure payment through Google Play or the App Store.' : 'Demo mode — add a RevenueCat key to enable real purchases.'}
         </Text>
       </ScrollView>
     </SafeAreaView>

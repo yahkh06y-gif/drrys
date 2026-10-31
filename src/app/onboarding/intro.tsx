@@ -16,29 +16,30 @@ import { VIDEO_BG, type VideoKey } from '@/art-videos';
 import { Motion } from '@/components/Motion';
 import { Btn } from '@/components/ui';
 import { play } from '@/lib/feedback';
+import { color } from '@/design/tokens';
 import { C, F } from '@/theme';
 
 const SLIDES: { video: VideoKey; startAt?: number; fg: string; title: string; body: string; btn: 'light' | 'teal' | 'leaf' }[] = [
   {
     video: 'intro1',
     startAt: 6, // the clip opens on its zoom-in; skip straight to the settled tree
-    fg: '#0E6E6A',
-    title: 'Grow Your Knowledge, One Day at a Time.',
-    body: 'We turn complex study goals into small daily sessions, so you always know what to focus on next.',
+    fg: color.text.brand,
+    title: 'Grow your knowledge, one day at a time.',
+    body: 'Every subject is a tree. Your mission: water it daily.',
     btn: 'light',
   },
   {
     video: 'intro2',
     fg: C.white,
-    title: 'Coco is your personal learning companion',
-    body: 'Drrys personalizes your learning; Coco understands your style and explains tough concepts using things you love.',
+    title: 'Coco learns your world.',
+    body: 'Tell him what you love. He explains every hard idea through it.',
     btn: 'teal',
   },
   {
     video: 'intro3',
     fg: C.white,
-    title: 'Learn Smarter, Not Harder.',
-    body: 'Drrys uses proven learning methods to help you understand, remember, and apply what you learn.',
+    title: 'Study the way science says works.',
+    body: 'No highlighting. No re-reading. Just methods that stick.',
     btn: 'leaf',
   },
 ];
@@ -92,14 +93,14 @@ export default function Intro() {
         <SafeAreaView edges={['bottom']} style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 6, paddingHorizontal: 40, paddingBottom: 16, gap: 12 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 12 }}>
             {SLIDES.map((_, k) => (
-              <View key={k} style={{ height: 8, width: k === i ? 28 : 12, borderRadius: 4, backgroundColor: k === i ? C.white : 'rgba(0,0,0,0.18)' }} />
+              <View key={k} style={{ height: 8, width: k === i ? 28 : 12, borderRadius: 4, backgroundColor: k === i ? C.white : color.overlay.shade }} />
             ))}
           </View>
-          <Btn title={i === 2 ? 'Get started' : 'continue'} kind={s.btn} onPress={next} mono={i < 2} />
+          <Btn title={i === 2 ? 'Get started' : 'Continue'} kind={s.btn} onPress={next} mono={i < 2} />
           {i === 2 && (
             <Btn
               title="I already have an account"
-              kind="green"
+              kind="light"
               height={46}
               onPress={() => router.push({ pathname: '/onboarding/signin', params: { mode: 'signin' } })}
             />
@@ -123,8 +124,8 @@ function Slide({ slide, active, w, h }: { slide: (typeof SLIDES)[number]; active
       <LinearGradient colors={['transparent', bg]} style={{ position: 'absolute', left: 0, right: 0, top: vh - 60, height: 60 }} />
       <SafeAreaView edges={['top']} style={{ flex: 1, paddingHorizontal: 28 }}>
         <View style={{ height: Math.min(vh * 0.5, h * 0.5) }} />
-        <Text style={{ fontFamily: F.bold, fontSize: 32, lineHeight: 38, color: slide.fg }}>{slide.title}</Text>
-        <Text style={{ fontFamily: F.medium, fontSize: 15, lineHeight: 22, color: slide.fg, opacity: 0.9, marginTop: 12 }}>{slide.body}</Text>
+        <Text accessibilityRole="header" style={{ fontFamily: F.semi, fontSize: 32, lineHeight: 38, letterSpacing: -0.6, color: slide.fg }}>{slide.title}</Text>
+        <Text style={{ fontFamily: F.regular, fontSize: 16, lineHeight: 24, color: slide.fg, opacity: 0.92, marginTop: 12 }}>{slide.body}</Text>
       </SafeAreaView>
     </View>
   );

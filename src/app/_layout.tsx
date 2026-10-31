@@ -1,11 +1,11 @@
-import { IosevkaCharon_400Regular, IosevkaCharon_700Bold } from '@expo-google-fonts/iosevka-charon';
 import {
-  SpaceGrotesk_400Regular,
-  SpaceGrotesk_500Medium,
-  SpaceGrotesk_600SemiBold,
-  SpaceGrotesk_700Bold,
+  ReadexPro_300Light,
+  ReadexPro_400Regular,
+  ReadexPro_500Medium,
+  ReadexPro_600SemiBold,
+  ReadexPro_700Bold,
   useFonts,
-} from '@expo-google-fonts/space-grotesk';
+} from '@expo-google-fonts/readex-pro';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -19,18 +19,19 @@ import { startReminderSync } from '@/lib/notify';
 import { refreshTogether } from '@/lib/together';
 import { initPurchases } from '@/lib/purchases';
 import { useApp } from '@/store';
+import { color } from '@/design/tokens';
 import { C } from '@/theme';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [fonts] = useFonts({
-    SpaceGrotesk_400Regular,
-    SpaceGrotesk_500Medium,
-    SpaceGrotesk_600SemiBold,
-    SpaceGrotesk_700Bold,
-    IosevkaCharon_400Regular,
-    IosevkaCharon_700Bold,
+    // one family for Arabic and English (src/design/tokens.ts → font)
+    ReadexPro_300Light,
+    ReadexPro_400Regular,
+    ReadexPro_500Medium,
+    ReadexPro_600SemiBold,
+    ReadexPro_700Bold,
   });
   const hydrated = useApp((s) => s.hydrated);
 
@@ -63,9 +64,9 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ animation: 'none' }} />
         {/* once onboarded, the whole onboarding flow drops out of the history, so Back never returns to it */}
         <Stack.Protected guard={!onboarded}>
-          <Stack.Screen name="onboarding" options={{ animation: 'none', contentStyle: { backgroundColor: '#2F8476' } }} />
+          <Stack.Screen name="onboarding" options={{ animation: 'none', contentStyle: { backgroundColor: color.bg.onboarding } }} />
         </Stack.Protected>
-        <Stack.Screen name="(tabs)" options={{ animation: 'fade', contentStyle: { backgroundColor: '#8FC9EC' } }} />
+        <Stack.Screen name="(tabs)" options={{ animation: 'fade', contentStyle: { backgroundColor: color.bg.sky } }} />
         <Stack.Screen name="session" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
         <Stack.Screen name="grow" options={{ animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="paywall" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />

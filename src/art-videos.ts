@@ -10,6 +10,7 @@ export const VIDEOS = {
   seedOpen: require('../assets/videos/seed-open.mp4'), // once: hands open the glowing seed → cream (sound)
   seedClose: require('../assets/videos/seed-close.mp4'), // once: seed planted, tree grows (10.7s, sound)
   celebrate: require('../assets/videos/celebrate.mp4'), // once: Coco in sunglasses + confetti (sound)
+  chestIdle: require('../assets/videos/chest-idle.mp4'), // loop: the closed chest wobbles, before it is opened (quiet sound)
 } as const;
 
 export type VideoKey = keyof typeof VIDEOS;
@@ -21,7 +22,14 @@ export const VIDEO_SOUND: Partial<Record<VideoKey, true>> = {
   seedOpen: true,
   seedClose: true,
   celebrate: true,
+  chestIdle: true,
 };
+
+// Clips that should play quieter than the default level (0–1).
+export const VIDEO_VOLUME_OF: Partial<Record<VideoKey, number>> = { chestIdle: 0.15 };
+
+// The flat colour the chest page uses behind the chest clip (the clip's own backdrop is exactly this).
+export const CHEST_BG = '#17594F';
 
 // Edge colours sampled from the renders so UI around/over them blends in.
 export const VIDEO_BG: Record<VideoKey, string> = {
@@ -35,6 +43,7 @@ export const VIDEO_BG: Record<VideoKey, string> = {
   seedOpen: '#95BD65', // first frame is the green backdrop with the hands
   seedClose: '#F2EEE4',
   celebrate: '#F2EADA',
+  chestIdle: '#17594F',
 };
 
 // Clip lengths (ms) — used as a safety net so one-shot clips always advance, even if playback fails.
@@ -49,4 +58,5 @@ export const VIDEO_MS: Record<VideoKey, number> = {
   seedOpen: 4020,
   seedClose: 10750,
   celebrate: 8000,
+  chestIdle: 4000,
 };

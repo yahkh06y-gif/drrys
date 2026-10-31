@@ -15,8 +15,8 @@ type N = typeof import('expo-notifications');
 const inExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 export const remindersSupported = Platform.OS !== 'web' && !(inExpoGo && Platform.OS === 'android');
 
-export const REMINDER_HOURS = [8, 13, 17, 19, 21];
-export const DEFAULT_HOUR = 19;
+export const REMINDER_HOURS = [8, 13, 17, 19, 20, 21, 22]; // 17 / 20 / 22 are the onboarding's Afternoon / Evening / Night
+export const DEFAULT_HOUR = 20;
 export const hourLabel = (h: number) => `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`;
 
 let mod: N | null = null;
@@ -75,7 +75,7 @@ function lineFor(day: Date) {
   if (lecture.length) {
     title = 'Coco 📖';
     const names = lecture.map((x) => x.name).slice(0, 2).join(' & ');
-    body = `Lecture day! A full session on ${names} keeps it fresh. About 15 minutes.`;
+    body = `Lecture day! A full session on ${names} keeps it fresh. About ${s.plan.minutes} minutes.`;
   } else if (due > 0) {
     title = 'Coco 💧';
     body = `${due} ${due === 1 ? 'flashcard is' : 'flashcards are'} waiting for you. About ${Math.max(2, Math.ceil(due / 2))} minutes.`;

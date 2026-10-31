@@ -1,4 +1,4 @@
-// "Great. Now let's plant our first subject".
+// "Now let's plant your first subject, <name>".
 // One continuous scene built from three Blender clips, all preloaded so the cuts are seamless:
 //   agriculture (Coco the farmer, loop) —dissolve→ fallSeed (Coco catches a seed) —instant cut→ seedOpen (the seed glows)
 // then on to the subject form.
@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Motion } from '@/components/Motion';
 import { Btn, Enter, OnbBar, T } from '@/components/ui';
 import { haptic } from '@/lib/feedback';
+import { finishOnboarding } from '@/lib/finish';
 import { progressOf } from '@/lib/onboarding';
 import { useApp } from '@/store';
 import { C } from '@/theme';
@@ -63,14 +64,14 @@ export default function Plant() {
       <SafeAreaView style={{ flex: 1, padding: 20 }} pointerEvents={stage === 'idle' ? 'auto' : 'none'}>
         <OnbBar value={progressOf('plant')} style={{ marginBottom: 20 }} />
         <Enter>
-          <T v="h1" style={{ color: C.tealSoft, fontSize: 34 }}>
-            Great{name ? `, ${name}` : ''}. Now let’s plant your first subject
+          <T v="h1" style={{ color: C.teal }}>
+            Now let’s plant your first subject{name ? `, ${name}` : ''}.
           </T>
         </Enter>
         <View style={{ flex: 1 }} />
         <View style={{ gap: 10 }}>
-          <Btn title="Plant Now" kind="leaf" mono onPress={startCatch} />
-          <Btn title="Not now" kind="green" height={46} mono onPress={() => router.push('/onboarding/signin')} />
+          <Btn title="Plant now" kind="leaf" mono onPress={startCatch} />
+          <Btn title="Not now" kind="light" height={46} mono onPress={finishOnboarding} />
         </View>
       </SafeAreaView>
 
